@@ -2,11 +2,16 @@
 # Build tooling
 agp = "9.1.1"
 kotlin = "2.4.20"
+jvm-target = "21"
 
 # Android SDK
 android-compile-sdk = "37"
 android-min-sdk = "29"
 android-target-sdk = "37"
+
+# App
+app-version-code = "1"
+app-version-name = "1.0"
 
 # Android
 activity = "1.13.0"
@@ -24,6 +29,10 @@ junit = "4.13.2"
 test-ext = "1.3.0"
 
 [libraries]
+# Dependencies of the included build-logic
+android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+
 # AndroidX
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
@@ -58,3 +67,7 @@ kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref 
 
 # Compose Multiplatform
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+
+# Plugins defined by this project (build-logic): no version, they resolve from the included build
+chat-android-application = { id = "chat.android.application" }
+chat-multiplatform-library = { id = "chat.multiplatform.library" }

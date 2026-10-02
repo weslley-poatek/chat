@@ -1,8 +1,9 @@
-rootProject.name = "Chat"
-enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+/**
+ * Convention plugins, used to keep a single source of truth for common module configurations.
+ * @see <a href="https://github.com/android/nowinandroid/blob/main/build-logic/README.md">Convention Plugins</a>
+ */
 
 pluginManagement {
-    includeBuild("build-logic")
     repositories {
         google {
             mavenContent {
@@ -27,15 +28,12 @@ dependencyResolutionManagement {
         }
         mavenCentral()
     }
+    versionCatalogs {
+        create("libs") {
+            from(files("../gradle/libs.versions.toml"))
+        }
+    }
 }
 
-include(":androidApp")
-include(":app")
-
-check(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {
-    """
-    The project requires JDK 21+ but it is currently using JDK ${JavaVersion.current()}.
-    Java Home: [${System.getProperty("java.home")}]
-    https://developer.android.com/build/jdks#jdk-config-in-studio
-    """.trimIndent()
-}
+rootProject.name = "build-logic"
+include(":convention")
