@@ -42,6 +42,7 @@ val enableTypeAccessors: ConfigurableFileCollection = files(
 dependencies {
     compileOnly(enableTypeAccessors)
     compileOnly(libs.android.gradle.plugin)
+    compileOnly(libs.compose.gradle.plugin)
     compileOnly(libs.kotlin.gradle.plugin)
 }
 
@@ -55,6 +56,10 @@ gradlePlugin {
         register("android-application") {
             id = libs.plugins.chat.android.application.get().pluginId
             implementationClass = "AndroidApplicationConventionPlugin"
+        }
+        register("compose-library") {
+            id = libs.plugins.chat.compose.library.get().pluginId
+            implementationClass = "ComposeLibraryConventionPlugin"
         }
         register("multiplatform-library") {
             id = libs.plugins.chat.multiplatform.library.get().pluginId
