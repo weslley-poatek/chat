@@ -17,6 +17,7 @@ app-version-name = "1.0"
 activity = "1.13.0"
 appcompat = "1.8.0"
 core = "1.19.1"
+datastore = "1.2.1"
 lifecycle = "2.11.0"
 
 # Compose Multiplatform
@@ -36,6 +37,7 @@ detekt = "1.23.8"
 # Testing
 espresso = "3.7.0"
 junit = "4.13.2"
+kotlinx-coroutines = "1.10.2"
 test-ext = "1.3.0"
 
 [libraries]
@@ -46,6 +48,10 @@ core-ktx = { module = "androidx.core:core-ktx", version.ref = "core" }
 lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 lifecycle-viewmodel-navigation3 = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "lifecycle" }
+
+# DataStore
+datastore-core-okio = { module = "androidx.datastore:datastore-core-okio", version.ref = "datastore" }
+datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 
 # Compose Multiplatform
 compose-animation = { module = "org.jetbrains.compose.animation:animation", version.ref = "compose-multiplatform" }
@@ -76,6 +82,7 @@ espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref =
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "test-ext" }
 
 # ================================================================
