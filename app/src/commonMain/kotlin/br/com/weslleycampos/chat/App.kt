@@ -14,10 +14,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import org.jetbrains.compose.resources.painterResource
-
 import br.com.weslleycampos.chat.app.resources.AppRes
 import br.com.weslleycampos.chat.app.resources.compose_multiplatform
+import org.jetbrains.compose.resources.painterResource
 
 @Composable
 @Preview
