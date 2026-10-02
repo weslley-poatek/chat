@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.chat.android.application)
     alias(libs.plugins.chat.koin)
+    alias(libs.plugins.chat.detekt)
 }
 
 dependencies {

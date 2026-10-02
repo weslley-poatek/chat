@@ -12,6 +12,13 @@ internal fun DependencyHandler.implementation(dependency: Any): Dependency? =
     add("implementation", dependency)
 
 /**
+ * Only where the Detekt plugin has run: it is what creates `detektPlugins`, the configuration that
+ * carries extra rule sets such as `detekt-formatting`. It is not installed automatically.
+ */
+internal fun DependencyHandler.detektPlugins(dependency: Any): Dependency? =
+    add("detektPlugins", dependency)
+
+/**
  * Only where the Android KMP library plugin has run: it is what creates this configuration.
  */
 internal fun DependencyHandler.androidRuntimeClasspath(dependency: Any): Dependency? =

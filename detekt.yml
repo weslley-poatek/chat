@@ -1,0 +1,52 @@
+naming:
+  FunctionNaming:
+    active: true
+    ignoreAnnotated: ['Composable', 'Test']
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
+  TopLevelPropertyNaming:
+    active: true
+    constantPattern: '[A-Z][A-Za-z0-9_]*'
+  MatchingDeclarationName:
+    active: false
+    excludes: ['**/expect/*', '**/actual/*']
+
+complexity:
+  LongMethod:
+    active: false
+  LongParameterList:
+    active: false
+  NamedArguments:
+    active: true
+
+style:
+  DestructuringDeclarationWithTooManyEntries:
+    active: false
+  ForbiddenComment:
+    allowedPatterns: 'TODO:'
+  MagicNumber:
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreLocalVariableDeclaration: true
+  UnusedPrivateMember:
+    ignoreAnnotated: ['Preview']
+    allowedNames: '(_|ignored|expected|.*[Pp]review.*)'
+  ReturnCount:
+    active: true
+    max: 5
+
+formatting:
+  EnumWrapping:
+    active: true
+  IfElseBracing:
+    active: true
+  NoBlankLineInList:
+    active: true
+  Filename:
+    active: true
+    excludes:
+      - '**/wasmApp/src/wasmJsMain/kotlin/**/main.kt'
+      - '**/jvmApp/src/jvmMain/kotlin/**/main.kt'
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false

@@ -43,6 +43,7 @@ dependencies {
     compileOnly(enableTypeAccessors)
     compileOnly(libs.android.gradle.plugin)
     compileOnly(libs.compose.gradle.plugin)
+    compileOnly(libs.detekt.gradle.plugin)
     compileOnly(libs.kotlin.gradle.plugin)
 }
 
@@ -60,6 +61,10 @@ gradlePlugin {
         register("compose-library") {
             id = libs.plugins.chat.compose.library.get().pluginId
             implementationClass = "ComposeLibraryConventionPlugin"
+        }
+        register("detekt") {
+            id = libs.plugins.chat.detekt.get().pluginId
+            implementationClass = "DetektConventionPlugin"
         }
         register("koin") {
             id = libs.plugins.chat.koin.get().pluginId
