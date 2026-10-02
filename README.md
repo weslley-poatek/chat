@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src=".github/assets/banner.svg" alt="Chat: a Kotlin Multiplatform chat app for Android and iOS" width="100%">
+<img src=".github/assets/banner.svg" alt="Chat: a Kotlin Multiplatform chat app for Android and iOS, shown in voice mode" width="100%">
 
 <br>
 <br>
@@ -33,7 +33,8 @@
 
 > [!NOTE]
 > **Status: foundation.** The build system, dependency injection and secure storage are in place.
-> The chat experience is being built on top of them, so the UI is still the starter screen.
+> The chat experience is being built on top of them, so the app still shows the starter screen.
+> The voice mode screen in the banner comes from the design prototype, not from a build of the app.
 
 ## ✨ Highlights
 
@@ -279,28 +280,6 @@ chat/
 └── detekt.yml                     🧹 Shared static-analysis rules
 ```
 
-## 🤝 Conventions
-
-Commits use an emoji-prefixed [Conventional Commits](https://www.conventionalcommits.org) subject line,
-in English and the imperative mood:
-
-```text
-✨ feat: Add core:preferences module and register it in the app.
-```
-
-| | Type | Use for |
-| :---: | --- | --- |
-| ✨ | `feat` | A real, user-facing feature |
-| 🐞 | `fix` | A bug fix |
-| ♻️ | `refactor` | Restructuring without changing behavior |
-| 🎨 | `style` | Formatting only |
-| 📚 | `docs` | Documentation only |
-| 🧪 | `test` | Tests only |
-| ⚡ | `perf` | Performance improvements |
-| 🛠️ | `build` | Build system or dependencies |
-| 🔄 | `ci` | CI/CD configuration |
-| ⚙️ | `chore` | Maintenance, tooling and scaffolding |
-
 ## 🩺 Troubleshooting
 
 <details>
@@ -398,8 +377,6 @@ print a Gradle version. Build from Xcode again afterwards; no project change is 
 <br>
 
 <div align="center">
-
-Built with 💜 using [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)
 
 <sub><a href="#top">↑ Back to top</a></sub>
 
