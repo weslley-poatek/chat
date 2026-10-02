@@ -1,34 +1,312 @@
-This is a Kotlin Multiplatform project targeting Android, iOS.
+<a id="top"></a>
 
-* [/iosApp](./iosApp/iosApp) contains an iOS application. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+<div align="center">
 
-* [/app](./app/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./app/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./app/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./app/src/jvmMain/kotlin)
-    folder is the appropriate location.
+<img src=".github/assets/banner.svg" alt="Chat: a Kotlin Multiplatform chat app for Android and iOS" width="100%">
 
-### Running the apps
+<br>
+<br>
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.4.20-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.12.1-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/compose-multiplatform/)
+[![Android](https://img.shields.io/badge/Android-API_29%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](#-getting-started)
+[![iOS](https://img.shields.io/badge/iOS-18.2%2B-000000?style=for-the-badge&logo=apple&logoColor=white)](#-getting-started)
 
-- Android app: `./gradlew :androidApp:assembleDebug`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+![Gradle](https://img.shields.io/badge/Gradle-9.5.1-02303A?style=flat-square&logo=gradle&logoColor=white)
+![AGP](https://img.shields.io/badge/AGP-9.1.1-34A853?style=flat-square&logo=android&logoColor=white)
+![Koin](https://img.shields.io/badge/Koin-4.2.2-F39C12?style=flat-square)
+![JDK](https://img.shields.io/badge/JDK-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
+![Detekt](https://img.shields.io/badge/Detekt-1.23.8-5C6BC0?style=flat-square)
 
-### Running tests
+**One Kotlin codebase. Two native apps. Shared UI, compile-time DI, and encrypted storage from day one.**
 
-Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
+[Highlights](#-highlights) •
+[Architecture](#%EF%B8%8F-architecture) •
+[Getting started](#-getting-started) •
+[Commands](#%EF%B8%8F-commands) •
+[Build logic](#-build-logic) •
+[Troubleshooting](#-troubleshooting)
 
-- Android tests: `./gradlew :app:testAndroidHostTest`
-- iOS tests: `./gradlew :app:iosSimulatorArm64Test`
+</div>
 
-### Troubleshooting
+<br>
 
-#### Xcode: "Unable to locate a Java Runtime"
+> [!NOTE]
+> **Status: foundation.** The build system, dependency injection and secure storage are in place.
+> The chat experience is being built on top of them, so the UI is still the starter screen.
+
+## ✨ Highlights
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>📱 Shared UI, native hosts</h3>
+      The whole interface is Compose Multiplatform in <code>:app</code>. Android renders it from
+      <code>MainActivity</code>, and iOS embeds it in SwiftUI through a static <code>App</code> framework.
+    </td>
+    <td width="50%" valign="top">
+      <h3>🧱 Convention-plugin build</h3>
+      Five <code>chat.*</code> plugins in <code>build-logic</code> own every SDK level, target and
+      dependency set. A module's build file is just its <code>plugins { }</code> block.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>💉 Compile-time checked DI</h3>
+      Koin annotations plus the Koin compiler plugin generate the graph per target and report
+      missing definitions when the code compiles, not at first injection.
+    </td>
+    <td width="50%" valign="top">
+      <h3>🔐 Encrypted preferences</h3>
+      <code>:core:preferences</code> ships plain and encrypted <code>DataStore</code> instances backed by
+      Android Keystore and the iOS Keychain, with authenticated, versioned ciphertext.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>🧭 Navigation 3 ready</h3>
+      Every Compose module gets Navigation 3, lifecycle-aware state collection and entry-scoped
+      ViewModels without declaring them itself.
+    </td>
+    <td width="50%" valign="top">
+      <h3>⚡ Fast, reproducible builds</h3>
+      Configuration cache and build cache are on, versions live in one catalog, and the Gradle
+      daemon runs on a pinned Azul Zulu 21 toolchain.
+    </td>
+  </tr>
+</table>
+
+## 🏛️ Architecture
+
+```mermaid
+flowchart TD
+    subgraph hosts ["Platform hosts"]
+        androidApp[":androidApp<br/><i>MainActivity · MainApplication</i>"]
+        iosApp["iosApp<br/><i>SwiftUI · Xcode project</i>"]
+    end
+
+    app[":app<br/><i>Compose UI · root AppModule</i>"]
+    prefs[":core:preferences<br/><i>plain + encrypted DataStore</i>"]
+
+    androidApp -- "implementation" --> app
+    iosApp -- "App.framework (static)" --> app
+    app -- "implementation" --> prefs
+```
+
+| Module | Role |
+| --- | --- |
+| [`:androidApp`](androidApp) | The Android application. Starts Koin with `androidContext(...)` and sets `App()` as content. |
+| [`iosApp`](iosApp) | The Xcode project. Calls `KoinKt.doInitKoin()` and wraps `MainViewController()` in SwiftUI. |
+| [`:app`](app) | Shared Compose Multiplatform UI and the root Koin module, `AppModule`, which `includes` feature and core modules. |
+| [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
+
+<details>
+<summary><b>How startup works on each platform</b></summary>
+
+<br>
+
+| | Android | iOS |
+| --- | --- | --- |
+| Entry point | `MainApplication.onCreate()` | `iOSApp.init()` |
+| Koin start | `startKoin<AppModule> { androidContext(...) }` | `KoinKt.doInitKoin()` → `startKoin { module<AppModule>() }` |
+| UI host | `MainActivity` → `setContent { App() }` | `ComposeView` → `MainViewControllerKt.MainViewController()` |
+
+iOS uses the untyped `startKoin` on purpose: with Koin compiler plugin 1.2.1, the typed form in the
+iOS compilation reports `KOIN-D002` for valid lookups across Gradle modules. See
+[`Koin.kt`](app/src/iosMain/kotlin/br/com/weslleycampos/chat/Koin.kt).
+
+</details>
+
+## 🧰 Tech stack
+
+| Layer | Library | Version |
+| --- | --- | --- |
+| Language | [Kotlin Multiplatform](https://kotlinlang.org/docs/multiplatform.html) | `2.4.20` |
+| UI | [Compose Multiplatform](https://www.jetbrains.com/compose-multiplatform/) · Material 3 | `1.12.1` · `1.12.0-alpha03` |
+| Navigation | [Navigation 3](https://developer.android.com/guide/navigation/navigation-3) | `1.1.2` |
+| Lifecycle | JetBrains `lifecycle-runtime-compose` · `lifecycle-viewmodel-compose` | `2.11.0` |
+| Dependency injection | [Koin](https://insert-koin.io) · Koin compiler plugin | `4.2.2` · `1.2.1` |
+| Storage | [AndroidX DataStore](https://developer.android.com/topic/libraries/architecture/datastore) Preferences (Okio) | `1.2.1` |
+| Static analysis | [Detekt](https://detekt.dev) + `detekt-formatting` | `1.23.8` |
+| Build | Gradle · Android Gradle Plugin | `9.5.1` · `9.1.1` |
+
+Every version lives in [`gradle/libs.versions.toml`](gradle/libs.versions.toml), including the Android
+SDK levels (`compileSdk 37`, `targetSdk 37`, `minSdk 29`) and the app version.
+
+## 🚀 Getting started
+
+### Prerequisites
+
+| Tool | Requirement |
+| --- | --- |
+| ☕ JDK | **21 or newer** to launch Gradle. The build stops early on anything older. |
+| 🤖 Android | Android Studio or IntelliJ IDEA with the Kotlin Multiplatform plugin, and Android SDK 37. |
+| 🍎 iOS | macOS with Xcode and the iOS 18.2+ SDK. An **Apple silicon** Mac is needed for the simulator, since the only simulator target is `iosSimulatorArm64`. |
+
+> [!TIP]
+> The JDK you install only launches Gradle. The build itself runs on the Azul Zulu 21 toolchain pinned in
+> [`gradle/gradle-daemon-jvm.properties`](gradle/gradle-daemon-jvm.properties), which Gradle downloads on the
+> first build, so that first build needs network access.
+
+### Clone
+
+```bash
+git clone git@github.com:weslley-poatek/chat.git
+```
+
+```bash
+cd chat
+```
+
+### 🤖 Run on Android
+
+Pick the `androidApp` run configuration in the IDE toolbar, or build from the terminal:
+
+```bash
+./gradlew :androidApp:installDebug
+```
+
+### 🍎 Run on iOS
+
+```bash
+open iosApp/iosApp.xcodeproj
+```
+
+Choose a simulator and press **Run**. The **Compile Kotlin Framework** build phase calls
+`./gradlew :app:embedAndSignAppleFrameworkForXcode`, so Xcode builds the shared code for you.
+
+> [!IMPORTANT]
+> To run on a physical device, set `TEAM_ID` in [`iosApp/Configuration/Config.xcconfig`](iosApp/Configuration/Config.xcconfig).
+> It feeds both the signing team and the bundle identifier.
+>
+> If Xcode fails with **"Unable to locate a Java Runtime"**, see [Troubleshooting](#-troubleshooting).
+
+## ⌨️ Commands
+
+| Task | Command |
+| --- | --- |
+| Build the Android debug APK | `./gradlew :androidApp:assembleDebug` |
+| Install it on a connected device | `./gradlew :androidApp:installDebug` |
+| Shared tests on the Android host | `./gradlew :app:testAndroidHostTest` |
+| Shared tests on the iOS simulator | `./gradlew :app:iosSimulatorArm64Test` |
+| Preferences tests on the iOS simulator | `./gradlew :core:preferences:iosSimulatorArm64Test` |
+| Static analysis for every module | `./gradlew detekt` |
+
+> [!WARNING]
+> Detekt runs with `autoCorrect = true`, so `detekt` and `check` may **rewrite source files**.
+> Commit or stash your work first if you want to review the corrections as a separate diff.
+
+## 🧱 Build logic
+
+All shared configuration lives in the [`build-logic`](build-logic/convention/src/main/kotlin) included
+build. Each module picks the conventions it needs:
+
+| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:preferences` |
+| --- | --- | :---: | :---: | :---: |
+| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | |
+| `chat.multiplatform.library` | KMP + Android KMP library target, host and device tests, iOS `App` frameworks | | ✅ | ✅ |
+| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | |
+| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type | ✅ | ✅ | ✅ |
+| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ |
+
+### Adding a module
+
+**1.** Register it in [`settings.gradle.kts`](settings.gradle.kts):
+
+```kotlin
+include(":feature:home")
+```
+
+**2.** Apply the conventions in `feature/home/build.gradle.kts`, then declare only what is unique to it:
+
+```kotlin
+plugins {
+    alias(libs.plugins.chat.multiplatform.library)
+    alias(libs.plugins.chat.compose.library) // only for modules with UI
+    alias(libs.plugins.chat.koin)
+    alias(libs.plugins.chat.detekt)
+}
+```
+
+**3.** Add its Koin module to the `includes` of [`AppModule`](app/src/commonMain/kotlin/br/com/weslleycampos/chat/AppModule.kt).
+A Gradle dependency alone registers nothing.
+
+Names are derived from the Gradle path, so there is nothing to configure:
+
+| Gradle path | Android namespace | Compose resources class |
+| --- | --- | --- |
+| `:app` | `br.com.weslleycampos.chat.app` | `br.com.weslleycampos.chat.app.resources.AppRes` |
+| `:feature:home` | `br.com.weslleycampos.chat.feature.home` | `br.com.weslleycampos.chat.feature.home.resources.FeatureHomeRes` |
+
+## 🔐 Secure storage
+
+`:core:preferences` exposes two qualified `DataStore<Preferences>` instances. Inject
+`@UnencryptedPreferences` for ordinary settings and `@EncryptedPreferences` for credentials that
+can be replaced by signing in again.
+
+| | 🤖 Android | 🍎 iOS |
+| --- | --- | --- |
+| Cipher | AES-256-GCM | AES-256-CBC + HMAC-SHA256, verified before decrypting |
+| Key storage | Android Keystore | Keychain, `AfterFirstUnlockThisDeviceOnly` |
+| File location | `noBackupFilesDir` | Application Support, excluded from backup |
+| Bound to ciphertext | Format version + store name, as AAD | Format version + store name, as AAD |
+
+If a key is lost or the file is corrupt, the encrypted store resets to empty, which the app should
+treat as signed out. The [module guide](core/preferences/README.md) covers usage, the byte format,
+recovery and DI details.
+
+## 🗂️ Project structure
+
+```text
+chat/
+├── androidApp/                    🤖 Android entry point
+├── app/                           📱 Shared Compose UI and root Koin module
+│   └── src/
+│       ├── commonMain/            Code for every target
+│       ├── androidMain/           Android actuals
+│       ├── iosMain/               iOS actuals, MainViewController, initKoin()
+│       ├── commonTest/
+│       ├── androidHostTest/
+│       └── iosTest/
+├── core/
+│   └── preferences/               🔐 Plain and encrypted DataStore
+├── iosApp/                        🍎 Xcode project and SwiftUI host
+├── build-logic/
+│   └── convention/                🧱 chat.* convention plugins
+├── gradle/
+│   ├── libs.versions.toml         📦 The single version catalog
+│   └── gradle-daemon-jvm.properties
+└── detekt.yml                     🧹 Shared static-analysis rules
+```
+
+## 🤝 Conventions
+
+Commits use an emoji-prefixed [Conventional Commits](https://www.conventionalcommits.org) subject line,
+in English and the imperative mood:
+
+```text
+✨ feat: Add core:preferences module and register it in the app.
+```
+
+| | Type | Use for |
+| :---: | --- | --- |
+| ✨ | `feat` | A real, user-facing feature |
+| 🐞 | `fix` | A bug fix |
+| ♻️ | `refactor` | Restructuring without changing behavior |
+| 🎨 | `style` | Formatting only |
+| 📚 | `docs` | Documentation only |
+| 🧪 | `test` | Tests only |
+| ⚡ | `perf` | Performance improvements |
+| 🛠️ | `build` | Build system or dependencies |
+| 🔄 | `ci` | CI/CD configuration |
+| ⚙️ | `chore` | Maintenance, tooling and scaffolding |
+
+## 🩺 Troubleshooting
+
+<details>
+<summary><b>Xcode: "Unable to locate a Java Runtime"</b></summary>
+
+<br>
 
 The Xcode build fails in the **Compile Kotlin Framework** build phase with:
 
@@ -115,10 +393,14 @@ it is fixed.
 Then run the two **Check** commands again: the first must list a JDK and the second must
 print a Gradle version. Build from Xcode again afterwards; no project change is needed.
 
-The JDK registered with macOS only launches Gradle. The build itself runs on the Java 21
-(Azul Zulu) toolchain pinned in `gradle/gradle-daemon-jvm.properties`, which Gradle
-downloads to `~/.gradle/jdks` on the first build, so that first build needs network access.
+</details>
 
----
+<br>
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+<div align="center">
+
+Built with 💜 using [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)
+
+<sub><a href="#top">↑ Back to top</a></sub>
+
+</div>

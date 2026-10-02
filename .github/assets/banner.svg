@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-labelledby="title desc">
+  <title id="title">Chat</title>
+  <desc id="desc">Kotlin Multiplatform chat for Android and iOS, built with Compose Multiplatform, Koin and encrypted DataStore.</desc>
+
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7F52FF"/>
+      <stop offset="0.55" stop-color="#B125EA"/>
+      <stop offset="1" stop-color="#E44857"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.6" fill="#FFFFFF" fill-opacity="0.16"/>
+    </pattern>
+    <clipPath id="card">
+      <rect width="1280" height="400" rx="32"/>
+    </clipPath>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#2A0B4F" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g clip-path="url(#card)">
+    <!-- Card -->
+    <rect width="1280" height="400" fill="url(#brand)"/>
+    <rect width="1280" height="400" fill="url(#dots)"/>
+    <rect width="1280" height="200" fill="url(#sheen)"/>
+    <circle cx="1160" cy="-30" r="230" fill="#FFFFFF" fill-opacity="0.07"/>
+    <circle cx="60" cy="430" r="190" fill="#FFFFFF" fill-opacity="0.06"/>
+
+    <!-- Mark: two speech bubbles with a typing indicator -->
+    <g filter="url(#shadow)">
+      <rect x="150" y="92" width="130" height="98" rx="32" fill="#FFFFFF" fill-opacity="0.3"/>
+      <path d="M252 184 L290 214 L268 176 Z" fill="#FFFFFF" fill-opacity="0.3"/>
+      <rect x="92" y="124" width="152" height="114" rx="38" fill="#FFFFFF"/>
+      <path d="M118 226 L102 266 L162 234 Z" fill="#FFFFFF"/>
+      <circle cx="132" cy="181" r="11.5" fill="#7F52FF"/>
+      <circle cx="168" cy="181" r="11.5" fill="#B125EA"/>
+      <circle cx="204" cy="181" r="11.5" fill="#E44857"/>
+    </g>
+
+    <!-- Wordmark -->
+    <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, 'Helvetica Neue', Arial, sans-serif" fill="#FFFFFF">
+      <text x="322" y="196" font-size="108" font-weight="800" letter-spacing="-3">Chat</text>
+      <text x="326" y="246" font-size="28" font-weight="500" fill-opacity="0.92">Kotlin Multiplatform chat for Android &amp; iOS</text>
+
+      <g font-size="18" font-weight="600" text-anchor="middle">
+        <rect x="326" y="276" width="250" height="40" rx="20" fill="#FFFFFF" fill-opacity="0.16" stroke="#FFFFFF" stroke-opacity="0.35"/>
+        <text x="451" y="302">Compose Multiplatform</text>
+        <rect x="590" y="276" width="96" height="40" rx="20" fill="#FFFFFF" fill-opacity="0.16" stroke="#FFFFFF" stroke-opacity="0.35"/>
+        <text x="638" y="302">Koin</text>
+        <rect x="700" y="276" width="226" height="40" rx="20" fill="#FFFFFF" fill-opacity="0.16" stroke="#FFFFFF" stroke-opacity="0.35"/>
+        <text x="813" y="302">Encrypted DataStore</text>
+      </g>
+    </g>
+
+    <!-- Phone mockup, bleeding off the bottom edge -->
+    <g filter="url(#shadow)">
+      <rect x="1028" y="58" width="196" height="400" rx="40" fill="#1B1233"/>
+      <rect x="1038" y="68" width="176" height="380" rx="31" fill="#FFFFFF"/>
+      <rect x="1098" y="80" width="56" height="16" rx="8" fill="#1B1233"/>
+
+      <!-- Incoming -->
+      <rect x="1052" y="114" width="116" height="36" rx="18" fill="#EFE9FF"/>
+      <rect x="1066" y="129" width="78" height="6" rx="3" fill="#7F52FF" fill-opacity="0.4"/>
+      <!-- Outgoing -->
+      <rect x="1090" y="162" width="110" height="36" rx="18" fill="url(#brand)"/>
+      <rect x="1104" y="177" width="72" height="6" rx="3" fill="#FFFFFF" fill-opacity="0.85"/>
+      <!-- Incoming -->
+      <rect x="1052" y="210" width="86" height="36" rx="18" fill="#EFE9FF"/>
+      <rect x="1066" y="225" width="52" height="6" rx="3" fill="#7F52FF" fill-opacity="0.4"/>
+      <!-- Outgoing -->
+      <rect x="1108" y="258" width="92" height="36" rx="18" fill="url(#brand)"/>
+      <rect x="1122" y="273" width="56" height="6" rx="3" fill="#FFFFFF" fill-opacity="0.85"/>
+      <!-- Typing -->
+      <rect x="1052" y="306" width="66" height="30" rx="15" fill="#EFE9FF"/>
+      <circle cx="1071" cy="321" r="4" fill="#7F52FF" fill-opacity="0.45"/>
+      <circle cx="1085" cy="321" r="4" fill="#7F52FF" fill-opacity="0.7"/>
+      <circle cx="1099" cy="321" r="4" fill="#7F52FF"/>
+      <!-- Composer -->
+      <rect x="1052" y="352" width="118" height="32" rx="16" fill="#F4F1FA"/>
+      <circle cx="1188" cy="368" r="14" fill="url(#brand)"/>
+      <path d="M1182 368 L1194 368 M1189 362 L1195 368 L1189 374" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </g>
+  </g>
+</svg>
