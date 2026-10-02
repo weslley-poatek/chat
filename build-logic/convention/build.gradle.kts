@@ -61,6 +61,10 @@ gradlePlugin {
             id = libs.plugins.chat.compose.library.get().pluginId
             implementationClass = "ComposeLibraryConventionPlugin"
         }
+        register("koin") {
+            id = libs.plugins.chat.koin.get().pluginId
+            implementationClass = "KoinConventionPlugin"
+        }
         register("multiplatform-library") {
             id = libs.plugins.chat.multiplatform.library.get().pluginId
             implementationClass = "MultiplatformLibraryConventionPlugin"

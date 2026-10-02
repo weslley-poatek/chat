@@ -26,6 +26,10 @@ material3 = "1.12.0-alpha03"
 # Navigation
 navigation3 = "1.1.2"
 
+# koin
+koin = "4.2.2"
+koin-plugin = "1.2.1"
+
 # Testing
 espresso = "3.7.0"
 junit = "4.13.2"
@@ -56,6 +60,11 @@ compose-ui-util = { module = "org.jetbrains.compose.ui:ui-util", version.ref = "
 navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "navigation3" }
 navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
 
+# Koin
+koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
+koin-annotations = { module = "io.insert-koin:koin-annotations", version.ref = "koin" }
+koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+
 # Testing
 espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 junit = { module = "junit:junit", version.ref = "junit" }
@@ -70,6 +79,9 @@ android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref
 compose-gradle-plugin = { module = "org.jetbrains.compose:compose-gradle-plugin", version.ref = "compose-multiplatform" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 
+[bundles]
+koin = ["koin-core", "koin-annotations"]
+
 [plugins]
 # Android
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -82,9 +94,13 @@ kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref 
 # Compose Multiplatform
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 
+# Koin
+koin-compiler = { id = "io.insert-koin.compiler.plugin", version.ref = "koin-plugin" }
+
 # ================================================================
 #  Plugins defined by this project
 # ================================================================
 chat-android-application = { id = "chat.android.application" }
 chat-compose-library = { id = "chat.compose.library" }
+chat-koin = { id = "chat.koin" }
 chat-multiplatform-library = { id = "chat.multiplatform.library" }
