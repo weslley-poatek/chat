@@ -3,7 +3,7 @@ package br.com.weslleycampos.chat
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class SharedCommonTest {
+class AppLogicIOSTest {
 
     @Test
     fun example() {

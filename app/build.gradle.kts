@@ -13,13 +13,13 @@ kotlin {
         iosSimulatorArm64()
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
-            baseName = "Shared"
+            baseName = "App"
             isStatic = true
         }
     }
     
     android {
-       namespace = "br.com.weslleycampos.chat.shared"
+       namespace = "br.com.weslleycampos.chat.app"
        compileSdk = libs.versions.android.compileSdk.get().toInt()
        minSdk = libs.versions.android.minSdk.get().toInt()
     
