@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     implementation(projects.app)
+    implementation(projects.core.navigation)
     implementation(libs.activity.compose)
 
     implementation(libs.compose.ui.tooling.preview)

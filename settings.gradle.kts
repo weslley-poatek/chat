@@ -31,6 +31,7 @@ dependencyResolutionManagement {
 
 include(":androidApp")
 include(":app")
+include(":core:navigation")
 include(":core:preferences")
 
 check(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {

@@ -65,9 +65,9 @@
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <h3>🧭 Navigation 3 ready</h3>
-      Every Compose module gets Navigation 3, lifecycle-aware state collection and entry-scoped
-      ViewModels without declaring them itself.
+      <h3>🧭 Modular Navigation 3</h3>
+      <code>:core:navigation</code> holds one saved back stack behind a <code>Navigator</code> with
+      Navigation 2 style options, and each module adds its screens through an <code>EntryProvider</code>.
     </td>
     <td width="50%" valign="top">
       <h3>⚡ Fast, reproducible builds</h3>
@@ -87,10 +87,13 @@ flowchart TD
     end
 
     app[":app<br/><i>Compose UI · root AppModule</i>"]
+    nav[":core:navigation<br/><i>Navigator · entry providers</i>"]
     prefs[":core:preferences<br/><i>plain + encrypted DataStore</i>"]
 
     androidApp -- "implementation" --> app
+    androidApp -- "implementation" --> nav
     iosApp -- "App.framework (static)" --> app
+    app -- "implementation" --> nav
     app -- "implementation" --> prefs
 ```
 
@@ -98,7 +101,8 @@ flowchart TD
 | --- | --- |
 | [`:androidApp`](androidApp) | The Android application. Starts Koin with `androidContext(...)` and sets `App()` as content. |
 | [`iosApp`](iosApp) | The Xcode project. Calls `KoinKt.doInitKoin()` and wraps `MainViewController()` in SwiftUI. |
-| [`:app`](app) | Shared Compose Multiplatform UI and the root Koin module, `AppModule`, which `includes` feature and core modules. |
+| [`:app`](app) | Shared Compose Multiplatform UI: `App()` renders the back stack in a `NavDisplay`. Holds the root Koin module, `AppModule`, which `includes` feature and core modules. |
+| [`:core:navigation`](core/navigation) | The shared `Navigator`, navigation keys, `EntryProvider` contract and back-stack saving. [Read the module guide →](core/navigation/README.md) |
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
 
 <details>
@@ -110,7 +114,11 @@ flowchart TD
 | --- | --- | --- |
 | Entry point | `MainApplication.onCreate()` | `iOSApp.init()` |
 | Koin start | `startKoin<AppModule> { androidContext(...) }` | `KoinKt.doInitKoin()` → `startKoin { module<AppModule>() }` |
-| UI host | `MainActivity` → `setContent { App() }` | `ComposeView` → `MainViewControllerKt.MainViewController()` |
+| UI host | `MainActivity` → `setContent { ... }` | `ComposeView` → `MainViewControllerKt.MainViewController()` |
+| Composition root | `rememberNavigator(HomeEntry)`, then `App(navBackStack, entryBuilders)` | The same, inside `ComposeUIViewController { ... }` |
+
+Both hosts read the entry builders from `EntriesAggregator`. `MainActivity` injects it with
+`by inject()`, and iOS gets it from `KoinPlatform.getKoin()`.
 
 iOS uses the untyped `startKoin` on purpose: with Koin compiler plugin 1.2.1, the typed form in the
 iOS compilation reports `KOIN-D002` for valid lookups across Gradle modules. See
@@ -191,6 +199,8 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 | Shared tests on the Android host | `./gradlew :app:testAndroidHostTest` |
 | Shared tests on the iOS simulator | `./gradlew :app:iosSimulatorArm64Test` |
 | Preferences tests on the iOS simulator | `./gradlew :core:preferences:iosSimulatorArm64Test` |
+| Navigation tests on the Android host | `./gradlew :core:navigation:testAndroidHostTest` |
+| Navigation tests on the iOS simulator | `./gradlew :core:navigation:iosSimulatorArm64Test` |
 | Static analysis for every module | `./gradlew detekt` |
 
 > [!WARNING]
@@ -202,13 +212,13 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 All shared configuration lives in the [`build-logic`](build-logic/convention/src/main/kotlin) included
 build. Each module picks the conventions it needs:
 
-| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:preferences` |
-| --- | --- | :---: | :---: | :---: |
-| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | |
-| `chat.multiplatform.library` | KMP + Android KMP library target, host and device tests, iOS `App` frameworks | | ✅ | ✅ |
-| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | |
-| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type | ✅ | ✅ | ✅ |
-| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ |
+| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:navigation` | `:core:preferences` |
+| --- | --- | :---: | :---: | :---: | :---: |
+| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | |
+| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ |
+| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | ✅ | |
+| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ |
+| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ |
 
 ### Adding a module
 
@@ -231,6 +241,9 @@ plugins {
 
 **3.** Add its Koin module to the `includes` of [`AppModule`](app/src/commonMain/kotlin/br/com/weslleycampos/chat/AppModule.kt).
 A Gradle dependency alone registers nothing.
+
+**4.** If it has screens, depend on `:core:navigation` and bind an `EntryProvider` for each one.
+The [navigation guide](core/navigation/README.md#adding-a-screen) walks through it.
 
 Names are derived from the Gradle path, so there is nothing to configure:
 
@@ -270,6 +283,7 @@ chat/
 │       ├── androidHostTest/
 │       └── iosTest/
 ├── core/
+│   ├── navigation/                🧭 Navigator, keys and entry providers
 │   └── preferences/               🔐 Plain and encrypted DataStore
 ├── iosApp/                        🍎 Xcode project and SwiftUI host
 ├── build-logic/

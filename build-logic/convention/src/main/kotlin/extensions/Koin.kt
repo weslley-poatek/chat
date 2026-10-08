@@ -9,12 +9,26 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
  *
  * The compiler plugin reads other modules' definitions through the annotations, so they belong on
  * every module that calls `startKoin<T>` or `get<T>()`, not only on the one declaring the graph.
+ *
+ * A module that compiles Compose also gets `koinInject()`, `currentKoinScope()` and `koinViewModel()`.
+ * `withPlugin` waits for the Compose compiler, so the order the module lists its plugins in does not
+ * matter here.
  */
 internal fun Project.configureKoinMultiplatform(extension: KotlinMultiplatformExtension) {
     extension.apply {
         sourceSets.apply {
             commonMain.dependencies {
                 implementation(libs.bundles.koin)
+            }
+        }
+    }
+
+    pluginManager.withPlugin(libs.plugins.compose.compiler.get().pluginId) {
+        extension.apply {
+            sourceSets.apply {
+                commonMain.dependencies {
+                    implementation(libs.bundles.koin.compose)
+                }
             }
         }
     }

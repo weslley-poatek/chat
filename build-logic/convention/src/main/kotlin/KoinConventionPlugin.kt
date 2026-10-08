@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
  *
  * It never applies Kotlin or Android itself — the module-type convention does — so apply it after
  * that one. `findByType` checks once, when this is applied: listed first, it adds no dependencies.
+ * Only the Koin Compose artifacts wait for their plugin, so they are added in either order.
  */
 class KoinConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {

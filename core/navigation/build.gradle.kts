@@ -8,8 +8,9 @@ plugins {
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation(projects.core.navigation)
-            implementation(projects.core.preferences)
+            // `api`: Navigator, EntryProvider and rememberNavigator expose NavKey, NavBackStack and
+            // EntryProviderScope to every module that reads them.
+            api(libs.navigation3.ui)
         }
     }
 }
