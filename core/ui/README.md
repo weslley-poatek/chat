@@ -59,6 +59,7 @@ has `@Preview`s for every variant and state in light and dark.
 | Component | Variants | Use |
 | --- | --- | --- |
 | `ChatButton` | `Primary`, `Secondary`, `Outlined`, `Text`, `Danger` × `Large`, `Small` | Actions, with an optional loading spinner |
+| `ChatIconButton` | `Standard`, `Accent` | Icon-only actions such as the menu and send buttons |
 
 ## Fonts and icons
 
