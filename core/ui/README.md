@@ -51,6 +51,15 @@ The prototype defines colors in OKLCH. The Kotlin primitives are their sRGB conv
 browser renders them. `accent.glow` and `accent.particle` are the voice mode colors, which the
 prototype computes in script.
 
+## Components
+
+Components live in `core.ui.components`. They are stateless, read only `ChatTheme`, and each file
+has `@Preview`s for every variant and state in light and dark.
+
+| Component | Variants | Use |
+| --- | --- | --- |
+| `ChatButton` | `Primary`, `Secondary`, `Outlined`, `Text`, `Danger` × `Large`, `Small` | Actions, with an optional loading spinner |
+
 ## Fonts and icons
 
 IBM Plex Sans (Regular, Medium, SemiBold) and IBM Plex Mono (Regular) are bundled under
@@ -70,4 +79,5 @@ The tests are in `commonTest`, so they run on the Android host and on the iOS si
 ./gradlew :core:ui:iosSimulatorArm64Test
 ```
 
-They check the palettes and gradients in every palette × light/dark.
+They check the palettes, the gradients and each component's colors in every palette ×
+light/dark, and that the previews cover every state.
