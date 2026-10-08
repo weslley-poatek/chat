@@ -61,6 +61,7 @@ has `@Preview`s for every variant and state in light and dark.
 | `ChatButton` | `Primary`, `Secondary`, `Outlined`, `Text`, `Danger` × `Large`, `Small` | Actions, with an optional loading spinner |
 | `ChatIconButton` | `Standard`, `Accent` | Icon-only actions such as the menu and send buttons |
 | `ChatTextField` | — | Single-line mono input with a placeholder and an optional trailing control |
+| `ChatSwitch` | — | On/off settings; the track takes the palette's accent when checked |
 
 ## Fonts and icons
 
