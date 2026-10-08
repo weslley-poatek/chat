@@ -63,6 +63,7 @@ has `@Preview`s for every variant and state in light and dark.
 | `ChatTextField` | — | Single-line mono input with a placeholder and an optional trailing control |
 | `ChatSwitch` | — | On/off settings; the track takes the palette's accent when checked |
 | `ChatSegmentedControl`, `ChatSegment` | — | Single choice among a few short options, such as theme or speech rate |
+| `ChatBottomSheet` | — | Modal sheets such as the model picker, with the prototype's handle and top border |
 
 ## Fonts and icons
 
