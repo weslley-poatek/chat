@@ -33,6 +33,7 @@ include(":androidApp")
 include(":app")
 include(":core:navigation")
 include(":core:preferences")
+include(":core:ui")
 
 check(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {
     """

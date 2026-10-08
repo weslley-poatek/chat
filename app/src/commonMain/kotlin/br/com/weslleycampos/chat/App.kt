@@ -1,7 +1,6 @@
 package br.com.weslleycampos.chat
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -11,6 +10,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import br.com.weslleycampos.chat.core.ui.ChatTheme
 
 @Composable
 fun App(
@@ -18,7 +18,7 @@ fun App(
     entryBuilders: List<EntryProviderScope<NavKey>.() -> Unit>,
     modifier: Modifier = Modifier,
 ) {
-    MaterialTheme {
+    ChatTheme {
         NavDisplay(
             backStack = navBackStack,
             entryDecorators = listOf(

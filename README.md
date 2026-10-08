@@ -89,12 +89,14 @@ flowchart TD
     app[":app<br/><i>Compose UI · root AppModule</i>"]
     nav[":core:navigation<br/><i>Navigator · entry providers</i>"]
     prefs[":core:preferences<br/><i>plain + encrypted DataStore</i>"]
+    ui[":core:ui<br/><i>ChatTheme · tokens · components</i>"]
 
     androidApp -- "implementation" --> app
     androidApp -- "implementation" --> nav
     iosApp -- "App.framework (static)" --> app
     app -- "implementation" --> nav
     app -- "implementation" --> prefs
+    app -- "implementation" --> ui
 ```
 
 | Module | Role |
@@ -104,6 +106,7 @@ flowchart TD
 | [`:app`](app) | Shared Compose Multiplatform UI: `App()` renders the back stack in a `NavDisplay`. Holds the root Koin module, `AppModule`, which `includes` feature and core modules. |
 | [`:core:navigation`](core/navigation) | The shared `Navigator`, navigation keys, `EntryProvider` contract and back-stack saving. [Read the module guide →](core/navigation/README.md) |
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
+| [`:core:ui`](core/ui) | The design system: `ChatTheme`, per-model palettes, typography, tokens and components. [Read the module guide →](core/ui/README.md) |
 
 <details>
 <summary><b>How startup works on each platform</b></summary>
@@ -201,6 +204,8 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 | Preferences tests on the iOS simulator | `./gradlew :core:preferences:iosSimulatorArm64Test` |
 | Navigation tests on the Android host | `./gradlew :core:navigation:testAndroidHostTest` |
 | Navigation tests on the iOS simulator | `./gradlew :core:navigation:iosSimulatorArm64Test` |
+| UI tests on the Android host | `./gradlew :core:ui:testAndroidHostTest` |
+| UI tests on the iOS simulator | `./gradlew :core:ui:iosSimulatorArm64Test` |
 | Static analysis for every module | `./gradlew detekt` |
 
 > [!WARNING]
@@ -212,13 +217,13 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 All shared configuration lives in the [`build-logic`](build-logic/convention/src/main/kotlin) included
 build. Each module picks the conventions it needs:
 
-| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:navigation` | `:core:preferences` |
-| --- | --- | :---: | :---: | :---: | :---: |
-| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | |
-| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ |
-| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | ✅ | |
-| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ |
-| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ |
+| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:navigation` | `:core:preferences` | `:core:ui` |
+| --- | --- | :---: | :---: | :---: | :---: | :---: |
+| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | | |
+| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ | ✅ |
+| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | ✅ | | ✅ |
+| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ### Adding a module
 
@@ -284,7 +289,8 @@ chat/
 │       └── iosTest/
 ├── core/
 │   ├── navigation/                🧭 Navigator, keys and entry providers
-│   └── preferences/               🔐 Plain and encrypted DataStore
+│   ├── preferences/               🔐 Plain and encrypted DataStore
+│   └── ui/                        🎨 ChatTheme, tokens and components
 ├── iosApp/                        🍎 Xcode project and SwiftUI host
 ├── build-logic/
 │   └── convention/                🧱 chat.* convention plugins

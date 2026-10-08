@@ -1,0 +1,10 @@
+<resources>
+    <string name="palette_sonnet">Claude Sonnet 4.5</string>
+    <string name="palette_opus">Claude Opus 4.1</string>
+    <string name="palette_gpt5">GPT-5</string>
+    <string name="palette_o3">o3</string>
+    <string name="palette_gemini">Gemini 2.5 Pro</string>
+    <string name="palette_llama">Llama 4 Maverick</string>
+    <string name="palette_deepseek">DeepSeek V3.1</string>
+    <string name="palette_mistral">Mistral Large 3</string>
+</resources>

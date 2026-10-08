@@ -10,6 +10,7 @@ kotlin {
         commonMain.dependencies {
             implementation(projects.core.navigation)
             implementation(projects.core.preferences)
+            implementation(projects.core.ui)
         }
     }
 }
