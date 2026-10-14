@@ -54,30 +54,37 @@ fun ChatTheme(
 
 object ChatTheme {
     val colors: ChatColors
-        @Composable @ReadOnlyComposable
+        @Composable
+        @ReadOnlyComposable
         get() = LocalChatColors.current
 
     val gradients: ChatGradients
-        @Composable @ReadOnlyComposable
+        @Composable
+        @ReadOnlyComposable
         get() = LocalChatGradients.current
 
     val typography: ChatTypography
-        @Composable @ReadOnlyComposable
+        @Composable
+        @ReadOnlyComposable
         get() = LocalChatTypography.current
 
     val sizes: ChatSizes
-        @Composable @ReadOnlyComposable
+        @Composable
+        @ReadOnlyComposable
         get() = LocalChatSizes.current
 
     val shapes: ChatShapes
-        @Composable @ReadOnlyComposable
+        @Composable
+        @ReadOnlyComposable
         get() = LocalChatShapes.current
 
     val spacing: ChatSpacing
-        @Composable @ReadOnlyComposable
+        @Composable
+        @ReadOnlyComposable
         get() = LocalChatSpacing.current
 
     val elevation: ChatElevation
-        @Composable @ReadOnlyComposable
+        @Composable
+        @ReadOnlyComposable
         get() = LocalChatElevation.current
 }
