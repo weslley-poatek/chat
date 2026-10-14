@@ -69,6 +69,9 @@ internal fun Project.configureLibrary(extension: KotlinMultiplatformExtension) {
             }
             withHostTest {
                 isIncludeAndroidResources = true
+                // android.jar stubs return defaults instead of throwing, so code that touches the
+                // framework in passing still runs, like the TextUtils check in Firebase's exceptions.
+                isReturnDefaultValues = true
             }
             withDeviceTestBuilder {
                 sourceSetTreeName = "test"

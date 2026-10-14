@@ -18,3 +18,12 @@ captures
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
 .claude/
+
+# Firebase config: local-only, download it from the Firebase console
+google-services.json
+GoogleService-Info.plist
+
+# Swift Package Manager, resolved by Xcode for the KotlinMultiplatformLinkedPackage
+.swiftpm
+.swiftpm-locks/
+Package.resolved

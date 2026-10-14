@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import br.com.weslleycampos.chat.core.navigation.entries.home.HomeEntry
+import br.com.weslleycampos.chat.core.navigation.entries.auth.SplashEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntriesAggregator
 import br.com.weslleycampos.chat.core.navigation.utils.rememberNavigator
 import org.koin.android.ext.android.inject
@@ -17,7 +17,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            val navigator = rememberNavigator(HomeEntry)
+            val navigator = rememberNavigator(SplashEntry)
 
             App(
                 navBackStack = navigator.navBackStack,

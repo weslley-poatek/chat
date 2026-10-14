@@ -17,8 +17,19 @@ app-version-name = "1.0"
 activity = "1.13.0"
 appcompat = "1.8.0"
 core = "1.19.1"
+credentials = "1.6.0"
 datastore = "1.2.1"
 lifecycle = "2.11.0"
+
+# Coroutines
+kotlinx-coroutines = "1.10.2"
+
+# Firebase and Google Sign-In
+firebase-bom = "34.19.0"
+firebase-ios-sdk = "12.19.2"
+googleid = "1.2.1"
+google-services = "4.5.0"
+google-signin-ios = "10.0.0"
 
 # Compose Multiplatform
 compose-multiplatform = "1.12.1"
@@ -37,7 +48,6 @@ detekt = "1.23.8"
 # Testing
 espresso = "3.7.0"
 junit = "4.13.2"
-kotlinx-coroutines = "1.10.2"
 test-ext = "1.3.0"
 
 [libraries]
@@ -45,9 +55,20 @@ test-ext = "1.3.0"
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 core-ktx = { module = "androidx.core:core-ktx", version.ref = "core" }
+credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
+credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
 lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 lifecycle-viewmodel-navigation3 = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "lifecycle" }
+
+# Coroutines
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "kotlinx-coroutines" }
+
+# Firebase and Google Sign-In: the iOS SDKs come through SwiftPM, see `swiftPMDependencies` in :data:auth and :feature:auth
+firebase-auth = { module = "com.google.firebase:firebase-auth" }
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 
 # DataStore
 datastore-core-okio = { module = "androidx.datastore:datastore-core-okio", version.ref = "datastore" }
@@ -103,6 +124,9 @@ koin-compose = ["koin-compose", "koin-compose-viewmodel"]
 # Android
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+
+# Firebase
+google-services = { id = "com.google.gms.google-services", version.ref = "google-services" }
 
 # Kotlin
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

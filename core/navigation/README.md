@@ -11,7 +11,9 @@ their screens through `EntryProvider`s, and `rememberNavigator` saves and restor
 | `EntryProvider` | `core.navigation.utils` | A feature's `entry<Key> { ... }` builder and the serializers of its keys |
 | `EntriesAggregator` | `core.navigation.utils` | Every `EntryProvider` in the graph, as Koin collects them |
 | `rememberNavigator` | `core.navigation.utils` | The navigator, saved across configuration changes and process death |
-| `HomeEntry` | `core.navigation.entries.home` | The start key |
+| `SplashEntry` | `core.navigation.entries.auth` | The start key: the session gate replaces it with `SignInEntry` or `HomeEntry` |
+| `SignInEntry` | `core.navigation.entries.auth` | Google sign-in |
+| `HomeEntry` | `core.navigation.entries.home` | The first screen after sign-in |
 
 ## Usage
 

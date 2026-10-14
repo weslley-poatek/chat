@@ -1,0 +1,7 @@
+<resources>
+    <string name="sign_in_app_name">Chat</string>
+    <string name="sign_in_google">Continue with Google</string>
+    <string name="sign_in_google_error">Couldn’t sign in with Google. Try again.</string>
+    <string name="sign_in_google_network_error">No internet connection. Check it and try again.</string>
+    <string name="sign_in_google_credential_error">Google couldn’t confirm your account. Try again.</string>
+</resources>

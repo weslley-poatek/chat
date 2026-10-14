@@ -11,6 +11,8 @@ kotlin {
             implementation(projects.core.navigation)
             implementation(projects.core.preferences)
             implementation(projects.core.ui)
+            implementation(projects.data.auth)
+            implementation(projects.feature.auth)
         }
     }
 }

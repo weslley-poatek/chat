@@ -32,8 +32,9 @@
 <br>
 
 > [!NOTE]
-> **Status: foundation.** The build system, dependency injection and secure storage are in place.
-> The chat experience is being built on top of them, so the app still shows the starter screen.
+> **Status: foundation.** The build system, dependency injection, secure storage and Google sign-in
+> are in place. The chat experience is being built on top of them, so after sign-in the app still
+> shows the starter screen.
 > The voice mode screen in the banner comes from the design prototype, not from a build of the app.
 
 ## ✨ Highlights
@@ -90,6 +91,8 @@ flowchart TD
     nav[":core:navigation<br/><i>Navigator · entry providers</i>"]
     prefs[":core:preferences<br/><i>plain + encrypted DataStore</i>"]
     ui[":core:ui<br/><i>ChatTheme · tokens · components</i>"]
+    featureAuth[":feature:auth<br/><i>Splash · Google sign-in</i>"]
+    dataAuth[":data:auth<br/><i>AuthManager · Firebase Auth</i>"]
 
     androidApp -- "implementation" --> app
     androidApp -- "implementation" --> nav
@@ -97,6 +100,9 @@ flowchart TD
     app -- "implementation" --> nav
     app -- "implementation" --> prefs
     app -- "implementation" --> ui
+    app -- "implementation" --> featureAuth
+    app -- "implementation" --> dataAuth
+    featureAuth -- "implementation" --> dataAuth
 ```
 
 | Module | Role |
@@ -107,6 +113,8 @@ flowchart TD
 | [`:core:navigation`](core/navigation) | The shared `Navigator`, navigation keys, `EntryProvider` contract and back-stack saving. [Read the module guide →](core/navigation/README.md) |
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
 | [`:core:ui`](core/ui) | The design system: `ChatTheme`, per-model palettes, typography, tokens and components. [Read the module guide →](core/ui/README.md) |
+| [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
+| [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
 
 <details>
 <summary><b>How startup works on each platform</b></summary>
@@ -115,10 +123,10 @@ flowchart TD
 
 | | Android | iOS |
 | --- | --- | --- |
-| Entry point | `MainApplication.onCreate()` | `iOSApp.init()` |
+| Entry point | `MainApplication.onCreate()` | `iOSApp.init()`, which also calls `FirebaseApp.configure()` and sets the `GIDSignIn` client ID |
 | Koin start | `startKoin<AppModule> { androidContext(...) }` | `KoinKt.doInitKoin()` → `startKoin { module<AppModule>() }` |
 | UI host | `MainActivity` → `setContent { ... }` | `ComposeView` → `MainViewControllerKt.MainViewController()` |
-| Composition root | `rememberNavigator(HomeEntry)`, then `App(navBackStack, entryBuilders)` | The same, inside `ComposeUIViewController { ... }` |
+| Composition root | `rememberNavigator(SplashEntry)`, then `App(navBackStack, entryBuilders)` | The same, inside `ComposeUIViewController { ... }` |
 
 Both hosts read the entry builders from `EntriesAggregator`. `MainActivity` injects it with
 `by inject()`, and iOS gets it from `KoinPlatform.getKoin()`.
@@ -139,6 +147,8 @@ iOS compilation reports `KOIN-D002` for valid lookups across Gradle modules. See
 | Lifecycle | JetBrains `lifecycle-runtime-compose` · `lifecycle-viewmodel-compose` | `2.11.0` |
 | Dependency injection | [Koin](https://insert-koin.io) · Koin compiler plugin | `4.2.2` · `1.2.1` |
 | Storage | [AndroidX DataStore](https://developer.android.com/topic/libraries/architecture/datastore) Preferences (Okio) | `1.2.1` |
+| Authentication | [Firebase Auth](https://firebase.google.com/docs/auth) · Android BoM · iOS SDK | `34.19.0` · `12.19.2` |
+| Google sign-in | [Credential Manager](https://developer.android.com/identity/sign-in/credential-manager-siwg) · `googleid` · [GoogleSignIn-iOS](https://github.com/google/GoogleSignIn-iOS) | `1.6.0` · `1.2.1` · `10.0.0` |
 | Static analysis | [Detekt](https://detekt.dev) + `detekt-formatting` | `1.23.8` |
 | Build | Gradle · Android Gradle Plugin | `9.5.1` · `9.1.1` |
 
@@ -169,6 +179,23 @@ git clone git@github.com:weslley-poatek/chat.git
 ```bash
 cd chat
 ```
+
+### 🔥 Firebase setup
+
+Both apps need a Firebase project with **Google** enabled under **Authentication → Sign-in method**.
+The config files are local-only and gitignored, so download them from the Firebase console:
+
+| | 🤖 Android | 🍎 iOS |
+| --- | --- | --- |
+| Register the app as | `br.com.weslleycampos.chat`, plus your debug SHA-1 from `./gradlew :androidApp:signingReport` | `br.com.weslleycampos.chat` |
+| Download | `google-services.json` into [`androidApp/`](androidApp) | `GoogleService-Info.plist` into [`iosApp/iosApp/`](iosApp/iosApp) |
+| Then | Nothing: the google-services plugin reads it at build time | Copy its `REVERSED_CLIENT_ID` into `GOOGLE_REVERSED_CLIENT_ID` in [`Config.xcconfig`](iosApp/Configuration/Config.xcconfig) |
+
+> [!IMPORTANT]
+> Without `google-services.json` the Android build fails, and without `GoogleService-Info.plist` the iOS
+> app crashes on launch in `FirebaseApp.configure()`. An empty `GOOGLE_REVERSED_CLIENT_ID` crashes the
+> iOS app when you tap **Continue with Google**. If you set `TEAM_ID`, register the iOS app as
+> `br.com.weslleycampos.chat<TEAM_ID>`, the bundle identifier it produces.
 
 ### 🤖 Run on Android
 
@@ -206,6 +233,8 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 | Navigation tests on the iOS simulator | `./gradlew :core:navigation:iosSimulatorArm64Test` |
 | UI tests on the Android host | `./gradlew :core:ui:testAndroidHostTest` |
 | UI tests on the iOS simulator | `./gradlew :core:ui:iosSimulatorArm64Test` |
+| Auth tests on the Android host | `./gradlew :data:auth:testAndroidHostTest :feature:auth:testAndroidHostTest` |
+| Auth tests on the iOS simulator | `./gradlew :data:auth:iosSimulatorArm64Test :feature:auth:iosSimulatorArm64Test` |
 | Static analysis for every module | `./gradlew detekt` |
 
 > [!WARNING]
@@ -217,13 +246,32 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 All shared configuration lives in the [`build-logic`](build-logic/convention/src/main/kotlin) included
 build. Each module picks the conventions it needs:
 
-| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:navigation` | `:core:preferences` | `:core:ui` |
-| --- | --- | :---: | :---: | :---: | :---: | :---: |
-| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | | |
-| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ | ✅ |
-| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | ✅ | | ✅ |
-| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:navigation` | `:core:preferences` | `:core:ui` | `:data:auth` | `:feature:auth` |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | | | | |
+| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | ✅ | | ✅ | | ✅ |
+| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+`:androidApp` also applies the `com.google.gms.google-services` plugin, which turns `google-services.json`
+into resources such as the `default_web_client_id` the Google account picker asks for.
+
+### iOS SDKs through SwiftPM
+
+`:data:auth` and `:feature:auth` declare the Firebase and GoogleSignIn iOS SDKs in a
+`swiftPMDependencies { }` block, and Kotlin calls them directly through the generated
+`swiftPMImport.Chat.*` packages. Xcode links them through
+[`iosApp/KotlinMultiplatformLinkedPackage`](iosApp/KotlinMultiplatformLinkedPackage), which Gradle
+generates. After adding or changing a `swiftPMDependencies` block, regenerate it and the Xcode project
+reference from the repository root:
+
+```bash
+XCODEPROJ_PATH=$PWD/iosApp/iosApp.xcodeproj ./gradlew :app:integrateLinkagePackage
+```
+
+Pass an absolute path: a relative one is read from `app/`, which writes the package to
+`app/iosApp/` instead.
 
 ### Adding a module
 
@@ -291,7 +339,12 @@ chat/
 │   ├── navigation/                🧭 Navigator, keys and entry providers
 │   ├── preferences/               🔐 Plain and encrypted DataStore
 │   └── ui/                        🎨 ChatTheme, tokens and components
+├── data/
+│   └── auth/                      🔑 AuthManager on Firebase Auth
+├── feature/
+│   └── auth/                      👋 Splash gate and Google sign-in screen
 ├── iosApp/                        🍎 Xcode project and SwiftUI host
+│   └── KotlinMultiplatformLinkedPackage/  📦 Generated SwiftPM package for the iOS SDKs
 ├── build-logic/
 │   └── convention/                🧱 chat.* convention plugins
 ├── gradle/
