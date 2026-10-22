@@ -6,13 +6,18 @@ import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
 import br.com.weslleycampos.chat.core.database.entities.StoredBlock
 import br.com.weslleycampos.chat.data.chat.fakes.FakeChatDatabase
+import br.com.weslleycampos.chat.data.chat.fakes.FakePreferences
 import br.com.weslleycampos.chat.data.chat.fakes.FixedRandom
 import br.com.weslleycampos.chat.data.chat.fakes.TEST_START
 import br.com.weslleycampos.chat.data.chat.fakes.TestClock
 import br.com.weslleycampos.chat.data.chat.models.Block
+import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
+import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.Persona
+import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import br.com.weslleycampos.chat.data.chat.replies.CannedReplies
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
@@ -32,6 +37,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -41,17 +47,31 @@ import kotlin.time.Duration.Companion.milliseconds
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoomChatRepositoryTest {
     private var database = FakeChatDatabase()
+    private val preferences = FakePreferences()
+
+    private val reviewer: Persona = PersonaPresets.personas.single { it.id == "reviewer" }
+    private val terse: Persona = PersonaPresets.personas.single { it.id == "terse" }
+    private val digest: Persona = PersonaPresets.personas.single { it.id == "digest" }
+    private val gemini: ChatModel = ModelCatalogue["gemini"]
+
+    /** The personas and preferences the chat repository reads, on the same fake database. */
+    private fun TestScope.models(): ModelRepository =
+        LocalModelRepository(personaDao = database.personaDao, preferences = preferences, scope = this)
 
     /**
      * Streams at the slowest pace and shortest thinking time, on the test's virtual time. Replies
      * stream in the test's own scope by default, since `advanceUntilIdle` skips `backgroundScope`.
      */
-    private fun TestScope.repository(scope: CoroutineScope = this): RoomChatRepository {
+    private fun TestScope.repository(
+        scope: CoroutineScope = this,
+        models: ModelRepository = models(),
+    ): RoomChatRepository {
         val clock = TestClock(testScheduler)
         return RoomChatRepository(
             conversationDao = database.conversationDao,
             messageDao = database.messageDao,
             transactions = database.transactions,
+            models = models,
             streamer = ReplyStreamer(messageDao = database.messageDao, clock = clock, random = FixedRandom()),
             clock = clock,
             scope = scope,
@@ -287,6 +307,185 @@ class RoomChatRepositoryTest {
         assertNull(reply.latency)
     }
 
+    @Test
+    fun aFirstSendWithNoChoiceStartsOnTheDefaultModelTheUserSet() = runTest {
+        val models = models()
+        models.setDefaultModel(ModelCatalogue["o3"])
+        val repository = repository(models = models)
+
+        val id = assertNotNull(repository.send(null, "Rust ownership in async closures"))
+
+        val conversation = assertNotNull(repository.observeConversation(id).first())
+        assertEquals(ModelChoice(ModelCatalogue["o3"]), conversation.choice)
+        assertEquals(ModelCatalogue["o3"], repository.replies(id).single().model)
+        assertNull(repository.replies(id).single().persona)
+    }
+
+    @Test
+    fun aFirstSendStartsOnTheModelPickedBeforeItAndLeavesTheDefaultAlone() = runTest {
+        val models = models()
+        val repository = repository(models = models)
+
+        val id = assertNotNull(repository.send(null, "SSE vs WebSocket", newChat = ModelChoice(gemini)))
+
+        assertEquals(ModelChoice(gemini), repository.observeConversation(id).first()?.choice)
+        assertEquals(gemini, repository.replies(id).single().model)
+        assertEquals(ModelCatalogue.default, models.observeDefaultModel().first())
+        assertEquals(ConversationEntityChoice("gemini", null), database.conversationRows.value.single().choice())
+    }
+
+    @Test
+    fun aFirstSendWithAPersonaStartsOnThePersonaAndTheModelItAnswersWith() = runTest {
+        val repository = repository()
+
+        val choice = ModelChoice(model = gemini, persona = terse)
+
+        val id = assertNotNull(repository.send(null, "Review this diff", newChat = choice))
+        advanceUntilIdle()
+
+        val conversation = assertNotNull(repository.observeConversation(id).first())
+        assertEquals(terse, conversation.persona)
+        assertEquals(ModelCatalogue["gpt5"], conversation.model)
+        val reply = repository.replies(id).single()
+        assertEquals(terse, reply.persona)
+        assertEquals(ModelCatalogue["gpt5"], reply.model)
+        assertEquals(ReplyStatus.DONE, reply.status)
+    }
+
+    @Test
+    fun aNewChatChoiceThatIsNotInTheCatalogueOrNotStoredSendsNothing() = runTest {
+        val repository = repository()
+        val retired = gemini.copy(id = "gemini-1")
+        val ghost = terse.copy(id = "ghost")
+
+        assertNull(repository.send(null, "hello", newChat = ModelChoice(retired)))
+        assertNull(repository.send(null, "hello", newChat = ModelChoice(ghost)))
+
+        assertTrue(database.conversationRows.value.isEmpty())
+        assertTrue(database.messageRows.value.isEmpty())
+    }
+
+    @Test
+    fun anOpenConversationAnswersWithItsOwnChoiceAndIgnoresANewChatOne() = runTest {
+        val repository = repository()
+        val id = assertNotNull(repository.send(null, "first", newChat = ModelChoice(reviewer)))
+        advanceUntilIdle()
+
+        assertEquals(id, repository.send(id, "second", newChat = ModelChoice(gemini)))
+
+        val replies = repository.replies(id)
+        assertEquals(listOf(reviewer, reviewer), replies.map { it.persona })
+        assertEquals(listOf("sonnet", "sonnet"), replies.map { it.model.id })
+        assertEquals(ModelChoice(reviewer), repository.observeConversation(id).first()?.choice)
+    }
+
+    @Test
+    fun choosingAModelChangesTheConversationDropsItsPersonaAndKeepsItsPlaceInRecent() = runTest {
+        val repository = repository()
+        val older = assertNotNull(repository.send(null, "older", newChat = ModelChoice(reviewer)))
+        advanceUntilIdle()
+        val newer = assertNotNull(repository.send(null, "newer"))
+        advanceUntilIdle()
+        val before = assertNotNull(repository.observeConversation(older).first())
+
+        assertTrue(repository.choose(older, ModelChoice(gemini)))
+
+        val after = assertNotNull(repository.observeConversation(older).first())
+        assertEquals(before.copy(model = gemini, persona = null), after)
+        assertEquals(listOf(newer, older), repository.observeRecentConversations().first().map { it.id })
+    }
+
+    @Test
+    fun choosingAPersonaPicksTheModelItAnswersWith() = runTest {
+        val repository = repository()
+        val id = assertNotNull(repository.send(null, "Summarise this paper"))
+        advanceUntilIdle()
+
+        assertTrue(repository.choose(id, ModelChoice(model = ModelCatalogue["opus"], persona = digest)))
+
+        assertEquals(ModelChoice(digest), repository.observeConversation(id).first()?.choice)
+        assertEquals(ConversationEntityChoice("gemini", "digest"), database.conversationRows.value.single().choice())
+    }
+
+    @Test
+    fun theNextReplyComesFromTheNewChoiceWhileTheReplyOnItsWayAndEarlierOnesKeepTheirs() = runTest {
+        val repository = repository()
+        val id = assertNotNull(repository.send(null, "first", newChat = ModelChoice(terse)))
+        advanceTimeBy(400)
+        assertEquals(ReplyStatus.STREAMING, repository.replies(id).single().status)
+
+        assertTrue(repository.choose(id, ModelChoice(gemini)))
+        advanceUntilIdle()
+        repository.send(id, "second")
+        assertTrue(repository.choose(id, ModelChoice(reviewer)))
+        advanceUntilIdle()
+        repository.send(id, "third")
+        advanceUntilIdle()
+
+        val replies = repository.replies(id)
+        assertEquals(listOf("gpt5", "gemini", "sonnet"), replies.map { it.model.id })
+        assertEquals(listOf(terse, null, reviewer), replies.map { it.persona })
+        assertEquals(List(3) { ReplyStatus.DONE }, replies.map { it.status })
+    }
+
+    @Test
+    fun choosingForAConversationThatDoesNotExistOrAChoiceThatIsNotStoredChangesNothing() = runTest {
+        val repository = repository()
+        val id = assertNotNull(repository.send(null, "first"))
+        val writes = database.writes
+
+        assertFalse(repository.choose(id + 1, ModelChoice(gemini)))
+        assertFalse(repository.choose(id, ModelChoice(gemini.copy(id = "gemini-1"))))
+        assertFalse(repository.choose(id, ModelChoice(terse.copy(id = "ghost"))))
+
+        assertEquals(writes, database.writes)
+        assertEquals(ModelChoice(ModelCatalogue.default), repository.observeConversation(id).first()?.choice)
+    }
+
+    @Test
+    fun aConversationsObserversSeeAChoiceAsSoonAsItIsMade() = runTest {
+        val repository = repository()
+        val id = assertNotNull(repository.send(null, "first"))
+        advanceUntilIdle()
+        val choices = mutableListOf<ModelChoice?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            repository.observeConversation(id).collect { choices += it?.choice }
+        }
+
+        repository.choose(id, ModelChoice(terse))
+        repository.choose(id, ModelChoice(terse))
+        repository.choose(id, ModelChoice(gemini))
+
+        assertEquals(
+            listOf<ModelChoice?>(ModelChoice(ModelCatalogue.default), ModelChoice(terse), ModelChoice(gemini)),
+            choices,
+        )
+    }
+
+    @Test
+    fun aPersonaThatIsNoLongerStoredReadsAsNoneOnItsConversationAndReplies() = runTest {
+        database = FakeChatDatabase(
+            conversations = listOf(
+                ConversationEntity(
+                    id = 1,
+                    title = "t",
+                    modelId = "gpt5",
+                    createdAt = 0,
+                    updatedAt = 0,
+                    personaId = "ghost",
+                ),
+            ),
+            messages = listOf(
+                message(id = 1, role = MessageRole.USER, status = MessageStatus.DONE),
+                message(id = 2, role = MessageRole.ASSISTANT, status = MessageStatus.DONE).copy(personaId = "ghost"),
+            ),
+        )
+        val repository = repository()
+
+        assertEquals(ModelChoice(ModelCatalogue["gpt5"]), repository.observeConversation(1).first()?.choice)
+        assertNull(repository.replies(1).single().persona)
+    }
+
     private fun message(
         id: Long,
         role: MessageRole,
@@ -303,4 +502,8 @@ class RoomChatRepositoryTest {
         latencyMillis = null,
         createdAt = 0,
     )
+
+    private data class ConversationEntityChoice(val modelId: String, val personaId: String?)
+
+    private fun ConversationEntity.choice() = ConversationEntityChoice(modelId, personaId)
 }

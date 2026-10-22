@@ -4,14 +4,18 @@ import br.com.weslleycampos.chat.core.database.entities.ConversationEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
+import br.com.weslleycampos.chat.core.database.entities.PersonaEntity
 import br.com.weslleycampos.chat.core.database.entities.StoredBlock
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
+import br.com.weslleycampos.chat.data.chat.models.Persona
+import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
@@ -26,6 +30,8 @@ class EntityMappersTest {
         StoredBlock.Code(language = "ts", text = "useEffect(() => {});"),
         StoredBlock.NumberedList(listOf("one", "two")),
     )
+    private val terse: Persona = PersonaPresets.personas.single { it.id == "terse" }
+    private val personas: Map<String, Persona> = mapOf(terse.id to terse)
 
     @Test
     fun aConversationRowReadsWithItsCatalogueModelAndInstants() {
@@ -39,9 +45,25 @@ class EntityMappersTest {
                 createdAt = Instant.fromEpochMilliseconds(1_000),
                 updatedAt = Instant.fromEpochMilliseconds(2_000),
             ),
-            row.toConversation(),
+            row.toConversation(personas),
         )
-        assertEquals(ModelCatalogue.default, row.copy(modelId = "retired").toConversation().model)
+        assertEquals(ModelCatalogue.default, row.copy(modelId = "retired").toConversation(personas).model)
+    }
+
+    @Test
+    fun aConversationRowReadsWithItsStoredPersonaAndAnUnknownOneAsNone() {
+        val row = ConversationEntity(
+            id = 3,
+            title = "Hello",
+            modelId = "gpt5",
+            createdAt = 1_000,
+            updatedAt = 2_000,
+            personaId = "terse",
+        )
+
+        assertEquals(terse, row.toConversation(personas).persona)
+        assertNull(row.copy(personaId = "ghost").toConversation(personas).persona)
+        assertNull(row.copy(personaId = null).toConversation(personas).persona)
     }
 
     @Test
@@ -65,7 +87,7 @@ class EntityMappersTest {
                 text = "Add a leading option",
                 createdAt = Instant.fromEpochMilliseconds(1_000),
             ),
-            row.toMessage(),
+            row.toMessage(personas),
         )
     }
 
@@ -93,9 +115,20 @@ class EntityMappersTest {
                 latency = 1_900.milliseconds,
                 createdAt = Instant.fromEpochMilliseconds(1_000),
             ),
-            row.toMessage(),
+            row.toMessage(personas),
         )
-        assertEquals(ModelCatalogue.default, (row.copy(modelId = null).toMessage() as Message.Assistant).model)
+        assertEquals(ModelCatalogue.default, (row.copy(modelId = null).toMessage(personas) as Message.Assistant).model)
+        assertEquals(terse, (row.copy(personaId = "terse").toMessage(personas) as Message.Assistant).persona)
+        assertNull((row.copy(personaId = "ghost").toMessage(personas) as Message.Assistant).persona)
+    }
+
+    @Test
+    fun aPersonaRowReadsWithItsCatalogueModelAndBack() {
+        val row = PersonaEntity(id = "terse", name = "Terse", modelId = "gpt5", prompt = terse.prompt, position = 1)
+
+        assertEquals(terse, row.toPersona())
+        assertEquals(row, terse.toEntity(position = 1))
+        assertEquals(ModelCatalogue.default, row.copy(modelId = "retired").toPersona().model)
     }
 
     @Test

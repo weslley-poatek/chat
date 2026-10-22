@@ -6,6 +6,7 @@ import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
+import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -60,6 +61,9 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
     val conversations = MutableStateFlow<List<Conversation>>(emptyList())
     val messages = MutableStateFlow<Map<Long, List<Message>>>(emptyMap())
     val sends = mutableListOf<Pair<Long?, String>>()
+
+    /** The `newChat` choice of every send, in order. */
+    val newChatChoices = mutableListOf<ModelChoice?>()
     var answer: (suspend (conversationId: Long?, text: String) -> Long?)? = null
     private var nextId = 1L
 
@@ -73,10 +77,21 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         .map { all -> all.sortedByDescending { it.updatedAt }.take(ChatRepository.RECENT_CONVERSATIONS) }
         .distinctUntilChanged()
 
-    override suspend fun send(conversationId: Long?, text: String): Long? {
+    override suspend fun send(conversationId: Long?, text: String, newChat: ModelChoice?): Long? {
         sends += conversationId to text
+        newChatChoices += newChat
         answer?.let { return it(conversationId, text) }
-        return play(conversationId, text.trim())
+        return play(conversationId, text.trim(), newChat ?: ModelChoice(ModelCatalogue.default))
+    }
+
+    /** Like the real one: a model drops the persona, a persona answers with its own model. */
+    override suspend fun choose(conversationId: Long, choice: ModelChoice): Boolean {
+        if (conversations.value.none { it.id == conversationId }) return false
+        val model = choice.persona?.model ?: choice.model
+        conversations.update { all ->
+            all.map { if (it.id == conversationId) it.copy(model = model, persona = choice.persona) else it }
+        }
+        return true
     }
 
     /** A conversation of [model] with one done exchange: the user's [title], then [ReplyBlocks]. */
@@ -103,11 +118,17 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         return conversation
     }
 
-    private fun play(conversationId: Long?, text: String): Long? {
+    private fun play(conversationId: Long?, text: String, newChat: ModelChoice): Long? {
         if (text.isEmpty()) return null
         val conversation = if (conversationId == null) {
-            Conversation(id = nextId++, title = text, model = ModelCatalogue.default, createdAt = Now, updatedAt = Now)
-                .also { created -> conversations.update { it + created } }
+            Conversation(
+                id = nextId++,
+                title = text,
+                model = newChat.persona?.model ?: newChat.model,
+                persona = newChat.persona,
+                createdAt = Now,
+                updatedAt = Now,
+            ).also { created -> conversations.update { it + created } }
         } else {
             conversations.value.firstOrNull { it.id == conversationId } ?: return null
         }
@@ -119,6 +140,7 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
             id = replyId,
             conversationId = conversation.id,
             model = conversation.model,
+            persona = conversation.persona,
             blocks = blocks,
             status = status,
             latency = latency,

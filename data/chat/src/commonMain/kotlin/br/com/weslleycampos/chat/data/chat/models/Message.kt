@@ -21,6 +21,9 @@ sealed interface Message {
      * A canned reply. [blocks] grow while it streams; see [ReplyStatus].
      *
      * @property model The model that wrote it, for the meta row's short name.
+     * @property persona The persona it was written as, for the meta row's " · code reviewer", or
+     *   `null` when the model answered on its own. Changing the conversation's persona later does
+     *   not change it.
      * @property latency How long it streamed, from its first block to its last: the meta row's
      *   "0.8s". `null` until [status] is [ReplyStatus.DONE].
      * @property createdAt When the message it answers was sent.
@@ -29,6 +32,7 @@ sealed interface Message {
         override val id: Long,
         override val conversationId: Long,
         val model: ChatModel,
+        val persona: Persona? = null,
         val blocks: List<Block>,
         val status: ReplyStatus,
         val latency: Duration?,

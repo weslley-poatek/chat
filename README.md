@@ -34,9 +34,10 @@
 > [!NOTE]
 > **Status: foundation.** The build system, dependency injection, secure storage, the local database
 > and sign-in with Google or an email and password are in place, and so is the chat data layer:
-> conversations and messages in Room, with canned replies streamed into them. After sign-in the app
-> opens the chat thread: send a message, watch the reply think, stream and finish, copy its code, and
-> reopen a recent conversation. History, the model picker, voice and attachments come next.
+> conversations and messages in Room, with canned replies streamed into them, plus the model
+> picker's favorites, personas and default model. After sign-in the app opens the chat thread: send
+> a message, watch the reply think, stream and finish, copy its code, and reopen a recent
+> conversation. History, the model picker, voice and attachments come next.
 > The voice mode screen in the banner comes from the design prototype, not from a build of the app.
 
 ## ✨ Highlights
@@ -97,7 +98,7 @@ flowchart TD
     featureAuth[":feature:auth<br/><i>Splash · sign-in: Google, email</i>"]
     featureChat[":feature:chat<br/><i>Chat thread · composer · streamed replies</i>"]
     dataAuth[":data:auth<br/><i>AuthManager · Firebase Auth</i>"]
-    dataChat[":data:chat<br/><i>ChatRepository · canned streamed replies</i>"]
+    dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · canned streamed replies</i>"]
 
     androidApp -- "implementation" --> app
     androidApp -- "implementation" --> nav
@@ -113,6 +114,7 @@ flowchart TD
     featureAuth -- "implementation" --> dataAuth
     featureChat -- "implementation" --> dataChat
     dataChat -- "implementation" --> db
+    dataChat -- "implementation" --> prefs
 ```
 
 | Module | Role |
@@ -120,12 +122,12 @@ flowchart TD
 | [`:androidApp`](androidApp) | The Android application. Starts Koin with `androidContext(...)` and sets `App()` as content. |
 | [`iosApp`](iosApp) | The Xcode project. Calls `KoinKt.doInitKoin()` and wraps `MainViewController()` in SwiftUI. |
 | [`:app`](app) | Shared Compose Multiplatform UI: `App()` renders the back stack in a `NavDisplay`. Holds the root Koin module, `AppModule`, which `includes` feature and core modules. |
-| [`:core:database`](core/database) | `ChatDatabase`, the on-device Room database every conversation and message is stored in, on the bundled SQLite driver: the `conversations` and `messages` tables, their DAOs and a `TransactionRunner`. [Read the module guide →](core/database/README.md) |
+| [`:core:database`](core/database) | `ChatDatabase`, the on-device Room database every conversation and message is stored in, on the bundled SQLite driver: the `conversations`, `messages` and `personas` tables, their DAOs and a `TransactionRunner`. [Read the module guide →](core/database/README.md) |
 | [`:core:navigation`](core/navigation) | The shared `Navigator`, navigation keys, `EntryProvider` contract and back-stack saving. [Read the module guide →](core/navigation/README.md) |
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
 | [`:core:ui`](core/ui) | The design system: `ChatTheme`, per-model palettes, typography, tokens and components. [Read the module guide →](core/ui/README.md) |
 | [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. Both on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
-| [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, and `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
+| [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency, and `choose`, which changes a conversation's model and persona. `ModelRepository`: the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
 | [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen: Google, email + password sign-in, account creation and the password-reset email, as modes of one screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
 | [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. The accent follows the conversation's model. |
 
@@ -364,7 +366,7 @@ chat/
 │   └── ui/                        🎨 ChatTheme, tokens and components
 ├── data/
 │   ├── auth/                      🔑 AuthManager and EmailAuthManager on Firebase Auth
-│   └── chat/                      💬 ChatRepository, canned streamed replies, model catalogue
+│   └── chat/                      💬 ChatRepository, ModelRepository, canned streamed replies, models and personas
 ├── feature/
 │   ├── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)
 │   └── chat/                      💬 The chat thread: empty state, messages, code blocks, composer

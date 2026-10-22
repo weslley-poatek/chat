@@ -2,7 +2,10 @@ package br.com.weslleycampos.chat.data.chat.models
 
 /** The eight models of the design prototype's `MODELS`, in its order. Read-only. */
 object ModelCatalogue {
-    /** New conversations use this model until a default-model preference exists. */
+    /**
+     * The default model for new chats until the user sets another (`ModelRepository.setDefaultModel`),
+     * and what a model id the catalogue no longer has reads as.
+     */
     const val DEFAULT_MODEL_ID = "sonnet"
 
     val models: List<ChatModel> = listOf(
