@@ -41,6 +41,18 @@ class MessageDaoTest {
     }
 
     @Test
+    fun aReplyKeepsThePersonaItWasWrittenAs() = runTest {
+        val conversationId = conversations.insert(conversation())
+        val asPersona = dao.insert(reply(conversationId).copy(personaId = "reviewer"))
+        val plain = dao.insert(reply(conversationId))
+        val user = dao.insert(userMessage(conversationId))
+
+        val personas = dao.observeByConversation(conversationId).first().associate { it.id to it.personaId }
+
+        assertEquals(mapOf(asPersona to "reviewer", plain to null, user to null), personas)
+    }
+
+    @Test
     fun replyBlocksRoundTripThroughTheirJsonColumn() = runTest {
         val conversationId = conversations.insert(conversation())
         val blocks = listOf(

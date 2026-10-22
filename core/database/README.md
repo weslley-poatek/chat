@@ -1,22 +1,24 @@
 # Database
 
 `:core:database` owns `ChatDatabase`, the app's single [Room](https://developer.android.com/kotlin/multiplatform/room)
-database for Android and iOS. Conversations, messages and everything else Chat keeps are tables
-here: they survive restarts and never leave the device.
+database for Android and iOS. Conversations, messages, personas and every other record Chat keeps
+are tables here: they survive restarts and never leave the device. Plain settings, such as the
+favorite models and the default model, are preferences in `:core:preferences` instead.
 
 | Type | Package | Role |
 | --- | --- | --- |
 | `ChatDatabase` | `core.database` | The `@Database`: its entities, version, auto-migrations, column converters and one getter per DAO |
-| `DATABASE_VERSION` | `core.database` | The schema version, `2`. Tests compare against it, so they need no edit when it rises |
+| `DATABASE_VERSION` | `core.database` | The schema version, `3`. Tests compare against it, so they need no edit when it rises |
 | `ChatDatabaseConstructor` | `core.database` | The `expect object` that `@ConstructedBy` names; Room's compiler writes the `actual` on each target |
 | `CoreDatabaseModule` | `core.database` | The Koin module: the `ChatDatabase` singleton, every DAO and the `TransactionRunner` |
 | `TransactionRunner` | `core.database` | Runs DAO calls from more than one DAO as one write transaction |
 | `ChatTypeConverters` | `core.database` | Stores enums as fixed lowercase values and reply blocks as a JSON array |
 | `PlaceholderEntity` | `core.database.entities` | Version 1's only table, `placeholder`. It stays empty and is never dropped |
-| `ConversationEntity` | `core.database.entities` | Version 2, `conversations`: one chat thread, its title, model and timestamps |
-| `MessageEntity` | `core.database.entities` | Version 2, `messages`: a user message or a reply, its blocks, status and latency |
+| `ConversationEntity` | `core.database.entities` | Version 2, `conversations`: one chat thread, its title, model and timestamps; version 3 adds its `personaId` |
+| `MessageEntity` | `core.database.entities` | Version 2, `messages`: a user message or a reply, its blocks, status and latency; version 3 adds the reply's `personaId` |
+| `PersonaEntity` | `core.database.entities` | Version 3, `personas`: a persona's name, model, prompt and place in the picker |
 | `StoredBlock` | `core.database.entities` | One reply block in the `blocks` column: paragraph, code or numbered list |
-| `ConversationDao`, `MessageDao` | `core.database.daos` | The queries on those two tables |
+| `ConversationDao`, `MessageDao`, `PersonaDao` | `core.database.daos` | The queries on those three tables |
 
 ## Versions
 
@@ -24,6 +26,7 @@ here: they survive restarts and never leave the device.
 | --- | --- | --- |
 | 1 | `placeholder` | — |
 | 2 | `conversations`, `messages` (foreign key to `conversations`, cascade delete, index on `conversationId`) | `AutoMigration(from = 1, to = 2)` |
+| 3 | `personas` (text primary key); nullable `personaId` on `conversations` and `messages`, without a foreign key | `AutoMigration(from = 2, to = 3)` |
 
 The module uses Room 3 (`androidx.room3`), which is Kotlin-only and KSP-only: DAO functions are
 `suspend` or return `Flow`, and there is no `SupportSQLiteDatabase`.
@@ -61,14 +64,17 @@ class ConversationStarter(
 }
 ```
 
-`:data:chat`'s `RoomChatRepository` is the real consumer.
+`:data:chat`'s `RoomChatRepository` and `LocalModelRepository` are the real consumers. The persona
+presets are seeded by `LocalModelRepository` with `PersonaDao.insertIfAbsent`, not by the
+database: a migration only changes the schema, so fresh and upgraded installs take the same step.
 
 ## Adding a table
 
 Every table, DAO and migration lives in this module, so each change is one commit here.
 
-**1.** Declare the entity under `entities/`. A column added to an existing table needs a
-`@ColumnInfo(defaultValue = …)` so the auto-migration can fill the rows already there:
+**1.** Declare the entity under `entities/`. A non-null column added to an existing table needs a
+`@ColumnInfo(defaultValue = …)` so the auto-migration can fill the rows already there; a nullable
+one, like version 3's `personaId`, reads `null` on them:
 
 ```kotlin
 @Entity(tableName = "notes")
@@ -106,12 +112,14 @@ from the previous version, and add the DAO getter:
         PlaceholderEntity::class,
         ConversationEntity::class,
         MessageEntity::class,
+        PersonaEntity::class,
         NoteEntity::class,
     ],
-    version = DATABASE_VERSION, // now 3
+    version = DATABASE_VERSION, // now 4
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 3, to = 4),
     ],
     exportSchema = true,
 )
@@ -121,6 +129,8 @@ abstract class ChatDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
 
     abstract fun messageDao(): MessageDao
+
+    abstract fun personaDao(): PersonaDao
 
     abstract fun noteDao(): NoteDao
 }
@@ -138,7 +148,7 @@ internal fun noteDao(database: ChatDatabase): NoteDao = database.noteDao()
 ```
 
 **5.** Build once (any compile or test task) and commit the schema Room exports for the new version,
-`schemas/br.com.weslleycampos.chat.core.database.ChatDatabase/3.json`, with the code.
+`schemas/br.com.weslleycampos.chat.core.database.ChatDatabase/4.json`, with the code.
 
 > [!IMPORTANT]
 > Never add a destructive migration fallback, and never edit or delete a schema JSON once it is
@@ -198,9 +208,9 @@ private val helper = MigrationTestHelper(
 
 @Test
 fun notesTableIsAdded() = runTest {
-    helper.createDatabase(version = 2).close()
+    helper.createDatabase(version = 3).close()
 
-    helper.runMigrationsAndValidate(version = 3)
+    helper.runMigrationsAndValidate(version = 4)
 }
 ```
 
@@ -228,13 +238,17 @@ Run from the repository root:
 - `ExportedSchemaTest` (common) checks that the schema for the current version is exported with
   the identity hash Room compiled.
 - `ConversationDaoTest` and `MessageDaoTest` (common) cover every query: observing by id, "recent"
-  order and limit, message order, the blocks JSON, reply progress, reply counts, unfinished and
-  interrupted replies, the foreign key and its cascade delete.
+  order and limit, setting the model and persona, message order, the blocks JSON, a reply's
+  persona, reply progress, reply counts, unfinished and interrupted replies, the foreign key and
+  its cascade delete.
+- `PersonaDaoTest` (common) covers the position order and inserting personas again without
+  touching the rows already there.
 - `BlocksJsonTest` (common) covers the empty array and skipping a block type a version does not know.
 - `TransactionRunnerTest` (common) commits writes from two DAOs together and rolls them back together.
-- `MigrationTestHelperTest` (iOS) creates version 1 from its exported schema and migrates it to 2.
+- `MigrationTestHelperTest` (iOS) creates version 1 from its exported schema and migrates it to 2,
+  and migrates a version 2 database with rows to 3, keeping every row without a persona.
 - `CoreDatabaseModuleTest` (iOS) gets the `ChatDatabase` singleton from `CoreDatabaseModule` and
-  opens it on disk, then deletes the file; it also gets the DAOs and the `TransactionRunner`.
+  opens it on disk, then deletes the file; it also gets the three DAOs and the `TransactionRunner`.
 
 Not covered by tests: the Android builder and its file location, since a host test has no
 `Context`. The Koin compiler plugin does not catch a missing dependency of this module's

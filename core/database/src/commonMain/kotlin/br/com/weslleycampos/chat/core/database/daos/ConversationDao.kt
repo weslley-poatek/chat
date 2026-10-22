@@ -25,4 +25,12 @@ interface ConversationDao {
 
     @Query("UPDATE conversations SET updatedAt = :updatedAt WHERE id = :id")
     suspend fun setUpdatedAt(id: Long, updatedAt: Long)
+
+    /**
+     * Sets the model and persona that answer the conversation's next message, leaving `updatedAt`
+     * and every other column as they are. Returns how many conversations it changed: `0` for an
+     * unknown [id].
+     */
+    @Query("UPDATE conversations SET modelId = :modelId, personaId = :personaId WHERE id = :id")
+    suspend fun setModel(id: Long, modelId: String, personaId: String?): Int
 }

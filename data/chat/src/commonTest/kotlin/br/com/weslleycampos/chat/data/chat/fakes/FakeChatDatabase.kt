@@ -3,10 +3,12 @@ package br.com.weslleycampos.chat.data.chat.fakes
 import br.com.weslleycampos.chat.core.database.TransactionRunner
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
+import br.com.weslleycampos.chat.core.database.daos.PersonaDao
 import br.com.weslleycampos.chat.core.database.entities.ConversationEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
+import br.com.weslleycampos.chat.core.database.entities.PersonaEntity
 import br.com.weslleycampos.chat.core.database.entities.ReplyProgress
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,15 +18,21 @@ import kotlinx.coroutines.flow.update
 private val unfinished = setOf(MessageStatus.THINKING, MessageStatus.STREAMING)
 
 /**
- * The two DAOs and a transaction runner over in-memory tables. Like Room, every observer re-reads
+ * The three DAOs and a transaction runner over in-memory tables. Like Room, every observer re-reads
  * its table whenever any row of it changes, and ids are assigned in insertion order.
  */
 internal class FakeChatDatabase(
     conversations: List<ConversationEntity> = emptyList(),
     messages: List<MessageEntity> = emptyList(),
+    personas: List<PersonaEntity> = emptyList(),
 ) {
     val conversationRows = MutableStateFlow(conversations)
     val messageRows = MutableStateFlow(messages)
+    val personaRows = MutableStateFlow(personas)
+
+    /** How many times personas were inserted, kept apart from [writes] so a seed does not count as a send's. */
+    var personaInserts = 0
+        private set
 
     /** Every reply write, in order. */
     val replyUpdates = mutableListOf<ReplyProgress>()
@@ -79,6 +87,25 @@ internal class FakeChatDatabase(
         override suspend fun setUpdatedAt(id: Long, updatedAt: Long) {
             write()
             conversationRows.update { rows -> rows.map { if (it.id == id) it.copy(updatedAt = updatedAt) else it } }
+        }
+
+        override suspend fun setModel(id: Long, modelId: String, personaId: String?): Int {
+            if (conversationRows.value.none { it.id == id }) return 0
+            write()
+            conversationRows.update { rows ->
+                rows.map { if (it.id == id) it.copy(modelId = modelId, personaId = personaId) else it }
+            }
+            return 1
+        }
+    }
+
+    val personaDao = object : PersonaDao {
+        override fun observeAll(): Flow<List<PersonaEntity>> =
+            personaRows.map { rows -> rows.sortedWith(compareBy<PersonaEntity> { it.position }.thenBy { it.id }) }
+
+        override suspend fun insertIfAbsent(personas: List<PersonaEntity>) {
+            personaInserts++
+            personaRows.update { rows -> rows + personas.filter { new -> rows.none { it.id == new.id } } }
         }
     }
 

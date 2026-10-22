@@ -3,7 +3,9 @@
 package br.com.weslleycampos.chat.core.database
 
 import androidx.room3.testing.MigrationTestHelper
+import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
 import kotlinx.coroutines.test.runTest
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSTemporaryDirectory
@@ -11,6 +13,7 @@ import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MigrationTestHelperTest {
@@ -50,5 +53,44 @@ class MigrationTestHelperTest {
             .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('conversations', 'messages')")
             .use { statement -> buildSet { while (statement.step()) add(statement.getText(0)) } }
         assertEquals(setOf("conversations", "messages"), tables)
+    }
+
+    @Test
+    fun migratesVersionTwoToThreeKeepingEveryConversationAndMessageWithoutAPersona() = runTest {
+        helper.createDatabase(version = 2).use { connection ->
+            connection.execSQL(
+                "INSERT INTO conversations (id, title, modelId, createdAt, updatedAt) " +
+                    "VALUES (1, 'Postgres index', 'gpt5', 10, 20)",
+            )
+            connection.execSQL(
+                "INSERT INTO messages " +
+                    "(id, conversationId, role, text, blocks, modelId, status, latencyMillis, createdAt) " +
+                    "VALUES (1, 1, 'user', 'why?', '[]', NULL, 'done', NULL, 10), " +
+                    "(2, 1, 'assistant', '', '[{\"type\":\"p\",\"text\":\"ok\"}]', 'gpt5', 'done', 800, 10)",
+            )
+        }
+
+        val connection = helper.runMigrationsAndValidate(version = 3)
+
+        assertEquals(listOf("1|Postgres index|gpt5|10|20|null"), connection.rows("SELECT * FROM conversations"))
+        assertEquals(
+            listOf("1|user|null", "2|assistant|null"),
+            connection.rows("SELECT id, role, personaId FROM messages ORDER BY id"),
+        )
+        assertEquals(listOf("0"), connection.rows("SELECT COUNT(*) FROM personas"))
+        assertFalse(connection.rows("PRAGMA foreign_key_list(conversations)").any())
+    }
+
+    /** Every row of [sql], its columns joined by `|`, a NULL as `null`. */
+    private fun SQLiteConnection.rows(sql: String): List<String> = prepare(sql).use { statement ->
+        buildList {
+            while (statement.step()) {
+                add(
+                    (0 until statement.getColumnCount()).joinToString("|") { column ->
+                        if (statement.isNull(column)) "null" else statement.getText(column)
+                    },
+                )
+            }
+        }
     }
 }

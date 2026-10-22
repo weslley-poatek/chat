@@ -8,8 +8,10 @@ import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
+import br.com.weslleycampos.chat.core.database.daos.PersonaDao
 import br.com.weslleycampos.chat.core.database.entities.ConversationEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageEntity
+import br.com.weslleycampos.chat.core.database.entities.PersonaEntity
 import br.com.weslleycampos.chat.core.database.entities.PlaceholderEntity
 
 /**
@@ -17,8 +19,9 @@ import br.com.weslleycampos.chat.core.database.entities.PlaceholderEntity
  *
  * - 1: `placeholder` only.
  * - 2: `conversations` and `messages`.
+ * - 3: `personas`, and a nullable `personaId` on `conversations` and `messages`.
  */
-internal const val DATABASE_VERSION = 2
+internal const val DATABASE_VERSION = 3
 
 /**
  * The app's single on-device database: everything Chat keeps lives here and survives restarts.
@@ -33,10 +36,12 @@ internal const val DATABASE_VERSION = 2
         PlaceholderEntity::class,
         ConversationEntity::class,
         MessageEntity::class,
+        PersonaEntity::class,
     ],
     version = DATABASE_VERSION,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3),
     ],
     exportSchema = true,
 )
@@ -46,6 +51,8 @@ abstract class ChatDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
 
     abstract fun messageDao(): MessageDao
+
+    abstract fun personaDao(): PersonaDao
 }
 
 /**

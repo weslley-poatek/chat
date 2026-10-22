@@ -21,6 +21,8 @@ import androidx.room3.PrimaryKey
  * @property status Where a reply is in its stream. A user message is always [MessageStatus.DONE].
  * @property latencyMillis How long a finished reply streamed for. `null` until it is done.
  * @property createdAt Epoch milliseconds.
+ * @property personaId Version 3: the id of the [PersonaEntity] a reply was written as, or `null` for a
+ *   user message and a reply from the model on its own. Rows from version 2 read `null`.
  */
 @Entity(
     tableName = "messages",
@@ -44,6 +46,7 @@ data class MessageEntity(
     val status: MessageStatus,
     val latencyMillis: Long?,
     val createdAt: Long,
+    val personaId: String? = null,
 )
 
 /** The author of a message. [value] is what the `role` column holds. */
