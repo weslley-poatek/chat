@@ -34,8 +34,9 @@
 > [!NOTE]
 > **Status: foundation.** The build system, dependency injection, secure storage, the local database
 > and sign-in with Google or an email and password are in place, and so is the chat data layer:
-> conversations and messages in Room, with canned replies streamed into them, plus the model
-> picker's favorites, personas and default model. After sign-in the app opens the chat thread: send
+> conversations and messages in Room, with canned replies streamed into them, the model picker's
+> favorites, personas and default model, and History's data: the conversation list, its search,
+> pins, archives and deletes. After sign-in the app opens the chat thread: send
 > a message, watch the reply think, stream and finish, copy its code, and reopen a recent
 > conversation. The model chip opens the model picker: pick one of the eight models or a persona,
 > star favorites, and the accent follows at once. History, voice and attachments come next.
@@ -99,7 +100,7 @@ flowchart TD
     featureAuth[":feature:auth<br/><i>Splash · sign-in: Google, email</i>"]
     featureChat[":feature:chat<br/><i>Chat thread · composer · model picker</i>"]
     dataAuth[":data:auth<br/><i>AuthManager · Firebase Auth</i>"]
-    dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · canned streamed replies</i>"]
+    dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · canned streamed replies · history</i>"]
 
     androidApp -- "implementation" --> app
     androidApp -- "implementation" --> nav
@@ -128,7 +129,7 @@ flowchart TD
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
 | [`:core:ui`](core/ui) | The design system: `ChatTheme`, per-model palettes, typography, tokens and components. [Read the module guide →](core/ui/README.md) |
 | [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. Both on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
-| [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency, and `choose`, which changes a conversation's model and persona. `ModelRepository`: the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
+| [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency, and `choose`, which changes a conversation's model and persona. For History, the list of conversations that are not archived and its search over titles, the user's messages and model names, `setPinned`, `archive` and `delete`, and `groupHistory`, which splits the list into pinned, today, yesterday and earlier. `ModelRepository`: the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
 | [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen: Google, email + password sign-in, account creation and the password-reset email, as modes of one screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
 | [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. The model picker sheet: favorites, personas and every model, stars, and a pick that changes the conversation or the new chat. The accent follows the conversation's model. |
 
@@ -165,7 +166,7 @@ iOS compilation reports `KOIN-D002` for valid lookups across Gradle modules. See
 | Storage | [AndroidX DataStore](https://developer.android.com/topic/libraries/architecture/datastore) Preferences (Okio) | `1.2.1` |
 | Database | [Room](https://developer.android.com/kotlin/multiplatform/room) (`androidx.room3`) · [SQLite](https://developer.android.com/kotlin/multiplatform/sqlite) bundled driver | `3.0.3` · `2.7.1` |
 | Serialization | [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) JSON, through its BOM, for the reply blocks column | `1.12.0` |
-| Date and time | [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime), for local message times and dates | `0.8.0` |
+| Date and time | [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime), for local message times and dates and History's days | `0.8.0` |
 | Code generation | [KSP](https://github.com/google/ksp), for Room's compiler | `2.3.12` |
 | Authentication | [Firebase Auth](https://firebase.google.com/docs/auth) · Android BoM · iOS SDK | `34.19.0` · `12.19.2` |
 | Google sign-in | [Credential Manager](https://developer.android.com/identity/sign-in/credential-manager-siwg) · `googleid` · [GoogleSignIn-iOS](https://github.com/google/GoogleSignIn-iOS) | `1.6.0` · `1.2.1` · `10.0.0` |
@@ -367,7 +368,7 @@ chat/
 │   └── ui/                        🎨 ChatTheme, tokens and components
 ├── data/
 │   ├── auth/                      🔑 AuthManager and EmailAuthManager on Firebase Auth
-│   └── chat/                      💬 ChatRepository, ModelRepository, canned streamed replies, models and personas
+│   └── chat/                      💬 ChatRepository, ModelRepository, canned streamed replies, models, personas, History's groups
 ├── feature/
 │   ├── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)
 │   └── chat/                      💬 The chat thread: empty state, messages, code blocks, composer, model picker

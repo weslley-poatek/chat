@@ -2,13 +2,16 @@ package br.com.weslleycampos.chat.data.chat
 
 import br.com.weslleycampos.chat.core.database.TransactionRunner
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
+import br.com.weslleycampos.chat.core.database.daos.containsPattern
 import br.com.weslleycampos.chat.core.database.entities.ConversationEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.ConversationTitles
+import br.com.weslleycampos.chat.data.chat.models.HistorySearch
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
@@ -37,9 +40,12 @@ import kotlin.time.Clock
  *
  * Personas and the default model come from [models], so a persona read here is one that
  * [ModelRepository.observePersonas] lists. Replies stream in [scope], which outlives any screen.
+ * History's lists come from [historyDao]; pinning, archiving and deleting go through
+ * [conversationDao], one at a time with sends and choices.
  */
 internal class RoomChatRepository(
     private val conversationDao: ConversationDao,
+    private val historyDao: HistoryDao,
     private val messageDao: MessageDao,
     private val transactions: TransactionRunner,
     private val models: ModelRepository,
@@ -49,23 +55,42 @@ internal class RoomChatRepository(
 ) : ChatRepository {
     private val recovery: Deferred<Int> = scope.async { messageDao.interruptUnfinishedReplies() }
 
-    /** Serialises sends and choices, so two sends to one conversation cannot both see it idle. */
+    /**
+     * Serialises sends, choices, pins, archives and deletes, so two sends to one conversation cannot
+     * both see it idle, and a delete cannot land between a send's check and its writes.
+     */
     private val sending = Mutex()
 
-    override fun observeConversation(id: Long): Flow<Conversation?> = afterRecovery {
+    private val turns = TurnWriter(conversationDao = conversationDao, messageDao = messageDao, clock = clock)
+
+    override fun observeConversation(id: Long): Flow<Conversation?> = afterRecovery(recovery) {
         combine(conversationDao.observe(id), models.personasById()) { row, personas -> row?.toConversation(personas) }
     }
 
-    override fun observeMessages(conversationId: Long): Flow<List<Message>> = afterRecovery {
+    override fun observeMessages(conversationId: Long): Flow<List<Message>> = afterRecovery(recovery) {
         combine(messageDao.observeByConversation(conversationId), models.personasById()) { rows, personas ->
             rows.map { it.toMessage(personas) }
         }
     }
 
-    override fun observeRecentConversations(): Flow<List<Conversation>> = afterRecovery {
+    override fun observeRecentConversations(): Flow<List<Conversation>> = afterRecovery(recovery) {
         val recent = conversationDao.observeRecent(ChatRepository.RECENT_CONVERSATIONS)
         combine(recent, models.personasById()) { rows, personas -> rows.map { it.toConversation(personas) } }
     }
+
+    override fun observeHistory(query: String): Flow<List<Conversation>> = afterRecovery(recovery) {
+        val text = HistorySearch.text(query)
+        val rows = if (text == null) {
+            historyDao.observeAll()
+        } else {
+            historyDao.search(pattern = containsPattern(text), modelIds = HistorySearch.modelIds(text))
+        }
+        combine(rows, models.personasById()) { conversations, personas ->
+            conversations.map { it.toConversation(personas) }
+        }
+    }
+
+    override fun observeConversationCount(): Flow<Int> = afterRecovery(recovery) { historyDao.observeCount() }
 
     override suspend fun send(conversationId: Long?, text: String, newChat: ModelChoice?): Long? {
         val message = text.trim()
@@ -74,9 +99,9 @@ internal class RoomChatRepository(
         val turn = sending.withLock {
             if (conversationId == null) {
                 val choice = models.stored(newChat) ?: return null
-                transactions.inWriteTransaction { startTurn(create(message, choice), message) }
+                transactions.inWriteTransaction { turns.startNew(message, choice) }
             } else {
-                transactions.inWriteTransaction { continued(conversationId)?.let { startTurn(it, message) } }
+                transactions.inWriteTransaction { turns.continueIn(conversationId, message) }
             }
         } ?: return null
         scope.launch { streamer.stream(turn.replyId, CannedReplies.next(repliesSoFar = turn.repliesBefore)) }
@@ -89,6 +114,33 @@ internal class RoomChatRepository(
             conversationDao.setModel(conversationId, modelId = stored.modelId, personaId = stored.personaId) > 0
         }
     }
+
+    override suspend fun setPinned(conversationId: Long, pinned: Boolean): Boolean =
+        sending.withLock { conversationDao.setPinned(conversationId, pinned) > 0 }
+
+    override suspend fun archive(conversationId: Long): Boolean =
+        sending.withLock { conversationDao.setArchived(conversationId, archived = true) > 0 }
+
+    /** A reply still streaming into it finds its row gone on its next write, and stops: see [ReplyStreamer]. */
+    override suspend fun delete(conversationId: Long): Boolean =
+        sending.withLock { conversationDao.delete(conversationId) > 0 }
+}
+
+/**
+ * A send's writes, run inside the caller's transaction: the conversation (created, or moved to the
+ * top and back from the archive), the user's message and a thinking reply.
+ */
+private class TurnWriter(
+    private val conversationDao: ConversationDao,
+    private val messageDao: MessageDao,
+    private val clock: Clock,
+) {
+    /** A new conversation titled after [text], answered by [choice], and its first turn. */
+    suspend fun startNew(text: String, choice: StoredChoice): Turn = startTurn(create(text, choice), text)
+
+    /** The conversation's next turn, or `null` when it is gone or its reply is on its way. */
+    suspend fun continueIn(conversationId: Long, text: String): Turn? =
+        continued(conversationId)?.let { startTurn(it, text) }
 
     /** A new conversation titled after [text], answered by [choice]. */
     private suspend fun create(text: String, choice: StoredChoice): ConversationEntity {
@@ -103,11 +155,15 @@ internal class RoomChatRepository(
         return created.copy(id = conversationDao.insert(created))
     }
 
-    /** The conversation, moved to the top of "recent", or `null` when it is gone or its reply is on its way. */
+    /**
+     * The conversation, moved to the top of "recent" and History and back from the archive, or
+     * `null` when it is gone or its reply is on its way.
+     */
     private suspend fun continued(conversationId: Long): ConversationEntity? {
         val existing = conversationDao.get(conversationId)
         if (existing == null || messageDao.hasUnfinishedReply(conversationId)) return null
         conversationDao.setUpdatedAt(conversationId, clock.now().toEpochMilliseconds())
+        if (existing.archived) conversationDao.setArchived(conversationId, archived = false)
         return existing
     }
 
@@ -142,13 +198,14 @@ internal class RoomChatRepository(
         )
         return Turn(conversationId = conversation.id, replyId = replyId, repliesBefore = repliesBefore)
     }
+}
 
-    private fun <T> afterRecovery(source: () -> Flow<T>): Flow<T> = flow {
-        recovery.await()
-        emitAll(source().distinctUntilChanged())
-    }
+private class Turn(val conversationId: Long, val replyId: Long, val repliesBefore: Int)
 
-    private class Turn(val conversationId: Long, val replyId: Long, val repliesBefore: Int)
+/** [source] without repeats, once [recovery] has marked the replies an earlier run left playing. */
+private fun <T> afterRecovery(recovery: Deferred<*>, source: () -> Flow<T>): Flow<T> = flow {
+    recovery.await()
+    emitAll(source().distinctUntilChanged())
 }
 
 /** A [ModelChoice] as the `modelId` and `personaId` columns store it. */

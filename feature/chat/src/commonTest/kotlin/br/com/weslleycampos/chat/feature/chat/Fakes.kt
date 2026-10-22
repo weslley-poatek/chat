@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -90,8 +91,27 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         messages.map { it[conversationId].orEmpty() }.distinctUntilChanged()
 
     override fun observeRecentConversations(): Flow<List<Conversation>> = conversations
-        .map { all -> all.sortedByDescending { it.updatedAt }.take(ChatRepository.RECENT_CONVERSATIONS) }
+        .map { all ->
+            all.filterNot { it.archived }.sortedByDescending { it.updatedAt }.take(ChatRepository.RECENT_CONVERSATIONS)
+        }
         .distinctUntilChanged()
+
+    /** Like the real one: not archived, newest first, the trimmed query in a title, user text or short name. */
+    override fun observeHistory(query: String): Flow<List<Conversation>> =
+        combine(conversations, messages) { all, threads ->
+            val text = query.trim()
+            fun matches(conversation: Conversation) = text.isEmpty() ||
+                conversation.title.contains(text, ignoreCase = true) ||
+                conversation.model.shortName.contains(text, ignoreCase = true) ||
+                threads[conversation.id].orEmpty().any { message ->
+                    message is Message.User && message.text.contains(text, ignoreCase = true)
+                }
+            all.filter { !it.archived && matches(it) }
+                .sortedWith(compareByDescending<Conversation> { it.updatedAt }.thenByDescending { it.id })
+        }.distinctUntilChanged()
+
+    override fun observeConversationCount(): Flow<Int> =
+        conversations.map { all -> all.count { !it.archived } }.distinctUntilChanged()
 
     override suspend fun send(conversationId: Long?, text: String, newChat: ModelChoice?): Long? {
         sends += conversationId to text
@@ -109,6 +129,25 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         conversations.update { all ->
             all.map { if (it.id == conversationId) it.copy(model = model, persona = choice.persona) else it }
         }
+        return true
+    }
+
+    override suspend fun setPinned(conversationId: Long, pinned: Boolean): Boolean =
+        rewrite(conversationId, { it.pinned != pinned }) { it.copy(pinned = pinned) }
+
+    override suspend fun archive(conversationId: Long): Boolean =
+        rewrite(conversationId, { !it.archived }) { it.copy(archived = true) }
+
+    override suspend fun delete(conversationId: Long): Boolean {
+        if (conversations.value.none { it.id == conversationId }) return false
+        messages.update { it - conversationId }
+        conversations.update { all -> all.filterNot { it.id == conversationId } }
+        return true
+    }
+
+    private fun rewrite(id: Long, changes: (Conversation) -> Boolean, update: (Conversation) -> Conversation): Boolean {
+        if (conversations.value.none { it.id == id && changes(it) }) return false
+        conversations.update { all -> all.map { if (it.id == id) update(it) else it } }
         return true
     }
 

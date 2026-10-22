@@ -160,6 +160,24 @@ class ReplyStreamerTest {
         assertEquals(listOf(StoredBlock.Paragraph("Shel")), reply.blocks)
     }
 
+    @Test
+    fun aStreamWhoseReplyIsGoneStopsOnTheWriteThatFindsNothingAndEndsQuietly() = runTest {
+        val streamer = streamer()
+        val stream = launch { streamer.stream(REPLY_ID, CannedReplies.replies[0]) }
+        advanceTimeBy(320 + 2 * 28)
+        runCurrent()
+        assertEquals(2, database.replyUpdates.size)
+
+        database.conversationDao.delete(1)
+        advanceUntilIdle()
+
+        // The third tick finds no row to change, and nothing is written or scheduled after it.
+        assertEquals(3, database.replyUpdates.size)
+        assertEquals(320 + 3 * 28L, currentTime)
+        assertTrue(stream.isCompleted && !stream.isCancelled)
+        assertTrue(database.messageRows.value.isEmpty())
+    }
+
     private companion object {
         const val REPLY_ID = 2L
     }

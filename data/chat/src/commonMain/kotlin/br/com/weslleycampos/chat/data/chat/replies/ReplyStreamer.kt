@@ -24,7 +24,9 @@ import kotlin.time.Duration.Companion.milliseconds
  *    time from the end of thinking to that tick, as the prototype's `lat`.
  *
  * Every tick is one write, so the UI sees the reply grow at the prototype's pace. A stream that is
- * cancelled or fails leaves the row [MessageStatus.INTERRUPTED] with the blocks it revealed.
+ * cancelled or fails leaves the row [MessageStatus.INTERRUPTED] with the blocks it revealed. One
+ * whose row is gone, deleted with its conversation, stops on the write that finds nothing to
+ * change, so it writes nothing more and ends quietly.
  */
 internal class ReplyStreamer(
     private val messageDao: MessageDao,
@@ -40,7 +42,7 @@ internal class ReplyStreamer(
                 delay(TICK)
                 val visible = reveal.advance(random)
                 val done = reveal.isDone
-                messageDao.updateReply(
+                val written = messageDao.updateReply(
                     ReplyProgress(
                         id = replyId,
                         blocks = visible.map(Block::toStoredBlock),
@@ -48,9 +50,10 @@ internal class ReplyStreamer(
                         latencyMillis = if (done) (clock.now() - start).inWholeMilliseconds else null,
                     ),
                 )
+                if (written == 0) return
             }
         } finally {
-            // A no-op once the reply is done: it only touches a row still thinking or streaming.
+            // A no-op once the reply is done or gone: it only touches a row still thinking or streaming.
             withContext(NonCancellable) { messageDao.interruptReply(replyId) }
         }
     }

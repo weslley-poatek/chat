@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import br.com.weslleycampos.chat.core.database.TransactionRunner
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
 import br.com.weslleycampos.chat.core.preferences.qualifiers.UnencryptedPreferences
@@ -24,11 +25,13 @@ import kotlin.time.Clock
 @Single
 internal fun chatRepository(
     conversationDao: ConversationDao,
+    historyDao: HistoryDao,
     messageDao: MessageDao,
     transactions: TransactionRunner,
     models: ModelRepository,
 ): ChatRepository = RoomChatRepository(
     conversationDao = conversationDao,
+    historyDao = historyDao,
     messageDao = messageDao,
     transactions = transactions,
     models = models,

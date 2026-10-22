@@ -65,6 +65,9 @@ internal class FakeChatDatabase(
     /** The id of every conversation deleted, in order. */
     val deletes = mutableListOf<Long>()
 
+    /** The pattern and model ids of every History search, in order. */
+    val searches = mutableListOf<Pair<String, List<String>>>()
+
     /** Runs before each reply write is applied; throw from it to fail that write. */
     var beforeReplyUpdate: (ReplyProgress) -> Unit = {}
 
@@ -158,6 +161,7 @@ internal class FakeChatDatabase(
             conversationRows.map { rows -> rows.filterNot { it.archived }.sortedWith(newestFirst) }
 
         override fun search(pattern: String, modelIds: List<String>): Flow<List<ConversationEntity>> {
+            searches += pattern to modelIds
             val text = containedText(pattern)
             return combine(conversationRows, messageRows) { rows, messages ->
                 val byMessage = messages

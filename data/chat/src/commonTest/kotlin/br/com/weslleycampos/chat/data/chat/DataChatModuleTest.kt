@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import br.com.weslleycampos.chat.core.database.TransactionRunner
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
 import br.com.weslleycampos.chat.core.preferences.qualifiers.UnencryptedPreferences
@@ -58,6 +59,9 @@ internal class FakeDatabaseModule {
 
     @Single
     fun conversationDao(database: FakeChatDatabase): ConversationDao = database.conversationDao
+
+    @Single
+    fun historyDao(database: FakeChatDatabase): HistoryDao = database.historyDao
 
     @Single
     fun messageDao(database: FakeChatDatabase): MessageDao = database.messageDao

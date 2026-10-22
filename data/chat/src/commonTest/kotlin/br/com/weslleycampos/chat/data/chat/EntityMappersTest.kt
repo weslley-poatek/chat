@@ -51,6 +51,19 @@ class EntityMappersTest {
     }
 
     @Test
+    fun aConversationRowReadsWithItsPinnedAndArchivedFlags() {
+        val row = ConversationEntity(id = 3, title = "Hello", modelId = "gpt5", createdAt = 1_000, updatedAt = 2_000)
+
+        val plain = row.toConversation(personas)
+        val pinned = row.copy(pinned = true).toConversation(personas)
+        val archived = row.copy(archived = true).toConversation(personas)
+
+        assertEquals(false to false, plain.pinned to plain.archived)
+        assertEquals(true to false, pinned.pinned to pinned.archived)
+        assertEquals(false to true, archived.pinned to archived.archived)
+    }
+
+    @Test
     fun aConversationRowReadsWithItsStoredPersonaAndAnUnknownOneAsNone() {
         val row = ConversationEntity(
             id = 3,

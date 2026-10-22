@@ -69,6 +69,7 @@ class RoomChatRepositoryTest {
         val clock = TestClock(testScheduler)
         return RoomChatRepository(
             conversationDao = database.conversationDao,
+            historyDao = database.historyDao,
             messageDao = database.messageDao,
             transactions = database.transactions,
             models = models,

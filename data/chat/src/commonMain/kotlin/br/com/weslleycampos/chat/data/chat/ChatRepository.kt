@@ -4,6 +4,7 @@ import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
+import br.com.weslleycampos.chat.data.chat.models.groupHistory
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -18,11 +19,16 @@ import kotlinx.coroutines.flow.Flow
  * [ModelRepository.observeDefaultModel] (or what the model picker picked since) with
  * [observeRecentConversations], and pass a `null` conversation id and that [ModelChoice] to [send],
  * which creates the conversation.
+ *
+ * History lists [observeHistory], grouped by [groupHistory], and pins, archives and deletes with
+ * [setPinned], [archive] and [delete]; it opens a conversation by id with [observeConversation] and
+ * [observeMessages], as "recent" does.
  */
 interface ChatRepository {
     /**
      * The conversation, with the model and persona that answer its next message, or `null` when
-     * there is none with this [id].
+     * there is none with this [id]: never created, or deleted since. An archived conversation is
+     * still observed, with [Conversation.archived] set.
      */
     fun observeConversation(id: Long): Flow<Conversation?>
 
@@ -34,10 +40,33 @@ interface ChatRepository {
     fun observeMessages(conversationId: Long): Flow<List<Message>>
 
     /**
-     * The [RECENT_CONVERSATIONS] most recently updated conversations, newest first: the empty
-     * state's "recent" list. A conversation moves to the top when a message is sent in it.
+     * The [RECENT_CONVERSATIONS] most recently updated conversations that are not archived, newest
+     * first: the empty state's "recent" list. A conversation moves to the top when a message is
+     * sent in it; pinning does not move it, and archiving or deleting one lets the next one in.
      */
     fun observeRecentConversations(): Flow<List<Conversation>>
+
+    /**
+     * History's list: every conversation that is not archived, the most recently updated first, the
+     * later id on a tie, pinned ones included in that order. Pass it to [groupHistory] for the
+     * "pinned", "today", "yesterday" and "earlier" groups.
+     *
+     * With a [query] that is not blank, only the conversations it matches, in the same order. The
+     * query is trimmed, and a conversation matches when one of these contains it:
+     * - its title;
+     * - the text of one of the user's own messages (replies are canned, the same in every
+     *   conversation, so they are not searched);
+     * - its model's short name, as the row shows it: "gpt" finds every GPT-5 conversation.
+     *
+     * Letters A–Z match whatever their case; other letters, such as "ç" or "É", only as typed.
+     * `%`, `_` and `\` are matched as themselves. Emits again whenever the list changes: a send,
+     * a pin, an archive, a delete, a model choice; while a query is set, also a reply that streams
+     * into a matching conversation's thread, but only when the matches change.
+     */
+    fun observeHistory(query: String = ""): Flow<List<Conversation>>
+
+    /** How many conversations [observeHistory] lists without a query: every one that is not archived. */
+    fun observeConversationCount(): Flow<Int>
 
     /**
      * Sends [text], trimmed, and starts its reply, then returns the conversation's id without
@@ -57,7 +86,11 @@ interface ChatRepository {
      * The reply thinks for 320–619 ms, then streams one tick every 28 ms until it is
      * [ReplyStatus.DONE] with its latency. It keeps playing, and is saved, after the UI that sent
      * it is gone; one that was still playing when the app was closed reads as
-     * [ReplyStatus.INTERRUPTED] the next time the app starts.
+     * [ReplyStatus.INTERRUPTED] the next time the app starts. Archiving its conversation lets it
+     * finish; deleting it stops it at its next tick.
+     *
+     * A message sent in an archived conversation brings it back to History and "recent", at the
+     * top, as it was pinned or not.
      */
     suspend fun send(conversationId: Long?, text: String, newChat: ModelChoice? = null): Long?
 
@@ -69,6 +102,31 @@ interface ChatRepository {
      * the model is not in the catalogue or the persona is not stored.
      */
     suspend fun choose(conversationId: Long, choice: ModelChoice): Boolean
+
+    /**
+     * Pins the conversation to History's "pinned" group, or unpins it back to its day, as a row's
+     * "pin" / "unpin" does. It keeps its place in "recent" and its `updatedAt`. Returns whether it
+     * changed anything: `false` for an unknown conversation or one that already is as [pinned]
+     * says.
+     */
+    suspend fun setPinned(conversationId: Long, pinned: Boolean): Boolean
+
+    /**
+     * Archives the conversation, as a row's "archive" does: History, "recent" and
+     * [observeConversationCount] leave it out, but it stays on the device with its messages,
+     * [observeConversation] still reads it, and a reply on its way finishes. Nothing lists archived
+     * conversations; a message sent in it brings it back. Returns whether it changed anything:
+     * `false` for an unknown conversation or one already archived.
+     */
+    suspend fun archive(conversationId: Long): Boolean
+
+    /**
+     * Deletes the conversation and all its messages from the device, as a row's "delete" does, with
+     * no undo. A reply still on its way stops at its next tick, and its conversation's observers
+     * read `null` and an empty thread. Returns whether it deleted anything: `false` for an unknown
+     * conversation, one already deleted included.
+     */
+    suspend fun delete(conversationId: Long): Boolean
 
     companion object {
         /** The prototype's empty state lists the first three. */

@@ -25,6 +25,8 @@ internal fun ConversationEntity.toConversation(personas: Map<String, Persona>): 
     persona = personaId?.let(personas::get),
     createdAt = Instant.fromEpochMilliseconds(createdAt),
     updatedAt = Instant.fromEpochMilliseconds(updatedAt),
+    pinned = pinned,
+    archived = archived,
 )
 
 internal fun MessageEntity.toMessage(personas: Map<String, Persona>): Message = when (role) {
