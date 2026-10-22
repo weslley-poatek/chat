@@ -11,18 +11,16 @@ class ChatIconButtonTest {
         for (palette in ChatPalette.entries) {
             for (dark in listOf(false, true)) {
                 val colors = palette.colors(dark)
-                for (variant in ChatIconButtonVariant.entries) {
-                    assertEquals(
-                        chatIconButtonColors(colors = colors, variant = variant, enabled = true),
-                        chatIconButtonColors(
-                            colors = colors,
-                            variant = variant,
-                            enabled = false,
-                            hovered = true,
-                            pressed = true,
-                        ),
-                    )
-                }
+                assertEquals(
+                    chatIconButtonColors(colors = colors, variant = ChatIconButtonVariant.Standard, enabled = true),
+                    chatIconButtonColors(
+                        colors = colors,
+                        variant = ChatIconButtonVariant.Standard,
+                        enabled = false,
+                        hovered = true,
+                        pressed = true,
+                    ),
+                )
                 assertEquals(
                     Color.Transparent to colors.text.secondary,
                     chatIconButtonColors(colors = colors, variant = ChatIconButtonVariant.Standard, enabled = true),
@@ -48,6 +46,27 @@ class ChatIconButtonTest {
                         pressed = true,
                     ),
                 )
+            }
+        }
+    }
+
+    @Test
+    fun aDisabledAccentButtonIsTheRaisedSurfaceWithTertiaryTextInEveryPalette() {
+        for (palette in ChatPalette.entries) {
+            for (dark in listOf(false, true)) {
+                val colors = palette.colors(dark)
+                for (interaction in listOf(false, true)) {
+                    assertEquals(
+                        colors.surface.secondary to colors.text.tertiary,
+                        chatIconButtonColors(
+                            colors = colors,
+                            variant = ChatIconButtonVariant.Accent,
+                            enabled = false,
+                            hovered = interaction,
+                            pressed = interaction,
+                        ),
+                    )
+                }
             }
         }
     }

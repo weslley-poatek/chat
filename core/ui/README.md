@@ -59,12 +59,13 @@ has `@Preview`s for every variant and state in light and dark.
 | Component | Variants | Use |
 | --- | --- | --- |
 | `ChatButton` | `Primary`, `Secondary`, `Outlined`, `Text`, `Danger` × `Large`, `Small` | Actions, with an optional loading spinner |
-| `ChatIconButton` | `Standard`, `Accent` | Icon-only actions such as the menu and send buttons |
+| `ChatIconButton` | `Standard`, `Accent` | Icon-only actions such as the menu and send buttons. A disabled `Accent` button is `surface.secondary` with a `text.tertiary` icon, easing between the two over 150 ms, instead of fading |
 | `ChatTextField` | — | Single-line mono input with a placeholder and an optional trailing control |
 | `ChatSwitch` | — | On/off settings; the track takes the palette's accent when checked |
 | `ChatSegmentedControl`, `ChatSegment` | — | Single choice among a few short options, such as theme or speech rate |
 | `ChatBottomSheet` | — | Modal sheets such as the model picker, with the prototype's handle and top border |
 | `ChatVoiceSphere` | `Listening`, `Thinking`, `Speaking` | The voice mode particle sphere, tinted with the palette's accent |
+| `ChatToast` | — | A one-line notice in inverted colours that fades in; pass `null` to hide it. The screen's state clears it after `ChatToastDefaults.Duration`, 1400 ms |
 
 ## Fonts and icons
 
@@ -72,6 +73,13 @@ IBM Plex Sans (Regular, Medium, SemiBold) and IBM Plex Mono (Regular) are bundle
 `composeResources/font`. Mono SemiBold is not bundled, so the mono styles that ask for it are
 synthesized from Regular. Icons are vector drawables named `ic_*`. Sources and licenses are in
 [`LICENSES`](LICENSES/README.md).
+
+The module's `CoreUiRes` class is internal, so other modules reach the icons through
+`core.ui.icons.ChatIcons`:
+
+```kotlin
+Icon(painter = painterResource(ChatIcons.Send), contentDescription = null)
+```
 
 ## Tests
 

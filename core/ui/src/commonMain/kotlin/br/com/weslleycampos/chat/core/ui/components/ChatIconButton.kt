@@ -1,5 +1,9 @@
 package br.com.weslleycampos.chat.core.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,12 +42,12 @@ import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import br.com.weslleycampos.chat.core.ui.ChatTheme
-import br.com.weslleycampos.chat.core.ui.resources.CoreUiRes
-import br.com.weslleycampos.chat.core.ui.resources.ic_menu
-import br.com.weslleycampos.chat.core.ui.resources.ic_send
+import br.com.weslleycampos.chat.core.ui.icons.ChatIcons
 import br.com.weslleycampos.chat.core.ui.theme.ChatColors
 import br.com.weslleycampos.chat.core.ui.theme.DisabledAlpha
 import org.jetbrains.compose.resources.painterResource
+
+private const val AccentTransitionMillis = 150
 
 enum class ChatIconButtonVariant {
     Standard,
@@ -65,14 +69,28 @@ fun ChatIconButton(
     val pressed by source.collectIsPressedAsState()
     val focused by source.collectIsFocusedAsState()
     val shape = ChatTheme.shapes.iconButton
-    val (container, foreground) = chatIconButtonColors(
+    val (containerTarget, foregroundTarget) = chatIconButtonColors(
         colors = ChatTheme.colors,
         variant = variant,
         enabled = enabled,
         hovered = hovered,
         pressed = pressed,
     )
-    val fadeModifier = if (enabled) Modifier else Modifier.alpha(DisabledAlpha)
+    // The prototype's send button eases `background .15s, color .15s` between enabled and disabled;
+    // the plain icon buttons have no transition.
+    val colorSpec: AnimationSpec<Color> = if (variant == ChatIconButtonVariant.Accent) {
+        tween(durationMillis = AccentTransitionMillis)
+    } else {
+        snap()
+    }
+    val container by animateColorAsState(targetValue = containerTarget, animationSpec = colorSpec)
+    val foreground by animateColorAsState(targetValue = foregroundTarget, animationSpec = colorSpec)
+    // A disabled Accent button has colours of its own instead of fading.
+    val fadeModifier = if (enabled || variant == ChatIconButtonVariant.Accent) {
+        Modifier
+    } else {
+        Modifier.alpha(DisabledAlpha)
+    }
     val focusModifier = if (focused && enabled) {
         Modifier.border(width = 2.dp, color = ChatTheme.colors.text.secondary, shape = shape).padding(2.dp)
     } else {
@@ -110,7 +128,12 @@ internal fun chatIconButtonColors(
         val background = if (enabled && (hovered || pressed)) colors.surface.secondary else Color.Transparent
         background to colors.text.secondary
     }
-    ChatIconButtonVariant.Accent -> colors.accent.primary to colors.text.onAccent
+    // The prototype's `canSend` styles: the accent fill, or `--bg2` with `--fg3` while disabled.
+    ChatIconButtonVariant.Accent -> if (enabled) {
+        colors.accent.primary to colors.text.onAccent
+    } else {
+        colors.surface.secondary to colors.text.tertiary
+    }
 }
 
 enum class ChatIconButtonPreviewState {
@@ -172,11 +195,7 @@ private fun ChatIconButtonPreview(
                     enabled = case.state != ChatIconButtonPreviewState.Disabled,
                     interactionSource = source,
                 ) {
-                    val icon = if (case.variant == ChatIconButtonVariant.Accent) {
-                        CoreUiRes.drawable.ic_send
-                    } else {
-                        CoreUiRes.drawable.ic_menu
-                    }
+                    val icon = if (case.variant == ChatIconButtonVariant.Accent) ChatIcons.Send else ChatIcons.Menu
                     Icon(painter = painterResource(icon), contentDescription = null)
                 }
             }
