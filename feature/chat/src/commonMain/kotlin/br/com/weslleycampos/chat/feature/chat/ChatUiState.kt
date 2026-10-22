@@ -6,15 +6,22 @@ import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
+import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
+import br.com.weslleycampos.chat.feature.chat.picker.ModelPickerUiState
+import br.com.weslleycampos.chat.feature.chat.picker.ModelPickerVariant
+import br.com.weslleycampos.chat.feature.chat.picker.modelPickerUiState
 import org.jetbrains.compose.resources.StringResource
 
 /**
- * Everything the Chat frame shows.
+ * Everything the Chat frame shows, the Model picker sheet over it included.
  *
  * @property conversationId The open conversation, or `null` for a new chat, which shows the empty state.
- * @property model The conversation's model, or [ModelCatalogue.default] for a new chat: the chip, the
- *   empty state, the composer placeholder and, through [palette], the accent.
+ * @property choice What answers the next message: the open conversation's model and persona, or the
+ *   new chat's, which starts on the default model and is whatever the picker picked since. It is
+ *   the chip, the empty state, the composer placeholder, the sheet's "●" and, through [model]'s
+ *   palette, the accent.
  * @property messages The thread, oldest first, as the prototype's message view-model (810–832).
  * @property recent The empty state's "recent" rows, newest first.
  * @property draft The composer's text.
@@ -22,11 +29,14 @@ import org.jetbrains.compose.resources.StringResource
  * @property sending A send is on its way to the database.
  * @property copiedBlock The code block whose header reads "copied", the prototype's `copiedKey`.
  * @property toast The toast's text while it shows.
+ * @property favorites The picker's "favorites", in catalogue order.
+ * @property personas The picker's "personas", in their order.
+ * @property modelPickerOpen The Model picker sheet shows: the prototype's `sheet:'chat'`.
  */
 @Immutable
 data class ChatUiState(
     val conversationId: Long? = null,
-    val model: ChatModel = ModelCatalogue.default,
+    val choice: ModelChoice = ModelChoice(ModelCatalogue.default),
     val messages: List<MessageUi> = emptyList(),
     val recent: List<RecentConversationUi> = emptyList(),
     val draft: String = "",
@@ -34,7 +44,16 @@ data class ChatUiState(
     val sending: Boolean = false,
     val copiedBlock: BlockKey? = null,
     val toast: StringResource? = null,
-)
+    val favorites: List<ChatModel> = emptyList(),
+    val personas: List<Persona> = emptyList(),
+    val modelPickerOpen: Boolean = false,
+) {
+    /** The model that answers: [choice]'s, the persona's own while one answers. */
+    val model: ChatModel get() = choice.model
+
+    /** The persona that answers, or `null` for the model on its own. */
+    val persona: Persona? get() = choice.persona
+}
 
 /** A new chat: the prototype's `isEmpty`. */
 val ChatUiState.showsEmptyState: Boolean get() = conversationId == null
@@ -44,6 +63,18 @@ val ChatUiState.canSend: Boolean get() = draft.isNotBlank() && !replyInProgress 
 
 /** How many lines tall the composer is at least. */
 val ChatUiState.draftRows: Int get() = draftRows(draft)
+
+/** The model chip: "Code reviewer · sonnet-4.5" with a persona, else the model's full name. */
+val ChatUiState.chipLabel: String get() = chipLabel(choice)
+
+/** The chat's Model picker sheet, marking [ChatUiState.choice]. */
+val ChatUiState.modelPicker: ModelPickerUiState
+    get() = modelPickerUiState(
+        variant = ModelPickerVariant.Chat,
+        favorites = favorites,
+        personas = personas,
+        active = choice,
+    )
 
 /** Which code block a "copy" belongs to: the prototype's `msg.id + '-' + i`. */
 @Immutable
@@ -61,6 +92,9 @@ sealed interface MessageUi {
     data class User(override val id: Long, override val time: String, val text: String) : MessageUi
 
     /**
+     * @property modelShortName The model that wrote it, "sonnet-4.5".
+     * @property personaName The persona it was written as, "Code reviewer", or `null`: its own,
+     *   whatever answers the conversation now.
      * @property latency "0.8s" once the reply is done, else `null`.
      * @property interrupted It stopped before it finished; it shows what it revealed, without a caret.
      * @property thinking No block yet while in progress: the lone blinking caret.
@@ -70,6 +104,7 @@ sealed interface MessageUi {
         override val id: Long,
         override val time: String,
         val modelShortName: String,
+        val personaName: String?,
         val latency: String?,
         val interrupted: Boolean,
         val thinking: Boolean,
@@ -121,6 +156,7 @@ fun Message.Assistant.toUi(time: String): MessageUi.Assistant {
         id = id,
         time = time,
         modelShortName = model.shortName,
+        personaName = persona?.name,
         latency = latency?.takeIf { status == ReplyStatus.DONE }?.let(::formatLatency),
         interrupted = status == ReplyStatus.INTERRUPTED,
         thinking = status.isInProgress && blocks.isEmpty(),

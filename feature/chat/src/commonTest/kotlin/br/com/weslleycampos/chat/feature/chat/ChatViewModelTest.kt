@@ -6,6 +6,7 @@ import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
+import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_send_failed
 import kotlinx.coroutines.CompletableDeferred
@@ -44,11 +45,13 @@ class ChatViewModelTest {
     private fun TestScope.chatViewModel(
         repository: FakeChatRepository = FakeChatRepository(backgroundScope),
         entry: ChatEntry = ChatEntry(),
+        models: FakeModelRepository = FakeModelRepository(),
     ): ChatViewModel {
         val viewModel = ChatViewModel(
             entry = entry,
             navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(entry) }),
             repository = repository,
+            models = models,
             times = testTimes(),
         )
         runCurrent()
@@ -234,7 +237,13 @@ class ChatViewModelTest {
         runCurrent()
 
         assertEquals(
-            ChatUiState(model = ModelCatalogue.default, recent = viewModel.state.recent, draft = "half a thought"),
+            ChatUiState(
+                choice = ModelChoice(ModelCatalogue.default),
+                recent = viewModel.state.recent,
+                draft = "half a thought",
+                favorites = viewModel.state.favorites,
+                personas = viewModel.state.personas,
+            ),
             viewModel.state,
         )
     }

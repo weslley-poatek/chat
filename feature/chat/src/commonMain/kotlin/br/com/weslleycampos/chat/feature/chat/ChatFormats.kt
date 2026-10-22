@@ -2,6 +2,8 @@ package br.com.weslleycampos.chat.feature.chat
 
 import br.com.weslleycampos.chat.core.ui.theme.ChatPalette
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
+import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.Persona
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
@@ -17,7 +19,7 @@ private const val MillisPerTenth = 100
 private const val TenthsPerSecond = 10
 
 /** The meta row's separator, the prototype's `" · "`. */
-private const val MetaSeparator = " · "
+internal const val MetaSeparator = " · "
 
 private val MonthAbbreviations = listOf(
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -52,11 +54,36 @@ fun formatLatency(latency: Duration): String {
 }
 
 /**
- * An assistant message's meta, the prototype's `` `${short} · ${time} · ${lat}` ``: the latency once
- * the reply is done, or [interruptedLabel] for one that stopped on the way.
+ * An assistant message's meta, the prototype's `` `${short}${persona} · ${time} · ${lat}` ``: the
+ * persona the reply was written as, lowercased, after the short name; the latency once the reply is
+ * done, or [interruptedLabel] for one that stopped on the way. "sonnet-4.5 · code reviewer · 14:02 · 0.8s".
  */
-fun assistantMeta(modelShortName: String, time: String, latency: String?, interruptedLabel: String?): String =
-    listOfNotNull(modelShortName, time, latency, interruptedLabel).joinToString(MetaSeparator)
+fun assistantMeta(
+    modelShortName: String,
+    personaName: String?,
+    time: String,
+    latency: String?,
+    interruptedLabel: String?,
+): String = listOfNotNull(modelShortName, personaName?.lowercase(), time, latency, interruptedLabel)
+    .joinToString(MetaSeparator)
+
+/**
+ * The model chip, the prototype's `chipLabel` without compare (row 7): "Code reviewer · sonnet-4.5"
+ * while a persona answers, else the model's full name, "Claude Sonnet 4.5".
+ */
+fun chipLabel(choice: ModelChoice): String =
+    choice.persona?.let { persona -> "${persona.name}$MetaSeparator${choice.model.shortName}" } ?: choice.model.name
+
+/**
+ * The empty state's meta line, the prototype's `modelMetaLine`: "Anthropic · 200k context · $$",
+ * ending " · persona: Code reviewer" while a persona answers.
+ */
+fun modelMetaLine(model: ChatModel, persona: Persona?): String = listOfNotNull(
+    model.provider,
+    "${model.contextWindow} context",
+    model.cost,
+    persona?.let { "persona: ${it.name}" },
+).joinToString(MetaSeparator)
 
 /**
  * The parts of an empty-state tip: the prototype draws its leading words, written `*so*` in the

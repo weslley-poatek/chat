@@ -44,7 +44,7 @@ private const val Dropdown = "▾"
 /** History, the model chip and New chat, over a hairline (frame lines 107–115). */
 @Composable
 internal fun ChatTopBar(
-    modelName: String,
+    chipLabel: String,
     onHistoryClick: () -> Unit,
     onModelClick: () -> Unit,
     onNewChat: () -> Unit,
@@ -65,16 +65,19 @@ internal fun ChatTopBar(
         ) {
             Icon(painter = painterResource(ChatIcons.Menu), contentDescription = null)
         }
-        ModelChip(name = modelName, onClick = onModelClick, modifier = Modifier.weight(1f))
+        ModelChip(label = chipLabel, onClick = onModelClick, modifier = Modifier.weight(1f))
         ChatIconButton(onClick = onNewChat, contentDescription = stringResource(FeatureChatRes.string.chat_new_chat)) {
             Icon(painter = painterResource(ChatIcons.NewChat), contentDescription = null)
         }
     }
 }
 
-/** The model chip: the glowing accent dot, the model's full name and `▾`. */
+/**
+ * The model chip: the glowing accent dot, [label] ("Claude Sonnet 4.5", or "Code reviewer ·
+ * sonnet-4.5" while a persona answers) and `▾`. It opens the Model picker.
+ */
 @Composable
-private fun ModelChip(name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ModelChip(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val shape = ChatTheme.shapes.control
@@ -100,7 +103,7 @@ private fun ModelChip(name: String, onClick: () -> Unit, modifier: Modifier = Mo
             ),
         )
         Text(
-            text = name,
+            text = label,
             modifier = Modifier.weight(1f),
             style = ChatTheme.typography.labelMedium,
             color = ChatTheme.colors.text.primary,

@@ -119,14 +119,95 @@ An open conversation
   `DataChatModuleTest.koinProvidesOneLocalModelRepositoryOnThePersonaDaoAndThePlainPreferences`,
   `DataChatModuleTest.koinProvidesOneRoomChatRepositoryOnTheDatabasesDaos`
 
-### UI (`:feature:chat`, `:app`) — placeholder for the feature agent
+### UI (`:feature:chat`, `:app`)
 
-> The feature agent replaces this section with the UI criteria and their tests: the sheet
-> (`sheet:'chat'` from the model chip; title, grabber, scrim, sections, rows, dots, meta, marks,
-> "★" / "☆", "+ new persona" with no handler), the pick rules on the calls in "Data contract", the
-> chip, empty-state meta and reply meta with the persona, the new chat's choice, and the accent
-> following the pick at once. Previews in light and dark for each state. The compare button, hint
-> and "◐" mark are row 7.
+The sheet is `ModelPickerSheet` in `:feature:chat`'s `picker` package, stateless, over one
+`ModelPickerUiState`; the chat drives it from `ChatViewModel`. Criteria run on the Android host and
+the iOS simulator. Layout, colours and animation are checked in the previews and on a device: there
+is no `runComposeUiTest`, as in row 3.
+
+| Preview | What it shows | Design source |
+| --- | --- | --- |
+| Model picker · Chat | "Model"; favorites, personas, "+ new persona", all models; "●" on Sonnet's two rows | lines 476–518 |
+| Model picker · Chat · persona | "●" on "Code reviewer" only, the Sonnet accent | `mRow` 848–853 |
+| Model picker · Chat · no favorites | the "favorites" label over no rows, every star "☆" | `favRows` 931 |
+| Model picker · Default | "Default model", no personas, "●" on GPT-5's rows, the GPT-5 accent | `sheet:'default'`, frames §2.7 |
+| Chat · Empty · persona | chip "Code reviewer · sonnet-4.5", meta "… · persona: Code reviewer" | `chipLabel`, `modelMetaLine` 888 |
+| Chat · Done · persona | a reply whose meta reads "sonnet-4.5 · code reviewer · 14:02 · …" | meta 813 |
+
+Each picker preview (`ModelPickerPreviewParameterProvider`, 402 × 1000) and each chat preview
+(402 × 874) is drawn in light and dark, in the accent of what answers.
+
+The sheet
+
+- [x] The model chip opens the Model picker; a tap on the scrim, a drag down or Back closes it
+  without a pick — `ChatViewModelPickerTest.theModelChipOpensThePickerAndDismissingItClosesItWithoutAPick`
+- [x] The chat's sheet is titled "Model" and Settings' "Default model" —
+  `ModelPickerUiStateTest.theSheetIsTitledModelForTheChatAndDefaultModelForSettings`
+- [x] It lists "favorites" in catalogue order, the personas in their order and "all models", from
+  what the repository holds — `ModelPickerUiStateTest.theChatSheetListsTheFavoritesThePersonasAndEveryModelInTheirOrder`,
+  `ChatViewModelPickerTest.theSheetListsTheFavoritesAndPersonasTheRepositoryHolds`
+- [x] With no favorites the section is empty and every star is "☆"; only "all models" rows have a
+  star, "★" for a favorite — `ModelPickerUiStateTest.withNoFavoritesTheFavoritesSectionIsEmptyAndEveryStarIsHollow`,
+  `ModelPickerUiStateTest.onlyAllModelsRowsHaveAStarFilledForTheFavorites`
+- [x] A model row's meta is "Anthropic · 200k ctx · $$", a persona's "→ sonnet-4.5 · <prompt>" —
+  `ModelPickerUiStateTest.rowMetaIsTheProviderContextAndCostOrThePersonasModelAndPrompt`
+- [x] Each row's dot is its model's hue, a persona's its model's —
+  `ModelPickerUiStateTest.eachRowsDotIsItsModelsPaletteAndAPersonasIsItsModels`
+- [x] "●" marks the persona that answers, or with none the model's rows (favorites and all models)
+  — `ModelPickerUiStateTest.theActiveMarkIsOnThePersonaWhenOneAnswersElseOnTheModelsRows`,
+  `ChatViewModelPickerTest.theActiveMarkIsOnWhatAnswersTheChat`
+- [x] The "Default model" sheet has no personas and marks the default model —
+  `ModelPickerUiStateTest.theDefaultSheetHasNoPersonasAndMarksTheDefaultModel`
+- [x] Every row has its own key — `ModelPickerUiStateTest.rowKeysAreUniqueAcrossTheSheet`
+
+Picks
+
+- [x] A model row picks the model alone, a persona row the persona on its model —
+  `ModelPickerUiStateTest.aModelRowPicksTheModelAloneAndAPersonaRowThePersonaOnItsModel`
+- [x] A new chat starts on the default model and follows it until something is picked —
+  `ChatViewModelPickerTest.aNewChatStartsOnTheDefaultModelAndFollowsItUntilSomethingIsPicked`
+- [x] A pick in a new chat becomes its choice, closes the sheet and writes nothing; the first send
+  carries it, or the default model with nothing picked —
+  `ChatViewModelPickerTest.aPickInANewChatIsKeptAsItsChoiceClosesTheSheetAndWritesNothing`,
+  `ChatViewModelPickerTest.theFirstSendOfANewChatCarriesItsChoice`,
+  `ChatViewModelPickerTest.aFirstSendWithNothingPickedCarriesTheDefaultModel`
+- [x] "new chat" goes back to the default model, dropping a persona —
+  `ChatViewModelPickerTest.newChatGoesBackToTheDefaultModelDroppingAPersona`
+- [x] A pick in an open conversation is passed to `choose` and the chip and accent follow at once; a
+  persona answers on its model and a model pick drops it —
+  `ChatViewModelPickerTest.aPickInAnOpenConversationChoosesItAndTheAccentFollowsAtOnce`,
+  `ChatViewModelPickerTest.aPersonaPickedInAnOpenConversationAnswersOnItsModelAndAModelPickDropsIt`
+- [x] A pick `choose` refuses shows the conversation's own choice again, and a streaming tick that
+  arrives before the pick is saved does not take the chip back —
+  `ChatViewModelPickerTest.aPickTheRepositoryRefusesShowsTheConversationsOwnChoiceAgain`,
+  `ChatViewModelPickerTest.aStreamingTickBeforeThePickIsSavedDoesNotTakeTheChipBack`
+- [x] An open conversation keeps its own model when the default changes, and a "recent" row shows
+  its persona from the tap — `ChatViewModelPickerTest.anOpenConversationKeepsItsOwnModelWhenTheDefaultChanges`,
+  `ChatViewModelPickerTest.aRecentRowWithAPersonaShowsItOnTheChipFromTheTap`
+- [x] The star stars or unstars the model without picking it, and the sheet stays open —
+  `ChatViewModelPickerTest.theStarTogglesAFavoriteAndKeepsTheSheetOpenWithoutPicking`
+
+The chat and the accent
+
+- [x] The chip is "Code reviewer · sonnet-4.5" with a persona, else the model's full name, and it,
+  the placeholder and the sheet follow the shown choice —
+  `ChatFormatsTest.theChipIsThePersonaAndItsShortNameOrTheModelsFullName`,
+  `ChatUiStateTest.theChipThePlaceholderAndThePickerFollowTheShownChoice`
+- [x] The empty-state meta ends "· persona: Code reviewer" while one answers —
+  `ChatFormatsTest.theEmptyStateMetaEndsWithThePersonaWhenOneAnswers`
+- [x] A reply's meta inserts its own persona, lowercased, after the short name —
+  `ChatFormatsTest.theReplyMetaInsertsItsOwnPersonaLowercasedAfterTheShortName`,
+  `ChatUiStateTest.aReplyCarriesThePersonaItWasWrittenAsOrNone`,
+  `ChatViewModelPickerTest.eachReplyShowsTheModelAndPersonaItWasWrittenWith`
+- [x] The root wears the default model's palette and follows it at once, `ChatPalette.Default`
+  until it is read — `AppViewModelTest.theRootWearsTheDefaultModelsPaletteAndFollowsItAtOnce`,
+  `AppViewModelTest.untilTheDefaultModelIsReadTheRootWearsTheDefaultPalette`
+- [x] Koin builds the chat's ViewModel on `ModelRepository` —
+  `ChatModuleTest.koinBuildsAChatViewModelForTheEntryItIsGiven`
+- [x] The previews cover every state above in light and dark —
+  `ModelPickerUiStateTest.previewsCoverEveryVariantInLightAndDark`,
+  `ChatUiStateTest.previewsCoverEveryStateInLightAndDark`
 
 ## Data contract
 
@@ -224,6 +305,43 @@ An open conversation
   - Settings' "Default model" sheet (`sheet:'default'`, row 10) uses `observeDefaultModel` and
     `setDefaultModel`.
 
+## UI contract
+
+What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.chat.picker`) unless
+noted.
+
+- **Sheet:** `ModelPickerSheet(open: Boolean, state: ModelPickerUiState, onDismissRequest,
+  onPick: (ModelChoice) -> Unit, onToggleFavorite: (ChatModel) -> Unit, modifier, headerAction:
+  @Composable () -> Unit = {})`. It slides in while `open` and away when it turns `false`; the
+  caller closes it on a pick. `ModelPickerContent(state, onPick, onToggleFavorite, modifier,
+  headerAction)` is what it shows under the grabber. Only the mark is in the accent, so wrap the
+  sheet in the `ChatTheme` of what answers.
+- **State:** `modelPickerUiState(variant, favorites, personas, active: ModelChoice):
+  ModelPickerUiState(variant, favorites, personas, allModels)`, each a list of
+  `ModelPickerRow(key, choice, name, meta, palette, favorite: Boolean?, mark: ModelPickerMark?)`;
+  `ModelPickerVariant.Chat` ("Model") and `.Default` ("Default model", no personas);
+  `ModelPickerMark.Active` ("●"); `modelRowMeta(model)` and `personaRowMeta(persona)`.
+- **Chat:** `ChatUiState.choice`, `.favorites`, `.personas`, `.modelPickerOpen`, with `model`,
+  `persona`, `chipLabel` and `modelPicker`; `ChatViewModel.onOpenModelPicker`,
+  `onDismissModelPicker`, `onPick(choice)`, `onToggleFavorite(model)`. `ChatEntryProvider` draws
+  the sheet after `ChatScreen`, inside the chat's `ChatTheme`. Formats: `chipLabel(choice)`,
+  `modelMetaLine(model, persona)`, `assistantMeta(modelShortName, personaName, time, latency,
+  interruptedLabel)`.
+- **Root accent (`:app`):** `AppViewModel(models)` exposes `palette: StateFlow<ChatPalette>`, the
+  default model's. `AppHost(entries, modifier)` is what both hosts call: it remembers the navigator
+  from `SplashEntry`, collects that palette and calls `App(navBackStack, entryBuilders, modifier,
+  palette = ChatPalette.Default)`, which has no Koin and stays previewable and testable.
+- **Row 7 (compare):** pass the compare button as `headerAction`, add the hint and a second mark
+  (`◐`) to `ModelPickerUiState` and `ModelPickerMark`, and route a pick through the compare rules
+  in `ChatViewModel.onPick`. The slot is empty now.
+- **Row 10 (Default model):** keep an open flag in the Settings ViewModel and draw
+  `ModelPickerSheet(open, state = modelPickerUiState(ModelPickerVariant.Default, favorites,
+  emptyList(), ModelChoice(defaultModel)), onPick = { setDefaultModel(it.model) and close },
+  onToggleFavorite = { setFavorite(it, it !in favorites) })`; the root accent follows on its own.
+- **Row 11 (Voice chip):** the same Chat variant against the voiced conversation, with the same
+  rules as `ChatViewModel.onPick` (`choose` in an open conversation, `newChat` before the first
+  send), wrapped in that conversation's `ChatTheme`.
+
 ## Decided
 
 - Decided: personas are rows of a Room `personas` table, not catalogue constants. The prototype
@@ -275,6 +393,44 @@ An open conversation
   `observeDefaultModel()` for the root and nothing session-scoped.
 - Decided: a model the catalogue does not have, or a persona not stored, is refused (`null` from
   `send`, `false` from `choose`, no write from the setters) rather than stored.
+
+- Decided (UI): the sheet lives in `:feature:chat`'s `picker` package, not `:core:ui`. Its rows
+  are made of the data's `ChatModel`, `Persona` and `ModelChoice`, which `:core:ui` cannot see;
+  Settings (row 10) and Voice (row 11) depend on `:feature:chat` for it. `ChatBottomSheet` stays
+  the generic shell.
+- Decided (UI): row 10 opens the "Default model" variant itself (see UI contract): the sheet is
+  stateless and takes `open`, so no navigation key or shared state is needed, and a pick there
+  calls `setDefaultModel`, never `choose`. That variant leaves the personas out, as there is no
+  default persona; "favorites" and "all models" stay.
+- Decided (UI): the sheet is at most 82 % of the height it is offered, the frame's `max-height:82%`,
+  and the list scrolls under a fixed header. It has two values, expanded and hidden: the frame has
+  no half-open sheet.
+- Decided (UI): the scrim is `ChatTheme.colors.surface.scrim`, black at 0.55, the frame's
+  `oklch(0 0 0 / 0.55)`; a tap on it, a drag down or Back closes the sheet without a pick.
+- Decided (UI): the sheet slides with Material 3's bottom sheet motion and the scrim fades, in
+  place of the prototype's 40 px `sheetUp` at 0.22 s; it slides away on every close, a pick
+  included. `ModalBottomSheet` owns the drag and Back, and a hand-made sheet would lose them.
+- Decided (UI): the accent changes on the pick, before `choose` answers, and the chat takes a
+  conversation's choice from the thread only when the conversation itself changes. A streaming
+  tick read before the pick is saved would otherwise put the old model back; a refused `choose`
+  puts the conversation's own choice back.
+- Decided (UI): the root accent comes from `AppViewModel` in `:app`, collected in `AppHost`, which
+  both hosts call. `App` keeps a `palette` parameter, so it stays free of Koin. The chat's own
+  `ChatTheme` passes `darkTheme = ChatTheme.colors.isDark`, so it follows the root's light or dark.
+- Decided (UI): "+ new persona" is drawn, as in the frame, but does nothing: it has no handler in
+  the prototype and no persona editor exists. It is in `--fg3`, not the frame's `--fg2`, so it reads
+  as unavailable, and screen readers hear it as a disabled button.
+- Decided (UI): the header's compare slot, `headerAction`, is empty: the compare button, its hint
+  and "◐" are row 7, so the chat sheet's header shows the title alone for now.
+- Decided (UI): the "favorites" label stays over an empty section, as in the prototype, so the
+  sheet keeps its shape when every star is off.
+- Decided (UI): the star is a 44 dp tap target of its own, beside the row's, not the frame's 32 px,
+  so it meets the touch-target size; a tap on it never picks.
+- Decided (UI): the meta lines are pure Kotlin functions over the data (`chipLabel`,
+  `modelMetaLine`, `assistantMeta`, `modelRowMeta`, `personaRowMeta`), so tests check them on both
+  targets. Row 3's `chat_empty_meta` string resource is gone.
+- Decided (UI): no `runComposeUiTest`, as row 3 decided: the Android host has no Robolectric. The
+  logic is tested through the ViewModels and pure functions, the drawing through the previews.
 
 ## Out of scope
 

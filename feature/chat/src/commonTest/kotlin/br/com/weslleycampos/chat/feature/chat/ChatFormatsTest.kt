@@ -2,6 +2,7 @@ package br.com.weslleycampos.chat.feature.chat
 
 import br.com.weslleycampos.chat.core.ui.theme.ChatPalette
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
+import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import kotlinx.datetime.FixedOffsetTimeZone
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.UtcOffset
@@ -58,9 +59,59 @@ class ChatFormatsTest {
 
     @Test
     fun theReplyMetaJoinsModelTimeAndLatencyOrInterrupted() {
-        assertEquals("sonnet-4.5 · 14:02 · 0.8s", assistantMeta("sonnet-4.5", "14:02", "0.8s", null))
-        assertEquals("sonnet-4.5 · 14:02", assistantMeta("sonnet-4.5", "14:02", null, null))
-        assertEquals("sonnet-4.5 · 14:02 · interrupted", assistantMeta("sonnet-4.5", "14:02", null, "interrupted"))
+        fun meta(latency: String?, interrupted: String?) = assistantMeta(
+            modelShortName = "sonnet-4.5",
+            personaName = null,
+            time = "14:02",
+            latency = latency,
+            interruptedLabel = interrupted,
+        )
+
+        assertEquals("sonnet-4.5 · 14:02 · 0.8s", meta(latency = "0.8s", interrupted = null))
+        assertEquals("sonnet-4.5 · 14:02", meta(latency = null, interrupted = null))
+        assertEquals("sonnet-4.5 · 14:02 · interrupted", meta(latency = null, interrupted = "interrupted"))
+    }
+
+    @Test
+    fun theReplyMetaInsertsItsOwnPersonaLowercasedAfterTheShortName() {
+        fun meta(persona: String, latency: String?, interrupted: String?) = assistantMeta(
+            modelShortName = "sonnet-4.5",
+            personaName = persona,
+            time = "14:02",
+            latency = latency,
+            interruptedLabel = interrupted,
+        )
+
+        assertEquals(
+            "sonnet-4.5 · code reviewer · 14:02 · 0.8s",
+            meta(persona = "Code reviewer", latency = "0.8s", interrupted = null),
+        )
+        assertEquals(
+            "sonnet-4.5 · paper digest · 14:02",
+            meta(persona = "Paper digest", latency = null, interrupted = null),
+        )
+        assertEquals(
+            "sonnet-4.5 · terse · 14:02 · interrupted",
+            meta(persona = "Terse", latency = null, interrupted = "interrupted"),
+        )
+    }
+
+    @Test
+    fun theChipIsThePersonaAndItsShortNameOrTheModelsFullName() {
+        assertEquals("Claude Sonnet 4.5", chipLabel(ModelChoice(ModelCatalogue.default)))
+        assertEquals("Gemini 2.5 Pro", chipLabel(ModelChoice(Gemini)))
+        assertEquals("Code reviewer · sonnet-4.5", chipLabel(ModelChoice(Reviewer)))
+        assertEquals("Terse · gpt-5", chipLabel(ModelChoice(Terse)))
+    }
+
+    @Test
+    fun theEmptyStateMetaEndsWithThePersonaWhenOneAnswers() {
+        assertEquals("Anthropic · 200k context · $$", modelMetaLine(ModelCatalogue.default, persona = null))
+        assertEquals("Google · 1M context · $$", modelMetaLine(Gemini, persona = null))
+        assertEquals(
+            "Anthropic · 200k context · $$ · persona: Code reviewer",
+            modelMetaLine(Reviewer.model, persona = Reviewer),
+        )
     }
 
     @Test

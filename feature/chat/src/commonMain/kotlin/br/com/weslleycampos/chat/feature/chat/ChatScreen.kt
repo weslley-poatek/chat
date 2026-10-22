@@ -19,6 +19,9 @@ import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
+import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.Persona
+import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_send_failed
@@ -33,6 +36,8 @@ import kotlin.time.Instant
  * thread rather than covering it. The toast floats over the thread's bottom edge.
  *
  * The accent is the [ChatUiState.model]'s: wrap the screen in `ChatTheme(palette = uiState.model.palette)`.
+ * The Model picker sheet the chip opens is [br.com.weslleycampos.chat.feature.chat.picker.ModelPickerSheet],
+ * shown next to the screen.
  */
 @Composable
 fun ChatScreen(
@@ -55,7 +60,7 @@ fun ChatScreen(
             .safeDrawingPadding(),
     ) {
         ChatTopBar(
-            modelName = uiState.model.name,
+            chipLabel = uiState.chipLabel,
             onHistoryClick = onHistoryClick,
             onModelClick = onModelClick,
             onNewChat = onNewChat,
@@ -66,7 +71,12 @@ fun ChatScreen(
                 .fillMaxWidth(),
         ) {
             if (uiState.showsEmptyState) {
-                ChatEmptyState(model = uiState.model, recent = uiState.recent, onOpenRecent = onOpenRecent)
+                ChatEmptyState(
+                    model = uiState.model,
+                    persona = uiState.persona,
+                    recent = uiState.recent,
+                    onOpenRecent = onOpenRecent,
+                )
             } else {
                 ChatThread(messages = uiState.messages, copiedBlock = uiState.copiedBlock, onCopyCode = onCopyCode)
             }
@@ -96,6 +106,7 @@ private const val PreviewUserTime = "14:01"
 private const val PreviewReplyTime = "14:02"
 private val PreviewLatency = 800.milliseconds
 private val PreviewGemini = ModelCatalogue["gemini"]
+private val PreviewReviewer = PersonaPresets.personas.first()
 
 private val PreviewRecent = listOf(
     RecentConversationUi(id = 1, title = "useDebounce hook with leading edge", time = "14:02"),
@@ -143,20 +154,25 @@ private fun previewReply(
     status: ReplyStatus,
     blocks: List<Block>,
     model: ChatModel = ModelCatalogue.default,
+    persona: Persona? = null,
     latency: Duration? = PreviewLatency.takeIf { status == ReplyStatus.DONE },
 ) = Message.Assistant(
     id = id,
     conversationId = PreviewConversationId,
     model = model,
+    persona = persona,
     blocks = blocks,
     status = status,
     latency = latency,
     createdAt = Instant.fromEpochMilliseconds(0),
 ).toUi(time = PreviewReplyTime)
 
-private fun previewThread(vararg messages: MessageUi, model: ChatModel = ModelCatalogue.default) = ChatUiState(
+private fun previewThread(
+    vararg messages: MessageUi,
+    choice: ModelChoice = ModelChoice(ModelCatalogue.default),
+) = ChatUiState(
     conversationId = PreviewConversationId,
-    model = model,
+    choice = choice,
     messages = messages.toList(),
     replyInProgress = (messages.lastOrNull() as? MessageUi.Assistant)?.let { it.thinking || it.hasCaret } == true,
 )
@@ -189,12 +205,18 @@ class ChatScreenPreviewParameterProvider : PreviewParameterProvider<ChatPreviewC
     private val states = listOf(
         "Empty" to ChatUiState(),
         "Empty · recent" to ChatUiState(recent = PreviewRecent),
+        "Empty · persona" to ChatUiState(choice = ModelChoice(PreviewReviewer), recent = PreviewRecent),
         "Thinking" to previewThread(
             question,
             previewReply(id = 2, status = ReplyStatus.THINKING, blocks = emptyList()),
         ),
         "Streaming" to streaming,
         "Done" to done,
+        "Done · persona" to previewThread(
+            question,
+            previewReply(id = 2, status = ReplyStatus.DONE, blocks = PreviewReplyBlocks, persona = PreviewReviewer),
+            choice = ModelChoice(PreviewReviewer),
+        ),
         "Interrupted" to previewThread(
             question,
             previewReply(id = 2, status = ReplyStatus.INTERRUPTED, blocks = PreviewReplyBlocks.take(2)),
@@ -224,7 +246,7 @@ class ChatScreenPreviewParameterProvider : PreviewParameterProvider<ChatPreviewC
         "Copied · Gemini" to previewThread(
             question,
             previewReply(id = 2, status = ReplyStatus.DONE, blocks = PreviewReplyBlocks, model = PreviewGemini),
-            model = PreviewGemini,
+            choice = ModelChoice(PreviewGemini),
         ).copy(copiedBlock = BlockKey(messageId = 2, index = 3)),
     )
 

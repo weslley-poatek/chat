@@ -114,7 +114,13 @@ private fun ChatMessage(
                     null
                 }
                 MetaRow(
-                    text = assistantMeta(message.modelShortName, message.time, message.latency, interrupted),
+                    text = assistantMeta(
+                        modelShortName = message.modelShortName,
+                        personaName = message.personaName,
+                        time = message.time,
+                        latency = message.latency,
+                        interruptedLabel = interrupted,
+                    ),
                     assistant = true,
                 )
                 AssistantBody(message = message, copiedBlock = copiedBlock, onCopyCode = onCopyCode)

@@ -4,7 +4,11 @@ import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
+import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
+import br.com.weslleycampos.chat.feature.chat.picker.ModelPickerVariant
+import br.com.weslleycampos.chat.feature.chat.picker.modelPickerUiState
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_send_failed
 import kotlin.test.Test
@@ -57,6 +61,7 @@ class ChatUiStateTest {
                 id = ReplyId,
                 time = "14:02",
                 modelShortName = "sonnet-4.5",
+                personaName = null,
                 latency = "0.8s",
                 interrupted = false,
                 thinking = false,
@@ -79,6 +84,45 @@ class ChatUiStateTest {
             ),
             message,
         )
+    }
+
+    @Test
+    fun aReplyCarriesThePersonaItWasWrittenAsOrNone() {
+        fun reply(persona: Persona?) = Message.Assistant(
+            id = ReplyId,
+            conversationId = 1,
+            model = persona?.model ?: Gemini,
+            persona = persona,
+            blocks = ReplyBlocks,
+            status = ReplyStatus.DONE,
+            latency = 812.milliseconds,
+            createdAt = Now,
+        ).toUi(testTimes())
+
+        val asReviewer = assertIs<MessageUi.Assistant>(reply(Reviewer))
+        val alone = assertIs<MessageUi.Assistant>(reply(null))
+
+        assertEquals("sonnet-4.5" to "Code reviewer", asReviewer.modelShortName to asReviewer.personaName)
+        assertEquals("gemini-2.5-pro" to null, alone.modelShortName to alone.personaName)
+    }
+
+    @Test
+    fun theChipThePlaceholderAndThePickerFollowTheShownChoice() {
+        val onModel = ChatUiState(choice = ModelChoice(Gemini), favorites = listOf(Gemini), personas = listOf(Reviewer))
+        val onPersona = onModel.copy(choice = ModelChoice(Reviewer))
+
+        assertEquals("Gemini 2.5 Pro", onModel.chipLabel)
+        assertEquals(Gemini, onModel.model)
+        assertNull(onModel.persona)
+        assertEquals("Code reviewer · sonnet-4.5", onPersona.chipLabel)
+        assertEquals(ModelCatalogue.default, onPersona.model)
+        assertEquals(Reviewer, onPersona.persona)
+        assertEquals(ModelPickerVariant.Chat, onPersona.modelPicker.variant)
+        assertEquals(
+            modelPickerUiState(ModelPickerVariant.Chat, listOf(Gemini), listOf(Reviewer), ModelChoice(Reviewer)),
+            onPersona.modelPicker,
+        )
+        assertFalse(ChatUiState().modelPickerOpen)
     }
 
     @Test
@@ -191,9 +235,11 @@ class ChatUiStateTest {
         val names = listOf(
             "Empty",
             "Empty · recent",
+            "Empty · persona",
             "Thinking",
             "Streaming",
             "Done",
+            "Done · persona",
             "Interrupted",
             "Long code block",
             "List",
@@ -208,6 +254,15 @@ class ChatUiStateTest {
         val states = cases.take(names.size).associate { it.name to it.uiState }
         assertTrue(states.getValue("Empty").showsEmptyState)
         assertTrue(states.getValue("Empty · recent").recent.isNotEmpty())
+        val emptyPersona = states.getValue("Empty · persona")
+        assertTrue(emptyPersona.showsEmptyState)
+        assertEquals("Code reviewer · sonnet-4.5", emptyPersona.chipLabel)
+        val donePersona = states.getValue("Done · persona")
+        assertEquals("Code reviewer · sonnet-4.5", donePersona.chipLabel)
+        assertEquals(
+            "Code reviewer",
+            donePersona.messages.filterIsInstance<MessageUi.Assistant>().single().personaName,
+        )
         assertTrue(states.getValue("Thinking").messages.filterIsInstance<MessageUi.Assistant>().single().thinking)
         assertTrue(states.getValue("Streaming").replyInProgress)
         assertEquals("0.8s", states.getValue("Done").messages.filterIsInstance<MessageUi.Assistant>().single().latency)

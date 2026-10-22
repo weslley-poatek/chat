@@ -18,6 +18,8 @@ kotlin {
             implementation(projects.feature.chat)
         }
         commonTest.dependencies {
+            // `AppViewModelTest` runs the root accent on virtual time.
+            implementation(libs.kotlinx.coroutines.test)
             // `AppEntriesTest` saves every key the app navigates to through the back stack's JSON.
             implementation(project.dependencies.platform(libs.kotlinx.serialization.bom))
             implementation(libs.kotlinx.serialization.json)

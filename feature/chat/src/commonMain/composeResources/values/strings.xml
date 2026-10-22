@@ -3,7 +3,6 @@
     <string name="chat_new_chat">New chat</string>
 
     <string name="chat_empty_title">new chat</string>
-    <string name="chat_empty_meta">%1$s · %2$s context · %3$s</string>
     <string name="chat_tip_type">*type* or paste code · drop files</string>
     <string name="chat_tip_mic">*hold mic* to talk · *tap* for voice mode</string>
     <string name="chat_tip_model">*tap model* to switch or compare two</string>
@@ -21,4 +20,12 @@
     <string name="chat_send">Send</string>
 
     <string name="chat_toast_send_failed">couldn’t send, try again</string>
+
+    <string name="model_picker_title_chat">Model</string>
+    <string name="model_picker_title_default">Default model</string>
+    <string name="model_picker_favorites">favorites</string>
+    <string name="model_picker_personas">personas</string>
+    <string name="model_picker_new_persona">new persona</string>
+    <string name="model_picker_all_models">all models</string>
+    <string name="model_picker_favorite">Favorite</string>
 </resources>

@@ -1,6 +1,7 @@
 package br.com.weslleycampos.chat.feature.chat
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -9,6 +10,7 @@ import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntryProvider
 import br.com.weslleycampos.chat.core.ui.ChatTheme
+import br.com.weslleycampos.chat.feature.chat.picker.ModelPickerSheet
 import kotlinx.coroutines.launch
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
@@ -31,14 +33,15 @@ class ChatEntryProvider : EntryProvider {
             val copyToClipboard: (String) -> Unit = { text ->
                 scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) }
             }
-            // The accent follows the conversation's model. Row 4 moves this to the app's root theme.
-            ChatTheme(palette = uiState.model.palette) {
+            val modelPicker = remember(uiState.favorites, uiState.personas, uiState.choice) { uiState.modelPicker }
+            // The chat wears the accent of what answers it over the root's, which is the default
+            // model's, in the root's light or dark; a pick changes it at once.
+            ChatTheme(palette = uiState.model.palette, darkTheme = ChatTheme.colors.isDark) {
                 ChatScreen(
                     uiState = uiState,
                     // History is row 5.
                     onHistoryClick = {},
-                    // The model picker is row 4.
-                    onModelClick = {},
+                    onModelClick = viewModel::onOpenModelPicker,
                     onNewChat = viewModel::onNewChat,
                     onOpenRecent = viewModel::onOpenRecent,
                     onDraftChange = viewModel::onDraftChange,
@@ -48,6 +51,14 @@ class ChatEntryProvider : EntryProvider {
                     // Voice mode is row 11.
                     onVoiceClick = {},
                     onCopyCode = { block -> viewModel.onCopyCode(block, copyToClipboard) },
+                )
+                // Row 7 adds the compare button to the sheet's `headerAction`.
+                ModelPickerSheet(
+                    open = uiState.modelPickerOpen,
+                    state = modelPicker,
+                    onDismissRequest = viewModel::onDismissModelPicker,
+                    onPick = viewModel::onPick,
+                    onToggleFavorite = viewModel::onToggleFavorite,
                 )
             }
         }

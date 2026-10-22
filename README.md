@@ -37,7 +37,8 @@
 > conversations and messages in Room, with canned replies streamed into them, plus the model
 > picker's favorites, personas and default model. After sign-in the app opens the chat thread: send
 > a message, watch the reply think, stream and finish, copy its code, and reopen a recent
-> conversation. History, the model picker, voice and attachments come next.
+> conversation. The model chip opens the model picker: pick one of the eight models or a persona,
+> star favorites, and the accent follows at once. History, voice and attachments come next.
 > The voice mode screen in the banner comes from the design prototype, not from a build of the app.
 
 ## ✨ Highlights
@@ -96,7 +97,7 @@ flowchart TD
     prefs[":core:preferences<br/><i>plain + encrypted DataStore</i>"]
     ui[":core:ui<br/><i>ChatTheme · tokens · components</i>"]
     featureAuth[":feature:auth<br/><i>Splash · sign-in: Google, email</i>"]
-    featureChat[":feature:chat<br/><i>Chat thread · composer · streamed replies</i>"]
+    featureChat[":feature:chat<br/><i>Chat thread · composer · model picker</i>"]
     dataAuth[":data:auth<br/><i>AuthManager · Firebase Auth</i>"]
     dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · canned streamed replies</i>"]
 
@@ -119,9 +120,9 @@ flowchart TD
 
 | Module | Role |
 | --- | --- |
-| [`:androidApp`](androidApp) | The Android application. Starts Koin with `androidContext(...)` and sets `App()` as content. |
+| [`:androidApp`](androidApp) | The Android application. Starts Koin with `androidContext(...)` and sets `AppHost(...)` as content. |
 | [`iosApp`](iosApp) | The Xcode project. Calls `KoinKt.doInitKoin()` and wraps `MainViewController()` in SwiftUI. |
-| [`:app`](app) | Shared Compose Multiplatform UI: `App()` renders the back stack in a `NavDisplay`. Holds the root Koin module, `AppModule`, which `includes` feature and core modules. |
+| [`:app`](app) | Shared Compose Multiplatform UI: `AppHost()`, which both hosts call, gives `App()` the back stack and the default model's accent from `AppViewModel`; `App()` renders the back stack in a `NavDisplay` inside the root `ChatTheme`. Holds the root Koin module, `AppModule`, which `includes` feature and core modules. |
 | [`:core:database`](core/database) | `ChatDatabase`, the on-device Room database every conversation and message is stored in, on the bundled SQLite driver: the `conversations`, `messages` and `personas` tables, their DAOs and a `TransactionRunner`. [Read the module guide →](core/database/README.md) |
 | [`:core:navigation`](core/navigation) | The shared `Navigator`, navigation keys, `EntryProvider` contract and back-stack saving. [Read the module guide →](core/navigation/README.md) |
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
@@ -129,7 +130,7 @@ flowchart TD
 | [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. Both on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
 | [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency, and `choose`, which changes a conversation's model and persona. `ModelRepository`: the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
 | [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen: Google, email + password sign-in, account creation and the password-reset email, as modes of one screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
-| [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. The accent follows the conversation's model. |
+| [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. The model picker sheet: favorites, personas and every model, stars, and a pick that changes the conversation or the new chat. The accent follows the conversation's model. |
 
 <details>
 <summary><b>How startup works on each platform</b></summary>
@@ -141,7 +142,7 @@ flowchart TD
 | Entry point | `MainApplication.onCreate()` | `iOSApp.init()`, which also calls `FirebaseApp.configure()` and sets the `GIDSignIn` client ID |
 | Koin start | `startKoin<AppModule> { androidContext(...) }` | `KoinKt.doInitKoin()` → `startKoin { module<AppModule>() }` |
 | UI host | `MainActivity` → `setContent { ... }` | `ComposeView` → `MainViewControllerKt.MainViewController()` |
-| Composition root | `rememberNavigator(SplashEntry)`, then `App(navBackStack, entryBuilders)` | The same, inside `ComposeUIViewController { ... }` |
+| Composition root | `AppHost(entries)`: `rememberNavigator(SplashEntry)` and the root accent, then `App(navBackStack, entryBuilders, palette = ...)` | The same, inside `ComposeUIViewController { ... }` |
 
 Both hosts read the entry builders from `EntriesAggregator`. `MainActivity` injects it with
 `by inject()`, and iOS gets it from `KoinPlatform.getKoin()`.
@@ -356,9 +357,9 @@ chat/
 ├── androidApp/                    🤖 Android entry point
 ├── app/                           📱 Shared Compose UI and root Koin module
 │   └── src/
-│       ├── commonMain/            App(), AppModule
+│       ├── commonMain/            AppHost(), App(), AppViewModel (the root accent), AppModule
 │       ├── iosMain/               MainViewController, initKoin()
-│       └── commonTest/            AppEntriesTest: every key survives the back stack's save
+│       └── commonTest/            AppEntriesTest, AppViewModelTest: keys survive a save; the root accent
 ├── core/
 │   ├── database/                  🗄️ ChatDatabase on Room, with its exported schemas
 │   ├── navigation/                🧭 Navigator, keys and entry providers
@@ -369,7 +370,7 @@ chat/
 │   └── chat/                      💬 ChatRepository, ModelRepository, canned streamed replies, models and personas
 ├── feature/
 │   ├── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)
-│   └── chat/                      💬 The chat thread: empty state, messages, code blocks, composer
+│   └── chat/                      💬 The chat thread: empty state, messages, code blocks, composer, model picker
 ├── iosApp/                        🍎 Xcode project and SwiftUI host
 │   └── KotlinMultiplatformLinkedPackage/  📦 Generated SwiftPM package for the iOS SDKs
 ├── build-logic/

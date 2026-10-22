@@ -1,12 +1,15 @@
 package br.com.weslleycampos.chat.feature.chat
 
 import br.com.weslleycampos.chat.data.chat.ChatRepository
+import br.com.weslleycampos.chat.data.chat.ModelRepository
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.Persona
+import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -33,6 +36,13 @@ internal class FixedClock(var now: Instant = Now) : Clock {
 internal fun testTimes(clock: Clock = FixedClock()) = ChatTimes(clock = clock, timeZone = { TimeZone.UTC })
 
 internal val Gemini: ChatModel = ModelCatalogue["gemini"]
+internal val Gpt5: ChatModel = ModelCatalogue["gpt5"]
+internal val Llama: ChatModel = ModelCatalogue["llama"]
+internal val Mistral: ChatModel = ModelCatalogue["mistral"]
+
+/** The presets: "Code reviewer" on sonnet, "Terse" on gpt5, "Paper digest" on gemini. */
+internal val Reviewer: Persona = PersonaPresets.personas[0]
+internal val Terse: Persona = PersonaPresets.personas[1]
 
 /** The fake's reply: the prototype's first canned answer. Block 3 is the code. */
 internal val ReplyBlocks = listOf(
@@ -65,6 +75,12 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
     /** The `newChat` choice of every send, in order. */
     val newChatChoices = mutableListOf<ModelChoice?>()
     var answer: (suspend (conversationId: Long?, text: String) -> Long?)? = null
+
+    /** Every `choose`, in order. */
+    val chooses = mutableListOf<Pair<Long, ModelChoice>>()
+
+    /** When set, `choose` waits for it, then saves the choice only if it answers `true`. */
+    var chooseAnswer: (suspend (conversationId: Long, choice: ModelChoice) -> Boolean)? = null
     private var nextId = 1L
 
     override fun observeConversation(id: Long): Flow<Conversation?> =
@@ -86,6 +102,8 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
 
     /** Like the real one: a model drops the persona, a persona answers with its own model. */
     override suspend fun choose(conversationId: Long, choice: ModelChoice): Boolean {
+        chooses += conversationId to choice
+        if (chooseAnswer?.invoke(conversationId, choice) == false) return false
         if (conversations.value.none { it.id == conversationId }) return false
         val model = choice.persona?.model ?: choice.model
         conversations.update { all ->
@@ -94,12 +112,21 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         return true
     }
 
-    /** A conversation of [model] with one done exchange: the user's [title], then [ReplyBlocks]. */
-    fun seed(title: String, model: ChatModel = ModelCatalogue.default, updatedAt: Instant = Now): Conversation {
+    /**
+     * A conversation of [model], or of [persona] on its model, with one done exchange: the user's
+     * [title], then [ReplyBlocks] written by the same.
+     */
+    fun seed(
+        title: String,
+        model: ChatModel = ModelCatalogue.default,
+        persona: Persona? = null,
+        updatedAt: Instant = Now,
+    ): Conversation {
         val conversation = Conversation(
             id = nextId++,
             title = title,
-            model = model,
+            model = persona?.model ?: model,
+            persona = persona,
             createdAt = updatedAt,
             updatedAt = updatedAt,
         )
@@ -108,7 +135,8 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         val reply = Message.Assistant(
             id = nextId++,
             conversationId = conversation.id,
-            model = model,
+            model = conversation.model,
+            persona = persona,
             blocks = ReplyBlocks,
             status = ReplyStatus.DONE,
             latency = ReplyLatency,
@@ -160,5 +188,40 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
 
     private fun update(reply: Message.Assistant) = messages.update { all ->
         all + (reply.conversationId to all.getValue(reply.conversationId).map { if (it.id == reply.id) reply else it })
+    }
+}
+
+/**
+ * An in-memory [ModelRepository] that keeps the real one's contract: favorites in catalogue order,
+ * the presets as personas, and every read a flow that emits only on change.
+ */
+internal class FakeModelRepository(
+    defaultModel: ChatModel = ModelCatalogue.default,
+    favorites: List<ChatModel> = ModelRepository.DEFAULT_FAVORITE_IDS.map(ModelCatalogue::get),
+    personas: List<Persona> = PersonaPresets.personas,
+) : ModelRepository {
+    val defaultModel = MutableStateFlow(defaultModel)
+    val favorites = MutableStateFlow(favorites)
+    val personas = MutableStateFlow(personas)
+
+    /** Every `setFavorite`, in order. */
+    val favoriteWrites = mutableListOf<Pair<ChatModel, Boolean>>()
+
+    override fun observeFavorites(): Flow<List<ChatModel>> = favorites
+
+    override suspend fun setFavorite(model: ChatModel, favorite: Boolean) {
+        favoriteWrites += model to favorite
+        favorites.update { current ->
+            val ids = current.map { it.id }.toSet().let { if (favorite) it + model.id else it - model.id }
+            ModelCatalogue.models.filter { it.id in ids }
+        }
+    }
+
+    override fun observePersonas(): Flow<List<Persona>> = personas
+
+    override fun observeDefaultModel(): Flow<ChatModel> = defaultModel
+
+    override suspend fun setDefaultModel(model: ChatModel) {
+        defaultModel.value = model
     }
 }

@@ -292,22 +292,28 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   `:core:navigation`'s `entries.chat`; `null` is a new chat. `ChatEntryProvider` registers it.
 - **Screen:** `ChatScreen(uiState, onHistoryClick, onModelClick, onNewChat, onOpenRecent,
   onDraftChange, onSend, onAttachClick, onVoiceClick, onCopyCode, modifier)`. `ChatEntryProvider`
-  wires `onHistoryClick` (row 5), `onModelClick` (row 4), `onAttachClick` (row 8) and
-  `onVoiceClick` (row 11) to `{}`, and wraps the screen in `ChatTheme(palette = uiState.model.palette)`.
-- **State:** `ChatUiState(conversationId, model, messages: List<MessageUi>, recent:
+  wires `onHistoryClick` (row 5), `onAttachClick` (row 8) and `onVoiceClick` (row 11) to `{}`;
+  `onModelClick` opens the Model picker (row 4, `04-model-picker.md`). It wraps the screen and the
+  sheet in `ChatTheme(palette = uiState.model.palette, darkTheme = ChatTheme.colors.isDark)`, over
+  the root's default-model theme.
+- **State:** `ChatUiState(conversationId, choice: ModelChoice, messages: List<MessageUi>, recent:
   List<RecentConversationUi>, draft, replyInProgress, sending, copiedBlock: BlockKey?, toast:
-  StringResource?)`, with `showsEmptyState`, `canSend` and `draftRows`. `MessageUi.User(id, time,
-  text)` and `MessageUi.Assistant(id, time, modelShortName, latency, interrupted, thinking, blocks)`;
-  `BlockUi.Paragraph`, `BlockUi.Code` (with `tokens`) and `BlockUi.NumberedList`, each with its
-  `BlockKey(messageId, index)`.
-- **ViewModel:** `ChatViewModel(@InjectedParam entry: ChatEntry, navigator, repository, times)`,
-  `Navigator by navigator`, bound only to its own class: `onDraftChange`, `onSend`, `onNewChat`,
-  `onOpenRecent(id)`, `onCopyCode(key, copy)`. Its toasts go through a private `showToast`.
+  StringResource?, favorites, personas, modelPickerOpen)` with `model` and `persona` (row 4), and
+  `showsEmptyState`, `canSend`, `draftRows`, `chipLabel` and `modelPicker`. `MessageUi.User(id, time,
+  text)` and `MessageUi.Assistant(id, time, modelShortName, personaName, latency, interrupted,
+  thinking, blocks)`; `BlockUi.Paragraph`, `BlockUi.Code` (with `tokens`) and `BlockUi.NumberedList`,
+  each with its `BlockKey(messageId, index)`.
+- **ViewModel:** `ChatViewModel(@InjectedParam entry: ChatEntry, navigator, repository, models:
+  ModelRepository, times)`, `Navigator by navigator`, bound only to its own class: `onDraftChange`,
+  `onSend`, `onNewChat`, `onOpenRecent(id)`, `onCopyCode(key, copy)`, and row 4's
+  `onOpenModelPicker`, `onDismissModelPicker`, `onPick(choice)`, `onToggleFavorite(model)`. Its
+  toast and "copied" go through `TimedValue`, a value shown for a duration and then cleared.
 - **`:core:ui`:** `ChatToast(message: String?, modifier)` (nothing while `null`) and
   `ChatToastDefaults.Duration` (1400 ms); `ChatIcons.Add`, `Back`, `Close`, `Memory`, `Menu`, `Mic`,
   `MicOff`, `NewChat`, `Search`, `Send`, `Settings`; `ChatIconButtonVariant.Accent`'s disabled look.
-- **Formats:** `formatClockTime`, `formatRecentTime`, `formatLatency`, `assistantMeta`, `tokenize`
-  and `ChatModel.palette` are public pure functions; `ChatTimes` (Koin single) reads the device's
+- **Formats:** `formatClockTime`, `formatRecentTime`, `formatLatency`, `assistantMeta(modelShortName,
+  personaName, time, latency, interruptedLabel)`, `tokenize` and `ChatModel.palette` are public pure
+  functions (row 4 adds `chipLabel` and `modelMetaLine`); `ChatTimes` (Koin single) reads the device's
   clock and time zone.
 
 ## Decided
@@ -364,7 +370,7 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   later `loadModules`, and `CoreDatabaseModule` needs a `Context` on the Android host.
 - Decided (UI): the accent is `ChatTheme(palette = uiState.model.palette)` around `ChatScreen` in
   `ChatEntryProvider`, so it follows the open conversation's model from the first frame. Row 4
-  moves it to the app's root theme. `ChatModel.palette` is the `ChatPalette` entry named after the
+  puts the default model's palette on the app's root theme and keeps this one over it. `ChatModel.palette` is the `ChatPalette` entry named after the
   model's id (`gpt5` → `GPT5`), `ChatPalette.Default` for an id it does not know.
 - Decided (UI): times are the prototype's `now()`, 24-hour local `HH:MM`, in the device's time
   zone, read on every format. A "recent" row shows `HH:MM` when the conversation was updated on

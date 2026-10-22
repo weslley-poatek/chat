@@ -29,8 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import br.com.weslleycampos.chat.core.ui.ChatTheme
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
+import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
-import br.com.weslleycampos.chat.feature.chat.resources.chat_empty_meta
 import br.com.weslleycampos.chat.feature.chat.resources.chat_empty_title
 import br.com.weslleycampos.chat.feature.chat.resources.chat_recent
 import br.com.weslleycampos.chat.feature.chat.resources.chat_tip_message
@@ -45,10 +45,14 @@ private val ModelDotSize = 9.dp
 /** The tips' `line-height:1.9`. */
 private val TipLineHeight = 1.9.em
 
-/** The empty state (frame lines 120–140), centred in the thread and scrolling once the keyboard leaves it too short. */
+/**
+ * The empty state (frame lines 120–140), centred in the thread and scrolling once the keyboard
+ * leaves it too short. Its meta line names the [persona] while one answers.
+ */
 @Composable
 internal fun ChatEmptyState(
     model: ChatModel,
+    persona: Persona?,
     recent: List<RecentConversationUi>,
     onOpenRecent: (Long) -> Unit,
     modifier: Modifier = Modifier,
@@ -64,7 +68,7 @@ internal fun ChatEmptyState(
                 .padding(horizontal = ChatTheme.spacing.xxxLarge + ChatTheme.spacing.xxxSmall),
             verticalArrangement = Arrangement.spacedBy(ChatTheme.spacing.xxxLarge, Alignment.CenterVertically),
         ) {
-            ModelHeader(model = model)
+            ModelHeader(model = model, persona = persona)
             Tips()
             if (recent.isNotEmpty()) Recent(recent = recent, onOpenRecent = onOpenRecent)
         }
@@ -72,7 +76,7 @@ internal fun ChatEmptyState(
 }
 
 @Composable
-private fun ModelHeader(model: ChatModel) {
+private fun ModelHeader(model: ChatModel, persona: Persona?) {
     Column {
         Text(
             text = stringResource(FeatureChatRes.string.chat_empty_title),
@@ -93,12 +97,7 @@ private fun ModelHeader(model: ChatModel) {
             )
         }
         Text(
-            text = stringResource(
-                FeatureChatRes.string.chat_empty_meta,
-                model.provider,
-                model.contextWindow,
-                model.cost,
-            ),
+            text = modelMetaLine(model = model, persona = persona),
             modifier = Modifier.padding(top = ChatTheme.spacing.xxSmall),
             style = ChatTheme.typography.labelMedium,
             color = ChatTheme.colors.text.secondary,

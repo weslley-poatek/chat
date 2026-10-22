@@ -7,6 +7,7 @@ import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntryProvider
 import br.com.weslleycampos.chat.data.chat.ChatRepository
+import br.com.weslleycampos.chat.data.chat.ModelRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -68,6 +69,9 @@ class ChatModuleTest {
 internal class FakeAppModule {
     @Single
     fun repository(): ChatRepository = FakeChatRepository()
+
+    @Single
+    fun models(): ModelRepository = FakeModelRepository()
 
     @Single
     fun navigator(): Navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(ChatEntry()) })

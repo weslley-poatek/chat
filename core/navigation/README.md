@@ -33,7 +33,7 @@ data class ConversationEntry(val id: String) : NavKey
 ```
 
 Bind an `EntryProvider` in the module that owns the screen. Koin collects every one into
-`EntriesAggregator`, which the hosts hand to `App()`.
+`EntriesAggregator`, which the hosts hand to `AppHost()`.
 
 ```kotlin
 @Single

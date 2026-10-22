@@ -32,6 +32,16 @@ ChatTheme(palette = ChatPalette.GEMINI) {
 `darkTheme` defaults to the system setting. Never read `MaterialTheme.colorScheme`:
 `ChatTheme` sets every slot of it to magenta, so anything that does shows up on screen.
 
+To give part of the screen another accent, nest a second `ChatTheme` and pass the outer one's
+light or dark on, so a theme chosen above it is kept:
+
+```kotlin
+ChatTheme(palette = model.palette, darkTheme = ChatTheme.colors.isDark) { ... }
+```
+
+The app does this for the chat, which wears its own model's palette over the root's default-model
+palette.
+
 ## Palettes
 
 The accent follows the active model. Models from the same provider share a hue, so `SONNET` and
