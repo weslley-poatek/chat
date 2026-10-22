@@ -33,7 +33,7 @@
 
 > [!NOTE]
 > **Status: foundation.** The build system, dependency injection, secure storage, the local database
-> and Google sign-in are in place. The chat experience is being built on top of them, so after
+> and sign-in with Google or an email and password are in place. The chat experience is being built on top of them, so after
 > sign-in the app still shows the starter screen.
 > The voice mode screen in the banner comes from the design prototype, not from a build of the app.
 
@@ -92,7 +92,7 @@ flowchart TD
     nav[":core:navigation<br/><i>Navigator · entry providers</i>"]
     prefs[":core:preferences<br/><i>plain + encrypted DataStore</i>"]
     ui[":core:ui<br/><i>ChatTheme · tokens · components</i>"]
-    featureAuth[":feature:auth<br/><i>Splash · Google sign-in</i>"]
+    featureAuth[":feature:auth<br/><i>Splash · sign-in: Google, email</i>"]
     dataAuth[":data:auth<br/><i>AuthManager · Firebase Auth</i>"]
 
     androidApp -- "implementation" --> app
@@ -117,7 +117,7 @@ flowchart TD
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
 | [`:core:ui`](core/ui) | The design system: `ChatTheme`, per-model palettes, typography, tokens and components. [Read the module guide →](core/ui/README.md) |
 | [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. Both on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
-| [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
+| [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen: Google, email + password sign-in, account creation and the password-reset email, as modes of one screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
 
 <details>
 <summary><b>How startup works on each platform</b></summary>
@@ -350,9 +350,9 @@ chat/
 │   ├── preferences/               🔐 Plain and encrypted DataStore
 │   └── ui/                        🎨 ChatTheme, tokens and components
 ├── data/
-│   └── auth/                      🔑 AuthManager on Firebase Auth
+│   └── auth/                      🔑 AuthManager and EmailAuthManager on Firebase Auth
 ├── feature/
-│   └── auth/                      👋 Splash gate and Google sign-in screen
+│   └── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)
 ├── iosApp/                        🍎 Xcode project and SwiftUI host
 │   └── KotlinMultiplatformLinkedPackage/  📦 Generated SwiftPM package for the iOS SDKs
 ├── build-logic/

@@ -1,7 +1,48 @@
 <resources>
     <string name="sign_in_app_name">Chat</string>
+    <string name="sign_in_back_link">← sign in</string>
+
+    <string name="sign_in_title_sign_in">Sign in</string>
+    <string name="sign_in_title_sign_up">Create account</string>
+    <string name="sign_in_title_forgot">Reset password</string>
+    <string name="sign_in_title_forgot_sent">Check your inbox</string>
+    <string name="sign_in_subtitle">An account keeps you signed in. Chat history, memory, personas and settings stay on this device.</string>
+    <string name="sign_in_subtitle_forgot">We’ll email a one-time link to choose a new password. Your chats on this device stay as they are.</string>
+
     <string name="sign_in_google">Continue with Google</string>
-    <string name="sign_in_google_error">Couldn’t sign in with Google. Try again.</string>
-    <string name="sign_in_google_network_error">No internet connection. Check it and try again.</string>
-    <string name="sign_in_google_credential_error">Google couldn’t confirm your account. Try again.</string>
+    <string name="sign_in_google_authorizing">authorizing…</string>
+    <string name="sign_in_or">or</string>
+
+    <string name="sign_in_email_placeholder">email</string>
+    <string name="sign_in_password_placeholder">password</string>
+    <string name="sign_in_password_placeholder_new">password · 8+ chars</string>
+    <string name="sign_in_password_show">show</string>
+    <string name="sign_in_password_hide">hide</string>
+    <string name="sign_in_password_show_description">Show password</string>
+    <string name="sign_in_password_hide_description">Hide password</string>
+
+    <string name="sign_in_cta_sign_in">Sign in</string>
+    <string name="sign_in_cta_sign_up">Create account</string>
+    <string name="sign_in_cta_forgot">Send reset link</string>
+
+    <string name="sign_in_forgot_link">Forgot password?</string>
+    <string name="sign_in_sign_up_link">Create account →</string>
+    <string name="sign_in_sign_in_link">Sign in →</string>
+    <string name="sign_in_sign_up_hint">8+ chars · spaces count</string>
+
+    <string name="sign_in_sent_to">→ sent to %1$s</string>
+    <string name="sign_in_sent_note">not there? check spam or the address</string>
+    <string name="sign_in_back_to_sign_in">Back to sign in</string>
+
+    <string name="sign_in_error_invalid_email">enter a valid email</string>
+    <string name="sign_in_error_short_password">password needs 8+ characters</string>
+    <string name="sign_in_error_wrong_credentials">wrong email or password</string>
+    <string name="sign_in_error_no_account">no account uses this email</string>
+    <string name="sign_in_error_email_in_use">this email already has an account</string>
+    <string name="sign_in_error_weak_password">password is too weak, try a longer one</string>
+    <string name="sign_in_error_too_many_requests">too many attempts, try again later</string>
+    <string name="sign_in_error_network">no connection, check it and try again</string>
+    <string name="sign_in_error_unknown">something went wrong, try again</string>
+    <string name="sign_in_error_google">couldn’t sign in with Google, try again</string>
+    <string name="sign_in_error_google_credential">Google couldn’t confirm your account, try again</string>
 </resources>

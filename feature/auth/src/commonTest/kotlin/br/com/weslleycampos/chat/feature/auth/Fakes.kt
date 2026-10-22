@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.data.auth.AuthManager
 import br.com.weslleycampos.chat.data.auth.AuthUser
+import br.com.weslleycampos.chat.data.auth.EmailAuthManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -22,6 +23,31 @@ internal class FakeAuthManager(
     }
 
     override fun signOut() = Unit
+}
+
+/** Records every call; [answer] decides how each one ends, by default with [failure] or success. */
+internal class FakeEmailAuthManager(private val failure: Exception? = null) : EmailAuthManager {
+    val signIns = mutableListOf<Pair<String, String>>()
+    val accountsCreated = mutableListOf<Pair<String, String>>()
+    val passwordResets = mutableListOf<String>()
+    var answer: suspend () -> Unit = { failure?.let { throw it } }
+
+    val calls: Int get() = signIns.size + accountsCreated.size + passwordResets.size
+
+    override suspend fun signIn(email: String, password: String) {
+        signIns += email to password
+        answer()
+    }
+
+    override suspend fun createAccount(email: String, password: String) {
+        accountsCreated += email to password
+        answer()
+    }
+
+    override suspend fun sendPasswordReset(email: String) {
+        passwordResets += email
+        answer()
+    }
 }
 
 internal fun navigator(vararg keys: NavKey) = NavigatorImpl(NavBackStack<NavKey>().apply { addAll(keys) })

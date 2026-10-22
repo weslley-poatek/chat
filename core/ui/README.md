@@ -64,7 +64,7 @@ has `@Preview`s for every variant and state in light and dark.
 | `ChatSwitch` | — | On/off settings; the track takes the palette's accent when checked |
 | `ChatSegmentedControl`, `ChatSegment` | — | Single choice among a few short options, such as theme or speech rate |
 | `ChatBottomSheet` | — | Modal sheets such as the model picker, with the prototype's handle and top border |
-| `ChatVoiceSphere` | `Listening`, `Thinking`, `Speaking` | The voice mode particle sphere, tinted with the palette's accent; also the sign-in logo |
+| `ChatVoiceSphere` | `Listening`, `Thinking`, `Speaking` | The voice mode particle sphere, tinted with the palette's accent |
 
 ## Fonts and icons
 
