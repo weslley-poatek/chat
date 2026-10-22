@@ -2,6 +2,7 @@ package br.com.weslleycampos.chat.data.chat.fakes
 
 import br.com.weslleycampos.chat.core.database.TransactionRunner
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
 import br.com.weslleycampos.chat.core.database.entities.ConversationEntity
@@ -12,13 +13,37 @@ import br.com.weslleycampos.chat.core.database.entities.PersonaEntity
 import br.com.weslleycampos.chat.core.database.entities.ReplyProgress
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
 private val unfinished = setOf(MessageStatus.THINKING, MessageStatus.STREAMING)
 
+private val newestFirst = compareByDescending<ConversationEntity> { it.updatedAt }.thenByDescending { it.id }
+
 /**
- * The three DAOs and a transaction runner over in-memory tables. Like Room, every observer re-reads
+ * The text a `containsPattern` LIKE pattern looks for: its `%` ends dropped and its `\` escapes
+ * undone. Like SQLite's `LIKE` on ASCII text, the fake then matches it ignoring case.
+ */
+private fun containedText(pattern: String): String {
+    require(pattern.length >= 2 && pattern.first() == '%' && pattern.last() == '%') {
+        "Not a contains pattern: $pattern"
+    }
+    return buildString {
+        var escaped = false
+        pattern.substring(1, pattern.length - 1).forEach { char ->
+            if (!escaped && char == '\\') {
+                escaped = true
+            } else {
+                append(char)
+                escaped = false
+            }
+        }
+    }
+}
+
+/**
+ * The four DAOs and a transaction runner over in-memory tables. Like Room, every observer re-reads
  * its table whenever any row of it changes, and ids are assigned in insertion order.
  */
 internal class FakeChatDatabase(
@@ -34,8 +59,11 @@ internal class FakeChatDatabase(
     var personaInserts = 0
         private set
 
-    /** Every reply write, in order. */
+    /** Every reply write, in order, a write to a reply that is gone included. */
     val replyUpdates = mutableListOf<ReplyProgress>()
+
+    /** The id of every conversation deleted, in order. */
+    val deletes = mutableListOf<Long>()
 
     /** Runs before each reply write is applied; throw from it to fail that write. */
     var beforeReplyUpdate: (ReplyProgress) -> Unit = {}
@@ -71,8 +99,7 @@ internal class FakeChatDatabase(
             conversationRows.map { rows -> rows.firstOrNull { it.id == id } }
 
         override fun observeRecent(limit: Int): Flow<List<ConversationEntity>> = conversationRows.map { rows ->
-            rows.sortedWith(compareByDescending<ConversationEntity> { it.updatedAt }.thenByDescending { it.id })
-                .take(limit)
+            rows.filterNot { it.archived }.sortedWith(newestFirst).take(limit)
         }
 
         override suspend fun get(id: Long): ConversationEntity? = conversationRows.value.firstOrNull { it.id == id }
@@ -97,6 +124,54 @@ internal class FakeChatDatabase(
             }
             return 1
         }
+
+        override suspend fun setPinned(id: Long, pinned: Boolean): Int =
+            rewrite(id, { it.pinned != pinned }) { it.copy(pinned = pinned) }
+
+        override suspend fun setArchived(id: Long, archived: Boolean): Int =
+            rewrite(id, { it.archived != archived }) { it.copy(archived = archived) }
+
+        /** Deletes the conversation and, like the foreign key's cascade, its messages. */
+        override suspend fun delete(id: Long): Int {
+            if (conversationRows.value.none { it.id == id }) return 0
+            write()
+            deletes += id
+            messageRows.update { rows -> rows.filterNot { it.conversationId == id } }
+            conversationRows.update { rows -> rows.filterNot { it.id == id } }
+            return 1
+        }
+
+        private fun rewrite(
+            id: Long,
+            changes: (ConversationEntity) -> Boolean,
+            update: (ConversationEntity) -> ConversationEntity,
+        ): Int {
+            if (conversationRows.value.none { it.id == id && changes(it) }) return 0
+            write()
+            conversationRows.update { rows -> rows.map { if (it.id == id) update(it) else it } }
+            return 1
+        }
+    }
+
+    val historyDao = object : HistoryDao {
+        override fun observeAll(): Flow<List<ConversationEntity>> =
+            conversationRows.map { rows -> rows.filterNot { it.archived }.sortedWith(newestFirst) }
+
+        override fun search(pattern: String, modelIds: List<String>): Flow<List<ConversationEntity>> {
+            val text = containedText(pattern)
+            return combine(conversationRows, messageRows) { rows, messages ->
+                val byMessage = messages
+                    .filter { it.role == MessageRole.USER && it.text.contains(text, ignoreCase = true) }
+                    .map { it.conversationId }
+                    .toSet()
+                rows.filter { row ->
+                    !row.archived &&
+                        (row.title.contains(text, ignoreCase = true) || row.modelId in modelIds || row.id in byMessage)
+                }.sortedWith(newestFirst)
+            }
+        }
+
+        override fun observeCount(): Flow<Int> = conversationRows.map { rows -> rows.count { !it.archived } }
     }
 
     val personaDao = object : PersonaDao {
@@ -121,16 +196,18 @@ internal class FakeChatDatabase(
             return id
         }
 
-        override suspend fun updateReply(progress: ReplyProgress) {
+        override suspend fun updateReply(progress: ReplyProgress): Int {
             beforeReplyUpdate(progress)
-            write()
             replyUpdates += progress
+            if (messageRows.value.none { it.id == progress.id }) return 0
+            write()
             messageRows.update { rows ->
                 rows.map {
                     if (it.id != progress.id) return@map it
                     it.copy(blocks = progress.blocks, status = progress.status, latencyMillis = progress.latencyMillis)
                 }
             }
+            return 1
         }
 
         override suspend fun countReplies(conversationId: Long): Int =

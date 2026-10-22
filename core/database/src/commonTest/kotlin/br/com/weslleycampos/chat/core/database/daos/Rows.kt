@@ -6,11 +6,19 @@ import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
 import br.com.weslleycampos.chat.core.database.entities.StoredBlock
 
-internal fun conversation(title: String = "Hello", updatedAt: Long = 0) = ConversationEntity(
+internal fun conversation(
+    title: String = "Hello",
+    updatedAt: Long = 0,
+    modelId: String = "sonnet",
+    pinned: Boolean = false,
+    archived: Boolean = false,
+) = ConversationEntity(
     title = title,
-    modelId = "sonnet",
+    modelId = modelId,
     createdAt = updatedAt,
     updatedAt = updatedAt,
+    pinned = pinned,
+    archived = archived,
 )
 
 internal fun userMessage(conversationId: Long, text: String = "hi", createdAt: Long = 0) = MessageEntity(

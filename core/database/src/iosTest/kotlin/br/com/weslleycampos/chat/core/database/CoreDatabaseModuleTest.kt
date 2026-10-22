@@ -4,6 +4,7 @@ package br.com.weslleycampos.chat.core.database
 
 import androidx.room3.useReaderConnection
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
 import kotlinx.coroutines.test.runTest
@@ -50,6 +51,7 @@ class CoreDatabaseModuleTest {
     @Test
     fun koinProvidesTheDaosAndATransactionRunnerOnThatDatabase() {
         assertSame(koin.get<ConversationDao>(), koin.get<ConversationDao>())
+        assertSame(koin.get<HistoryDao>(), koin.get<HistoryDao>())
         assertSame(koin.get<MessageDao>(), koin.get<MessageDao>())
         assertSame(koin.get<PersonaDao>(), koin.get<PersonaDao>())
         assertIs<RoomTransactionRunner>(koin.get<TransactionRunner>())

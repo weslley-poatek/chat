@@ -18,9 +18,12 @@ interface MessageDao {
     @Insert
     suspend fun insert(message: MessageEntity): Long
 
-    /** Rewrites a reply's blocks, status and latency, leaving its other columns as they are. */
+    /**
+     * Rewrites a reply's blocks, status and latency, leaving its other columns as they are. Returns
+     * how many replies it changed: `0` once the reply is gone with its deleted conversation.
+     */
     @Update(entity = MessageEntity::class)
-    suspend fun updateReply(progress: ReplyProgress)
+    suspend fun updateReply(progress: ReplyProgress): Int
 
     /** The conversation's assistant messages, finished or not. */
     @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId AND role = 'assistant'")

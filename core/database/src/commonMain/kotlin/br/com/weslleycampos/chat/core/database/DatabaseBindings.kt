@@ -1,12 +1,16 @@
 package br.com.weslleycampos.chat.core.database
 
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
 import org.koin.core.annotation.Single
 
 @Single
 internal fun conversationDao(database: ChatDatabase): ConversationDao = database.conversationDao()
+
+@Single
+internal fun historyDao(database: ChatDatabase): HistoryDao = database.historyDao()
 
 @Single
 internal fun messageDao(database: ChatDatabase): MessageDao = database.messageDao()

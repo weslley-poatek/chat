@@ -124,6 +124,24 @@ class MessageDaoTest {
     }
 
     @Test
+    fun updatingAReplySaysWhetherTheReplyIsStillThere() = runTest {
+        val conversationId = conversations.insert(conversation())
+        val id = dao.insert(reply(conversationId, status = MessageStatus.STREAMING, blocks = emptyList()))
+        val progress = ReplyProgress(
+            id = id,
+            blocks = listOf(StoredBlock.Paragraph("Two")),
+            status = MessageStatus.STREAMING,
+            latencyMillis = null,
+        )
+
+        assertEquals(1, dao.updateReply(progress))
+        conversations.delete(conversationId)
+
+        assertEquals(0, dao.updateReply(progress))
+        assertTrue(dao.observeByConversation(conversationId).first().isEmpty())
+    }
+
+    @Test
     fun repliesAreCountedPerConversation() = runTest {
         val conversationId = conversations.insert(conversation())
         val other = conversations.insert(conversation())

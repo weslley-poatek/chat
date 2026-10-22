@@ -81,6 +81,33 @@ class MigrationTestHelperTest {
         assertFalse(connection.rows("PRAGMA foreign_key_list(conversations)").any())
     }
 
+    @Test
+    fun migratesVersionThreeToFourKeepingEveryConversationNeitherPinnedNorArchived() = runTest {
+        helper.createDatabase(version = 3).use { connection ->
+            connection.execSQL(
+                "INSERT INTO conversations (id, title, modelId, createdAt, updatedAt, personaId) " +
+                    "VALUES (1, 'Postgres index', 'gpt5', 10, 20, 'terse'), (2, 'Hello', 'sonnet', 30, 40, NULL)",
+            )
+            connection.execSQL(
+                "INSERT INTO messages " +
+                    "(id, conversationId, role, text, blocks, modelId, status, latencyMillis, createdAt, personaId) " +
+                    "VALUES (1, 1, 'user', 'why?', '[]', NULL, 'done', NULL, 10, NULL), " +
+                    "(2, 1, 'assistant', '', '[{\"type\":\"p\",\"text\":\"ok\"}]', 'gpt5', 'done', 800, 10, 'terse')",
+            )
+        }
+
+        val connection = helper.runMigrationsAndValidate(version = 4)
+
+        assertEquals(
+            listOf("1|Postgres index|gpt5|10|20|terse|0|0", "2|Hello|sonnet|30|40|null|0|0"),
+            connection.rows("SELECT * FROM conversations ORDER BY id"),
+        )
+        assertEquals(
+            listOf("1|user|null", "2|assistant|terse"),
+            connection.rows("SELECT id, role, personaId FROM messages ORDER BY id"),
+        )
+    }
+
     /** Every row of [sql], its columns joined by `|`, a NULL as `null`. */
     private fun SQLiteConnection.rows(sql: String): List<String> = prepare(sql).use { statement ->
         buildList {
