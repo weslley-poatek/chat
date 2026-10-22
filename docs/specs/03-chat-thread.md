@@ -108,13 +108,125 @@ criteria below run on the Android host and the iOS simulator unless marked iOS.
 - [x] Koin provides one `RoomChatRepository` as `ChatRepository` —
   `DataChatModuleTest.koinProvidesOneRoomChatRepositoryOnTheDatabasesDaos`
 
-### UI (`:feature:chat`, `:core:ui`, `:core:navigation`, `:app`) — for the feature agent
+### UI (`:feature:chat`, `:core:ui`, `:core:navigation`, `:app`)
 
-<!-- The feature agent writes the UI criteria here: top bar, empty state and recent list, messages
-     and blocks, caret, latency meta, syntax highlighting, code "copy" / "copied", composer, new chat,
-     toast, ChatEntry replacing HomeEntry, starter code removed. -->
+The screen is `ChatScreen` in `:feature:chat`, stateless, over one `ChatUiState` from
+`ChatViewModel`. Its previews (`ChatScreenPreviewParameterProvider`, 402 × 874) draw every state in
+light and dark:
 
-- [ ] _To be written by the feature agent._
+| Preview | What it shows | Design source |
+| --- | --- | --- |
+| Empty | "new chat", model name, meta line and tips; no "recent" | lines 120–140 |
+| Empty · recent | the three latest conversations under "recent" | lines 132–139 |
+| Thinking | the user bubble, then the lone blinking caret | lines 142–150, 178 |
+| Streaming | the first paragraph with the trailing caret | lines 151–176 |
+| Done | paragraph, list, code, meta with latency | lines 144–176 |
+| Interrupted | the revealed blocks, meta ending "interrupted" | — (data's `INTERRUPTED`) |
+| Long code block | a 12-line `ts` block still streaming, scrolling sideways | lines 167–172 |
+| List | a reply ending in a numbered list | lines 157–163 |
+| Composer · multi-line draft | the draft three lines tall | lines 241–248, `draftRows` 869 |
+| Send disabled | a draft while the reply streams: Send in `--bg2` / `--fg3` | `sendStyle` 870 |
+| Toast | "couldn’t send, try again" over the thread, the draft back | lines 531–534 |
+| Copied · Gemini | "copied" in a code header, the Gemini accent | `copyText` 730 |
+
+Criteria run on the Android host and the iOS simulator. Layout, colours and animation are checked
+in the previews and on a device: there is no `runComposeUiTest`, see Decided.
+
+Navigation and app
+
+- [x] After sign-in, or with a signed-in user at launch, a new chat replaces the auth screen —
+  `SignInViewModelTest.aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithANewChat`,
+  `SignInViewModelTest.aValidSignUpCreatesTheAccountAndReplacesSignInWithANewChat`,
+  `SignInViewModelTest.aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithANewChat`,
+  `SplashViewModelTest.aRestoredUserReplacesSplashWithANewChat`
+- [x] `ChatEntry()` and `ChatEntry(42)` survive the back stack's save, next to every key the app
+  registers — `ChatEntryProviderTest.aSavedBackStackRestoresANewChatAndAnOpenConversation`,
+  `AppEntriesTest.theSavedBackStackRestoresEveryScreenTheAppShows`
+- [x] Koin provides the entry provider, one `ChatTimes`, and a `ChatViewModel` for the entry it is
+  given — `ChatModuleTest.koinProvidesTheEntryProviderAndOneChatTimes`,
+  `ChatModuleTest.koinBuildsAChatViewModelForTheEntryItIsGiven`
+- [x] `HomeEntry`, the starter `HomeScreen` and the template's `Greeting*`, `Platform*`,
+  `AppLogic*Test` and `AppCommonTest` are gone, and `./gradlew detekt` passes with no failures —
+  the build itself
+
+Empty state and opening a conversation
+
+- [x] A new chat shows the empty state on the default model with the three latest conversations,
+  newest first, and their times — `ChatViewModelTest.aNewChatShowsTheEmptyStateOnTheDefaultModelWithTheThreeLatestConversations`,
+  `ChatUiStateTest.onlyANewChatShowsTheEmptyState`,
+  `ChatUiStateTest.aConversationIsARecentRowWithItsTitleAndLastUpdate`
+- [x] A "recent" time is `HH:MM` for today in the device's time zone, else "Sep 13" —
+  `ChatFormatsTest.aRecentRowShowsTheTimeForTodayAndTheDateBeforeThat`,
+  `ChatFormatsTest.todayIsTheDeviceTimeZonesDay`, `ChatFormatsTest.chatTimesWriteInTheDevicesTimeZoneAgainstItsClock`
+- [x] A tip's starred words are its emphasised runs — `ChatFormatsTest.aTipsStarredWordsAreItsEmphasisedRuns`
+- [x] Tapping a "recent" row opens that conversation, with its model's accent from the tap, and a
+  send continues it — `ChatViewModelTest.aRecentRowOpensThatConversationOnItsModel`,
+  `ChatViewModelTest.aSendInAnOpenedConversationContinuesIt`
+- [x] An entry with a conversation id opens it; one whose conversation is gone opens a new chat —
+  `ChatViewModelTest.anEntryWithAConversationIdOpensThatConversation`,
+  `ChatViewModelTest.anEntryForAConversationThatIsGoneOpensANewChat`
+- [x] Each model's accent is the `ChatPalette` named after its id, the default for an unknown one —
+  `ChatFormatsTest.everyModelHasThePaletteNamedAfterItsId`
+
+Sending, new chat and the toast
+
+- [x] Send empties the composer at once, creates the conversation, and the reply goes thinking →
+  streaming with the caret → done with its latency —
+  `ChatViewModelTest.aSendFromANewChatCreatesTheConversationAndFollowsItsReplyFromThinkingToDone`
+- [x] Send is disabled for a blank draft and while the last reply thinks or streams, which the UI
+  reads from the last message, not a flag of its own — `ChatViewModelTest.sendIsDisabledWhileAReplyIsOnItsWay`,
+  `ChatViewModelTest.aBlankDraftCannotBeSent`, `ChatUiStateTest.sendNeedsTextAndNoReplyOrSendOnItsWay`,
+  `ChatUiStateTest.aReplyIsInProgressOnlyWhileTheLastMessageIsThinkingOrStreaming`
+- [x] A disabled Send is `--bg2` with a `--fg3` arrow, an enabled one the accent —
+  `ChatIconButtonTest.aDisabledAccentButtonIsTheRaisedSurfaceWithTertiaryTextInEveryPalette`
+- [x] When `send` returns `null` or throws, the text comes back to an untouched composer and the
+  toast says "couldn’t send, try again" for 1400 ms; a newer toast replaces it and restarts the time —
+  `ChatViewModelTest.whenNothingWasSentTheDraftComesBackAndTheToastShowsFor1400Ms`,
+  `ChatViewModelTest.aSendThatFailsIsTreatedAsNothingSent`,
+  `ChatViewModelTest.aDraftTypedWhileTheSendWasOnItsWayIsKeptWhenNothingWasSent`,
+  `ChatViewModelTest.aNewToastReplacesTheShownOneAndRestartsItsTime`,
+  `ChatToastTest.aToastShowsForTheDesignsFourteenHundredMilliseconds`
+- [x] The toast inverts the screen's colours in every palette —
+  `ChatToastTest.theToastInvertsTheScreenColorsInEveryPalette`,
+  `ChatToastTest.providerCoversHiddenShortAndLongToastsInBothModes`
+- [x] New chat returns to the empty state on the default model, keeps the draft and clears
+  "copied"; a send that answers after it does not pull the old thread back —
+  `ChatViewModelTest.newChatGoesBackToTheEmptyStateOnTheDefaultModelAndKeepsTheDraft`,
+  `ChatViewModelTest.aSendThatAnswersAfterNewChatLeavesTheNewChatEmpty`
+- [x] The composer is one line per line of the draft, from one to six —
+  `ChatFormatsTest.theComposerIsOneLinePerLineOfTheDraftFromOneToSix`,
+  `ChatUiStateTest.theComposerIsAsTallAsTheDraftsLines`
+
+Messages and blocks
+
+- [x] A user message shows its text and local `HH:MM` —
+  `ChatUiStateTest.aUserMessageShowsItsTextAtItsLocalTime`,
+  `ChatFormatsTest.clockTimesAreLocalTwentyFourHourHoursAndMinutes`
+- [x] A done reply shows every block, no caret, and the meta "sonnet-4.5 · 14:02 · 0.8s" —
+  `ChatUiStateTest.aDoneReplyShowsEveryBlockAndItsLatencyWithoutACaret`,
+  `ChatFormatsTest.theReplyMetaJoinsModelTimeAndLatencyOrInterrupted`,
+  `ChatFormatsTest.latencyIsInTenthsOfASecondWithAHalfRoundingUp`
+- [x] While a reply streams only its last block has the caret, and a list never does —
+  `ChatUiStateTest.onlyTheLastBlockOfAStreamingReplyHasTheCaret`,
+  `ChatUiStateTest.aListHasNoCaretEvenWhileItStreamsLast`
+- [x] A reply in progress with no block yet is the thinking caret —
+  `ChatUiStateTest.aReplyInProgressWithNoBlockYetIsThinking`
+- [x] An interrupted reply keeps what it revealed, without caret or latency, its meta ending
+  "interrupted" — `ChatUiStateTest.anInterruptedReplyKeepsWhatItRevealedWithoutCaretOrLatency`
+- [x] Code is coloured as the prototype's `tokenize` does: comments, strings (one still being
+  typed included), numbers, capitalised types, `KW` keywords and calls, in `ChatColors.syntax` —
+  `CodeTokensTest.*`
+- [x] "copy" puts the block's text on the clipboard and its header reads "copied" for 1200 ms;
+  another copy restarts that, and a block that is not code copies nothing —
+  `ChatViewModelTest.copyHandsTheCodeToTheClipboardAndReadsCopiedFor1200Ms`,
+  `ChatViewModelTest.anotherCopyRestartsTheCopiedTime`, `ChatViewModelTest.copyDoesNothingForABlockThatIsNotCode`,
+  `ChatUiStateTest.aCodeBlockIsFoundByItsKey`
+- [x] A streaming tick rebuilds only the reply that grew —
+  `ChatViewModelTest.aStreamingTickRedrawsOnlyTheReplyThatGrew`,
+  `ChatViewModelTest.theMessageCacheMapsEachUnchangedMessageOnce`
+- [x] The previews cover every state above in light and dark, and other modules reach every
+  `:core:ui` icon — `ChatUiStateTest.previewsCoverEveryStateInLightAndDark`,
+  `ChatIconsTest.everyBundledIconIsReachableFromOtherModulesOnce`
 
 ## Data contract
 
@@ -172,6 +284,32 @@ criteria below run on the Android host and the iOS simulator unless marked iOS.
   - On the first injection, every reply left thinking or streaming by an earlier run becomes
     `INTERRUPTED`, keeping its blocks; reads and sends wait for that.
 
+## UI contract
+
+What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.chat`) unless noted.
+
+- **Key:** `@Serializable data class ChatEntry(val conversationId: Long? = null) : NavKey` in
+  `:core:navigation`'s `entries.chat`; `null` is a new chat. `ChatEntryProvider` registers it.
+- **Screen:** `ChatScreen(uiState, onHistoryClick, onModelClick, onNewChat, onOpenRecent,
+  onDraftChange, onSend, onAttachClick, onVoiceClick, onCopyCode, modifier)`. `ChatEntryProvider`
+  wires `onHistoryClick` (row 5), `onModelClick` (row 4), `onAttachClick` (row 8) and
+  `onVoiceClick` (row 11) to `{}`, and wraps the screen in `ChatTheme(palette = uiState.model.palette)`.
+- **State:** `ChatUiState(conversationId, model, messages: List<MessageUi>, recent:
+  List<RecentConversationUi>, draft, replyInProgress, sending, copiedBlock: BlockKey?, toast:
+  StringResource?)`, with `showsEmptyState`, `canSend` and `draftRows`. `MessageUi.User(id, time,
+  text)` and `MessageUi.Assistant(id, time, modelShortName, latency, interrupted, thinking, blocks)`;
+  `BlockUi.Paragraph`, `BlockUi.Code` (with `tokens`) and `BlockUi.NumberedList`, each with its
+  `BlockKey(messageId, index)`.
+- **ViewModel:** `ChatViewModel(@InjectedParam entry: ChatEntry, navigator, repository, times)`,
+  `Navigator by navigator`, bound only to its own class: `onDraftChange`, `onSend`, `onNewChat`,
+  `onOpenRecent(id)`, `onCopyCode(key, copy)`. Its toasts go through a private `showToast`.
+- **`:core:ui`:** `ChatToast(message: String?, modifier)` (nothing while `null`) and
+  `ChatToastDefaults.Duration` (1400 ms); `ChatIcons.Add`, `Back`, `Close`, `Memory`, `Menu`, `Mic`,
+  `MicOff`, `NewChat`, `Search`, `Send`, `Settings`; `ChatIconButtonVariant.Accent`'s disabled look.
+- **Formats:** `formatClockTime`, `formatRecentTime`, `formatLatency`, `assistantMeta`, `tokenize`
+  and `ChatModel.palette` are public pure functions; `ChatTimes` (Koin single) reads the device's
+  clock and time zone.
+
 ## Decided
 
 - Decided: the reply's blocks live in one `messages.blocks` TEXT column, a JSON array in the
@@ -224,6 +362,60 @@ criteria below run on the Android host and the iOS simulator unless marked iOS.
 - Decided: `DataChatModuleTest` loads `DataChatModule` next to an annotated test module of fakes.
   The Koin compiler plugin rejects lookups whose dependencies come from a classic `module { }` or a
   later `loadModules`, and `CoreDatabaseModule` needs a `Context` on the Android host.
+- Decided (UI): the accent is `ChatTheme(palette = uiState.model.palette)` around `ChatScreen` in
+  `ChatEntryProvider`, so it follows the open conversation's model from the first frame. Row 4
+  moves it to the app's root theme. `ChatModel.palette` is the `ChatPalette` entry named after the
+  model's id (`gpt5` → `GPT5`), `ChatPalette.Default` for an id it does not know.
+- Decided (UI): times are the prototype's `now()`, 24-hour local `HH:MM`, in the device's time
+  zone, read on every format. A "recent" row shows `HH:MM` when the conversation was updated on
+  today's local date, else the English month and day, "Sep 13", as the prototype's history items.
+  `kotlinx-datetime` 0.8.0, the latest stable, converts `kotlin.time.Instant` to local dates.
+- Decided (UI): the latency is tenths of a second, a half rounding up: 849 ms "0.8s", 850 ms
+  "0.9s". A message's time is its `createdAt`; a reply's is the time of the message it answers.
+- Decided (UI): "copy" writes plain text through Compose's `LocalClipboard`
+  (`plainTextClipEntry`: `ClipData.newPlainText` on Android, `ClipEntry.withPlainText` on iOS).
+  `ChatViewModel.onCopyCode(key, copy)` takes the write as a lambda, as SignIn takes its Google
+  launcher, so the ViewModel stays platform-free. The header reads "copied" for 1200 ms and is a
+  polite live region; a copy shows no toast, as in the prototype.
+- Decided (UI): the only toast this row needs is "couldn’t send, try again", when `send` returns
+  `null` or throws. The draft comes back if the composer is still empty, so nothing typed is lost.
+  `ChatToast` (in `:core:ui`, for later rows' toasts) shows for `ChatToastDefaults.Duration`, 1400
+  ms, fades in over 150 ms, and sits bottom centre over the thread, 24 dp above the composer (the
+  prototype's 84 px from the bottom edge).
+- Decided (UI): a "recent" row is the title on one line and the time; it opens that conversation in
+  the same entry, taking its model from the recent list so the accent changes on the tap. "recent"
+  is hidden when there is no conversation. Rows are at least 44 dp tall for touch (the prototype's
+  36 px).
+- Decided (UI): the only flag of the ViewModel's own is `sending`, while the call to `send` is on its
+  way, so a double tap cannot send twice. Whether a reply is on its way is always the last message's
+  `status.isInProgress`.
+- Decided (UI): the thinking caret shows while a reply is in progress with no block yet. An
+  interrupted reply shows what it revealed and no caret; one that revealed nothing shows its meta
+  only.
+- Decided (UI): the composer is a `BasicTextField` styled from the frame (`ChatTextField` is single
+  line and 48 dp): at least as many lines as the draft has, six at most, then it scrolls. Enter adds
+  a line; ⌘ / Ctrl + Enter sends from a hardware keyboard, as the prototype's `draftKey`.
+- Decided (UI): the thread snaps to its end on every change of its messages (a send and each tick)
+  and when it gets shorter (the keyboard opening), as the prototype's `scrollTop = scrollHeight`.
+  The empty state scrolls when the keyboard leaves it too short. The screen pads for the safe area
+  and the keyboard with `safeDrawingPadding()`.
+- Decided (UI): until their rows, these do nothing: History (row 5), the model chip (row 4), "+"
+  (row 8), a tap on the mic (row 11; hold to record is row 8), and a tap on a message (row 6, no
+  handler at all). The tips keep the prototype's copy. The local-only banner is dropped.
+- Decided (UI): the ViewModel lives in the entry's `ViewModelStore`, so the draft and the open
+  conversation survive a configuration change. After process death the back stack restores the
+  `ChatEntry` it was created with, usually a new chat: a conversation opened from "recent" is not
+  written back to the key. `ChatViewModel` keeps `Navigator` for row 5's History.
+- Decided (UI): `:core:ui` gains `ChatToast`, public `ChatIcons` handles (its `CoreUiRes` is
+  internal, so other modules could not reach its drawables), and the Accent `ChatIconButton`'s
+  disabled look: `--bg2` with `--fg3`, easing 150 ms between the two, instead of fading to 38 %.
+  The model chip, code block, composer and top bar are used once and stay in `:feature:chat`.
+- Decided (UI): no `runComposeUiTest`. The Android host has no Robolectric, so a Compose UI test
+  cannot pass on both targets; the logic is tested through the ViewModel and pure functions, and the
+  drawing through the previews.
+- Decided (UI): Row 3 replaced the starter `HomeEntry` with `ChatEntry(conversationId: Long? = null)`
+  in `core.navigation.entries.chat` and deleted the KMP template's starter code. `:app` keeps
+  `AppEntriesTest`, which saves every key the app registers through the back stack's JSON.
 
 ## Out of scope
 
@@ -233,5 +425,5 @@ criteria below run on the Android host and the iOS simulator unless marked iOS.
   Memory and the remember flag: row 9. `autoRead`: row 10.
 - The prototype's `SEED` / `loadSeed` demo conversation: no demo data is seeded (queue decision).
 - Stopping a reply: the design has no stop control.
-- Syntax highlighting (`tokenize`), "copy" / "copied", the caret and the toast are UI work for
-  `:feature:chat` / `:core:ui`.
+- Syntax highlighting (`tokenize`), "copy" / "copied", the caret and the toast are UI work, in the
+  UI criteria above.

@@ -1,0 +1,24 @@
+<resources>
+    <string name="chat_history">History</string>
+    <string name="chat_new_chat">New chat</string>
+
+    <string name="chat_empty_title">new chat</string>
+    <string name="chat_empty_meta">%1$s · %2$s context · %3$s</string>
+    <string name="chat_tip_type">*type* or paste code · drop files</string>
+    <string name="chat_tip_mic">*hold mic* to talk · *tap* for voice mode</string>
+    <string name="chat_tip_model">*tap model* to switch or compare two</string>
+    <string name="chat_tip_message">*tap a message* to copy, fork, read aloud</string>
+    <string name="chat_recent">recent</string>
+
+    <string name="chat_meta_user">you · %1$s</string>
+    <string name="chat_meta_interrupted">interrupted</string>
+    <string name="chat_code_copy">copy</string>
+    <string name="chat_code_copied">copied</string>
+
+    <string name="chat_composer_placeholder">message %1$s…</string>
+    <string name="chat_attach">Attach</string>
+    <string name="chat_voice">Voice</string>
+    <string name="chat_send">Send</string>
+
+    <string name="chat_toast_send_failed">couldn’t send, try again</string>
+</resources>

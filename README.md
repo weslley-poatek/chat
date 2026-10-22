@@ -34,8 +34,9 @@
 > [!NOTE]
 > **Status: foundation.** The build system, dependency injection, secure storage, the local database
 > and sign-in with Google or an email and password are in place, and so is the chat data layer:
-> conversations and messages in Room, with canned replies streamed into them. The chat screen is being
-> built on top of them, so after sign-in the app still shows the starter screen.
+> conversations and messages in Room, with canned replies streamed into them. After sign-in the app
+> opens the chat thread: send a message, watch the reply think, stream and finish, copy its code, and
+> reopen a recent conversation. History, the model picker, voice and attachments come next.
 > The voice mode screen in the banner comes from the design prototype, not from a build of the app.
 
 ## ✨ Highlights
@@ -94,6 +95,7 @@ flowchart TD
     prefs[":core:preferences<br/><i>plain + encrypted DataStore</i>"]
     ui[":core:ui<br/><i>ChatTheme · tokens · components</i>"]
     featureAuth[":feature:auth<br/><i>Splash · sign-in: Google, email</i>"]
+    featureChat[":feature:chat<br/><i>Chat thread · composer · streamed replies</i>"]
     dataAuth[":data:auth<br/><i>AuthManager · Firebase Auth</i>"]
     dataChat[":data:chat<br/><i>ChatRepository · canned streamed replies</i>"]
 
@@ -105,9 +107,11 @@ flowchart TD
     app -- "implementation" --> prefs
     app -- "implementation" --> ui
     app -- "implementation" --> featureAuth
+    app -- "implementation" --> featureChat
     app -- "implementation" --> dataAuth
     app -- "implementation" --> dataChat
     featureAuth -- "implementation" --> dataAuth
+    featureChat -- "implementation" --> dataChat
     dataChat -- "implementation" --> db
 ```
 
@@ -123,6 +127,7 @@ flowchart TD
 | [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. Both on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
 | [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, and `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
 | [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen: Google, email + password sign-in, account creation and the password-reset email, as modes of one screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
+| [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. The accent follows the conversation's model. |
 
 <details>
 <summary><b>How startup works on each platform</b></summary>
@@ -157,6 +162,7 @@ iOS compilation reports `KOIN-D002` for valid lookups across Gradle modules. See
 | Storage | [AndroidX DataStore](https://developer.android.com/topic/libraries/architecture/datastore) Preferences (Okio) | `1.2.1` |
 | Database | [Room](https://developer.android.com/kotlin/multiplatform/room) (`androidx.room3`) · [SQLite](https://developer.android.com/kotlin/multiplatform/sqlite) bundled driver | `3.0.3` · `2.7.1` |
 | Serialization | [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) JSON, through its BOM, for the reply blocks column | `1.12.0` |
+| Date and time | [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime), for local message times and dates | `0.8.0` |
 | Code generation | [KSP](https://github.com/google/ksp), for Room's compiler | `2.3.12` |
 | Authentication | [Firebase Auth](https://firebase.google.com/docs/auth) · Android BoM · iOS SDK | `34.19.0` · `12.19.2` |
 | Google sign-in | [Credential Manager](https://developer.android.com/identity/sign-in/credential-manager-siwg) · `googleid` · [GoogleSignIn-iOS](https://github.com/google/GoogleSignIn-iOS) | `1.6.0` · `1.2.1` · `10.0.0` |
@@ -251,6 +257,8 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 | Auth tests on the iOS simulator | `./gradlew :data:auth:iosSimulatorArm64Test :feature:auth:iosSimulatorArm64Test` |
 | Chat data tests on the Android host | `./gradlew :data:chat:testAndroidHostTest` |
 | Chat data tests on the iOS simulator | `./gradlew :data:chat:iosSimulatorArm64Test` |
+| Chat screen tests on the Android host | `./gradlew :feature:chat:testAndroidHostTest` |
+| Chat screen tests on the iOS simulator | `./gradlew :feature:chat:iosSimulatorArm64Test` |
 | Static analysis for every module | `./gradlew detekt` |
 
 > [!WARNING]
@@ -262,14 +270,14 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 All shared configuration lives in the [`build-logic`](build-logic/convention/src/main/kotlin) included
 build. Each module picks the conventions it needs:
 
-| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:database` | `:core:navigation` | `:core:preferences` | `:core:ui` | `:data:auth` | `:data:chat` | `:feature:auth` |
-| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | | | | | | |
-| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | | ✅ | | ✅ | | | ✅ |
-| `chat.room` | KSP and the Room Gradle plugin with schemas in `schemas/`, Room runtime and bundled SQLite driver, the Room compiler per target, and the driver and schema path its tests need | | | ✅ | | | | | | |
-| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:database` | `:core:navigation` | `:core:preferences` | `:core:ui` | `:data:auth` | `:data:chat` | `:feature:auth` | `:feature:chat` |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | | | | | | | |
+| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | | ✅ | | ✅ | | | ✅ | ✅ |
+| `chat.room` | KSP and the Room Gradle plugin with schemas in `schemas/`, Room runtime and bundled SQLite driver, the Room compiler per target, and the driver and schema path its tests need | | | ✅ | | | | | | | |
+| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 `:androidApp` also applies the `com.google.gms.google-services` plugin, which turns `google-services.json`
 into resources such as the `default_web_client_id` the Google account picker asks for.
@@ -346,12 +354,9 @@ chat/
 ├── androidApp/                    🤖 Android entry point
 ├── app/                           📱 Shared Compose UI and root Koin module
 │   └── src/
-│       ├── commonMain/            Code for every target
-│       ├── androidMain/           Android actuals
-│       ├── iosMain/               iOS actuals, MainViewController, initKoin()
-│       ├── commonTest/
-│       ├── androidHostTest/
-│       └── iosTest/
+│       ├── commonMain/            App(), AppModule
+│       ├── iosMain/               MainViewController, initKoin()
+│       └── commonTest/            AppEntriesTest: every key survives the back stack's save
 ├── core/
 │   ├── database/                  🗄️ ChatDatabase on Room, with its exported schemas
 │   ├── navigation/                🧭 Navigator, keys and entry providers
@@ -361,7 +366,8 @@ chat/
 │   ├── auth/                      🔑 AuthManager and EmailAuthManager on Firebase Auth
 │   └── chat/                      💬 ChatRepository, canned streamed replies, model catalogue
 ├── feature/
-│   └── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)
+│   ├── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)
+│   └── chat/                      💬 The chat thread: empty state, messages, code blocks, composer
 ├── iosApp/                        🍎 Xcode project and SwiftUI host
 │   └── KotlinMultiplatformLinkedPackage/  📦 Generated SwiftPM package for the iOS SDKs
 ├── build-logic/

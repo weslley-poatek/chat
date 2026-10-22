@@ -142,10 +142,10 @@ simulator.
 - [x] Given an error, when the email or the password is edited, then the error clears —
   `SignInViewModelTest.typingInEitherFieldClearsTheError`
 - [x] Given a valid `signin`, when the CTA is tapped, then `EmailAuthManager.signIn` gets the email and
-  password as typed, and on return Home replaces SignIn on the back stack, as after Google —
-  `SignInViewModelTest.aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithHome`
-- [x] Given a valid `signup`, when the CTA is tapped, then `createAccount` is called and on return Home
-  replaces SignIn — `SignInViewModelTest.aValidSignUpCreatesTheAccountAndReplacesSignInWithHome`
+  password as typed, and on return a new chat replaces SignIn on the back stack, as after Google —
+  `SignInViewModelTest.aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithANewChat`
+- [x] Given a valid `signup`, when the CTA is tapped, then `createAccount` is called and on return a new
+  chat replaces SignIn — `SignInViewModelTest.aValidSignUpCreatesTheAccountAndReplacesSignInWithANewChat`
 - [x] Given a valid email in `forgot`, when "Send reset link" is tapped, then `sendPasswordReset` gets
   it, no password is needed, and on return `forgotSent` shows while SignIn stays —
   `SignInViewModelTest.aValidResetSendsTheLinkWithoutAPasswordAndShowsTheSentConfirmation`
@@ -166,8 +166,8 @@ simulator.
   `SignInViewModelTest.theGoogleButtonOpensThePickerWhileNothingIsBusy`,
   `SignInViewModelTest.aTokenThatArrivesWhileSigningInIsIgnored`
 - [x] Given a Google token, then `authBusy` is `google` ("authorizing…") and the earlier error is gone
-  until Firebase answers, and on success Home replaces SignIn —
-  `SignInViewModelTest.aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithHome`,
+  until Firebase answers, and on success a new chat replaces SignIn —
+  `SignInViewModelTest.aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithANewChat`,
   `SignInViewModelTest.aGoogleTokenClearsTheEarlierError`
 - [x] Given a Google failure, then a network failure shows "no connection, check it and try again", a
   rejected credential "Google couldn’t confirm your account, try again" and anything else, the
@@ -344,7 +344,7 @@ previews and checked on a device: Android and iOS, light and dark, with the keyb
   and `ImeAction.Next` to the password (`Done` in `forgot`, where it is the last field); the password
   uses the password keyboard, also while shown, and `ImeAction.Done`. `Done` submits, like the CTA,
   and leaves the keyboard up, as the prototype's CTA keeps focus in the field (`preventBlur`); it
-  goes away when Home replaces the screen. Autofill hints: email + username on the email field,
+  goes away when Chat replaces the screen. Autofill hints: email + username on the email field,
   `Password` on sign in and `NewPassword` on sign up.
 - Decided: insets and scrolling: the screen pads by `WindowInsets.safeDrawing` (status bar,
   navigation bar, cutout and keyboard) for the prototype's `--st` / `--sb`, then 22 at the sides and
@@ -368,9 +368,9 @@ previews and checked on a device: Android and iOS, light and dark, with the keyb
 - Decided: `SignInUiState` lives in the ViewModel and survives configuration changes, not process
   death: after one, the screen starts over in `signin`, and the password is never written to saved
   state.
-- Decided: success navigates exactly as Google does: `navigate(HomeEntry) { popUpTo<SignInEntry>
-  { inclusive = true } }`. The prototype's `finishAuth` lands on an empty Chat; a later row replaces
-  `HomeEntry`.
+- Decided: success navigates exactly as Google does: `navigate(ChatEntry()) { popUpTo<SignInEntry>
+  { inclusive = true } }`, a new chat, as the prototype's `finishAuth` lands on an empty Chat. Row 3
+  replaced the starter `HomeEntry` with `ChatEntry` (`docs/specs/03-chat-thread.md`).
 
 ## Out of scope
 

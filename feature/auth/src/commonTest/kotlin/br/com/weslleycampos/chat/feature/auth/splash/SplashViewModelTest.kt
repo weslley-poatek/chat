@@ -2,7 +2,7 @@ package br.com.weslleycampos.chat.feature.auth.splash
 
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SignInEntry
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SplashEntry
-import br.com.weslleycampos.chat.core.navigation.entries.home.HomeEntry
+import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.feature.auth.FakeAuthManager
 import br.com.weslleycampos.chat.feature.auth.navigator
 import br.com.weslleycampos.chat.feature.auth.stack
@@ -26,12 +26,12 @@ class SplashViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun aRestoredUserReplacesSplashWithHome() {
+    fun aRestoredUserReplacesSplashWithANewChat() {
         val navigator = navigator(SplashEntry)
 
         SplashViewModel(navigator, FakeAuthManager(user = user()))
 
-        assertEquals(listOf(HomeEntry), navigator.stack)
+        assertEquals(listOf(ChatEntry()), navigator.stack)
     }
 
     @Test

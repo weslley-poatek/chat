@@ -11,9 +11,9 @@ their screens through `EntryProvider`s, and `rememberNavigator` saves and restor
 | `EntryProvider` | `core.navigation.utils` | A feature's `entry<Key> { ... }` builder and the serializers of its keys |
 | `EntriesAggregator` | `core.navigation.utils` | Every `EntryProvider` in the graph, as Koin collects them |
 | `rememberNavigator` | `core.navigation.utils` | The navigator, saved across configuration changes and process death |
-| `SplashEntry` | `core.navigation.entries.auth` | The start key: the session gate replaces it with `SignInEntry` or `HomeEntry` |
+| `SplashEntry` | `core.navigation.entries.auth` | The start key: the session gate replaces it with `SignInEntry` or `ChatEntry()` |
 | `SignInEntry` | `core.navigation.entries.auth` | Sign-in: Google, or email + password with account creation and password reset as modes of the same screen |
-| `HomeEntry` | `core.navigation.entries.home` | The first screen after sign-in |
+| `ChatEntry` | `core.navigation.entries.chat` | The chat thread, the first screen after sign-in: `ChatEntry()` is a new chat, `ChatEntry(conversationId)` opens a saved conversation |
 
 ## Usage
 

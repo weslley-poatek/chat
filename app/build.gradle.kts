@@ -15,6 +15,12 @@ kotlin {
             implementation(projects.data.auth)
             implementation(projects.data.chat)
             implementation(projects.feature.auth)
+            implementation(projects.feature.chat)
+        }
+        commonTest.dependencies {
+            // `AppEntriesTest` saves every key the app navigates to through the back stack's JSON.
+            implementation(project.dependencies.platform(libs.kotlinx.serialization.bom))
+            implementation(libs.kotlinx.serialization.json)
         }
     }
 }

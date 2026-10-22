@@ -28,6 +28,9 @@ kotlinx-coroutines = "1.10.2"
 # Serialization
 kotlinx-serialization = "1.12.0"
 
+# Date and time
+kotlinx-datetime = "0.8.0"
+
 # Database
 room = "3.0.3"
 sqlite = "2.7.1"
@@ -77,6 +80,9 @@ kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-cor
 # the artifacts Room pulls in at an older version, such as `kotlinx-serialization-json-okio`, on the same one
 kotlinx-serialization-bom = { module = "org.jetbrains.kotlinx:kotlinx-serialization-bom", version.ref = "kotlinx-serialization" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json" }
+
+# Date and time: local clock times and dates of `kotlin.time.Instant`s, in the device's time zone
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 
 # Firebase and Google Sign-In: the iOS SDKs come through SwiftPM, see `swiftPMDependencies` in :data:auth and :feature:auth
 firebase-auth = { module = "com.google.firebase:firebase-auth" }

@@ -2,7 +2,6 @@ package br.com.weslleycampos.chat.core.navigation
 
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
-import br.com.weslleycampos.chat.core.navigation.entries.home.HomeEntry
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -11,6 +10,7 @@ import kotlin.test.assertTrue
 private data object StartKey : NavKey
 private data object FormKey : NavKey
 private data object ConfirmKey : NavKey
+private data object TargetKey : NavKey
 private data class PageKey(val page: Int) : NavKey
 
 private val FirstPage = PageKey(1)
@@ -49,42 +49,42 @@ class NavigatorTest {
     fun popUpToRemovesEverythingAboveTheTopmostMatch() {
         val stack = arrayOf(StartKey, FirstPage, SecondPage, FormKey)
 
-        val toKey = navigator(*stack).apply { navigate(HomeEntry) { popUpTo(FirstPage) } }
-        val toType = navigator(*stack).apply { navigate(HomeEntry) { popUpTo<PageKey>() } }
+        val toKey = navigator(*stack).apply { navigate(TargetKey) { popUpTo(FirstPage) } }
+        val toType = navigator(*stack).apply { navigate(TargetKey) { popUpTo<PageKey>() } }
         val toTypeInclusive = navigator(*stack).apply {
-            navigate(HomeEntry) { popUpTo<PageKey> { inclusive = true } }
+            navigate(TargetKey) { popUpTo<PageKey> { inclusive = true } }
         }
 
-        assertEquals(listOf(StartKey, FirstPage, HomeEntry), toKey.stack())
-        assertEquals(listOf(StartKey, FirstPage, SecondPage, HomeEntry), toType.stack())
-        assertEquals(listOf(StartKey, FirstPage, HomeEntry), toTypeInclusive.stack())
+        assertEquals(listOf(StartKey, FirstPage, TargetKey), toKey.stack())
+        assertEquals(listOf(StartKey, FirstPage, SecondPage, TargetKey), toType.stack())
+        assertEquals(listOf(StartKey, FirstPage, TargetKey), toTypeInclusive.stack())
     }
 
     @Test
     fun popUpToWithoutAMatchRemovesNothing() {
         val navigator = navigator(StartKey, FormKey)
 
-        navigator.navigate(HomeEntry) { popUpTo<ConfirmKey> { inclusive = true } }
+        navigator.navigate(TargetKey) { popUpTo<ConfirmKey> { inclusive = true } }
 
-        assertEquals(listOf(StartKey, FormKey, HomeEntry), navigator.stack())
+        assertEquals(listOf(StartKey, FormKey, TargetKey), navigator.stack())
     }
 
     @Test
     fun popUpToTheRootInclusiveLeavesOnlyTheNewKey() {
         val navigator = navigator(StartKey, FormKey, FirstPage)
 
-        navigator.navigate(HomeEntry) { popUpTo<StartKey> { inclusive = true } }
+        navigator.navigate(TargetKey) { popUpTo<StartKey> { inclusive = true } }
 
-        assertEquals(listOf(HomeEntry), navigator.stack())
+        assertEquals(listOf(TargetKey), navigator.stack())
     }
 
     @Test
     fun popUpToRunsBeforeTheTopIsCompared() {
-        val navigator = navigator(HomeEntry, FormKey)
+        val navigator = navigator(TargetKey, FormKey)
 
-        navigator.navigate(HomeEntry) { popUpTo<HomeEntry>() }
+        navigator.navigate(TargetKey) { popUpTo<TargetKey>() }
 
-        assertEquals(listOf(HomeEntry), navigator.stack())
+        assertEquals(listOf(TargetKey), navigator.stack())
     }
 
     @Test

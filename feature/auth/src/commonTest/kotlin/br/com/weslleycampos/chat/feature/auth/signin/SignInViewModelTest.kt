@@ -2,7 +2,7 @@ package br.com.weslleycampos.chat.feature.auth.signin
 
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SignInEntry
-import br.com.weslleycampos.chat.core.navigation.entries.home.HomeEntry
+import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.data.auth.AuthException
 import br.com.weslleycampos.chat.feature.auth.FakeAuthManager
 import br.com.weslleycampos.chat.feature.auth.FakeEmailAuthManager
@@ -185,7 +185,7 @@ class SignInViewModelTest {
     // Success
 
     @Test
-    fun aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithHome() {
+    fun aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithANewChat() {
         val navigator = navigator(SignInEntry)
         val emailAuthManager = FakeEmailAuthManager()
         val viewModel = signInViewModel(navigator = navigator, emailAuthManager = emailAuthManager)
@@ -194,11 +194,11 @@ class SignInViewModelTest {
         viewModel.onSubmit()
 
         assertEquals(listOf(" $Email " to " $Password "), emailAuthManager.signIns)
-        assertEquals(listOf(HomeEntry), navigator.stack)
+        assertEquals(listOf(ChatEntry()), navigator.stack)
     }
 
     @Test
-    fun aValidSignUpCreatesTheAccountAndReplacesSignInWithHome() {
+    fun aValidSignUpCreatesTheAccountAndReplacesSignInWithANewChat() {
         val navigator = navigator(SignInEntry)
         val emailAuthManager = FakeEmailAuthManager()
         val viewModel = signInViewModel(navigator = navigator, emailAuthManager = emailAuthManager)
@@ -209,7 +209,7 @@ class SignInViewModelTest {
 
         assertEquals(listOf(Email to "12345678"), emailAuthManager.accountsCreated)
         assertEquals(0, emailAuthManager.signIns.size)
-        assertEquals(listOf(HomeEntry), navigator.stack)
+        assertEquals(listOf(ChatEntry()), navigator.stack)
     }
 
     @Test
@@ -261,7 +261,7 @@ class SignInViewModelTest {
 
         pending.complete(Unit)
 
-        assertEquals(listOf(HomeEntry), navigator.stack)
+        assertEquals(listOf(ChatEntry()), navigator.stack)
     }
 
     @Test
@@ -353,7 +353,7 @@ class SignInViewModelTest {
         viewModel.onSubmit()
 
         assertEquals(2, emailAuthManager.signIns.size)
-        assertEquals(listOf(HomeEntry), navigator.stack)
+        assertEquals(listOf(ChatEntry()), navigator.stack)
     }
 
     // Google
@@ -369,7 +369,7 @@ class SignInViewModelTest {
     }
 
     @Test
-    fun aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithHome() {
+    fun aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithANewChat() {
         val pending = CompletableDeferred<Unit>()
         val navigator = navigator(SignInEntry)
         val authManager = FakeAuthManager().apply { authenticate = { pending.await() } }
@@ -383,7 +383,7 @@ class SignInViewModelTest {
 
         pending.complete(Unit)
 
-        assertEquals(listOf(HomeEntry), navigator.stack)
+        assertEquals(listOf(ChatEntry()), navigator.stack)
     }
 
     @Test
