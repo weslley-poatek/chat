@@ -3,6 +3,7 @@
 agp = "9.1.1"
 kotlin = "2.4.20"
 jvm-target = "21"
+ksp = "2.3.12"
 
 # Android SDK
 android-compile-sdk = "37"
@@ -23,6 +24,10 @@ lifecycle = "2.11.0"
 
 # Coroutines
 kotlinx-coroutines = "1.10.2"
+
+# Database
+room = "3.0.3"
+sqlite = "2.7.1"
 
 # Firebase and Google Sign-In
 firebase-bom = "34.19.0"
@@ -70,6 +75,11 @@ firebase-auth = { module = "com.google.firebase:firebase-auth" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 
+# Database: Room 3 (`androidx.room3`) on the bundled SQLite driver; `chat.room` adds runtime, driver and compiler
+room-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room" }
+room-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room" }
+sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
+
 # DataStore
 datastore-core-okio = { module = "androidx.datastore:datastore-core-okio", version.ref = "datastore" }
 datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
@@ -106,6 +116,9 @@ junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
+room-testing = { module = "androidx.room3:room3-testing", version.ref = "room" }
+# The desktop build of the bundled driver: its jar carries the macOS, Linux and Windows natives the Android host tests load
+sqlite-bundled-jvm = { module = "androidx.sqlite:sqlite-bundled-jvm", version.ref = "sqlite" }
 test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "test-ext" }
 
 # ================================================================
@@ -115,6 +128,7 @@ android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref
 compose-gradle-plugin = { module = "org.jetbrains.compose:compose-gradle-plugin", version.ref = "compose-multiplatform" }
 detekt-gradle-plugin = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", version.ref = "detekt" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+room-gradle-plugin = { module = "androidx.room3:room3-gradle-plugin", version.ref = "room" }
 
 [bundles]
 koin = ["koin-core", "koin-annotations"]
@@ -132,9 +146,13 @@ google-services = { id = "com.google.gms.google-services", version.ref = "google
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
 # Compose Multiplatform
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+
+# Database
+room = { id = "androidx.room3", version.ref = "room" }
 
 # Koin
 koin-compiler = { id = "io.insert-koin.compiler.plugin", version.ref = "koin-plugin" }
@@ -150,3 +168,4 @@ chat-compose-library = { id = "chat.compose.library" }
 chat-detekt = { id = "chat.detekt" }
 chat-koin = { id = "chat.koin" }
 chat-multiplatform-library = { id = "chat.multiplatform.library" }
+chat-room = { id = "chat.room" }

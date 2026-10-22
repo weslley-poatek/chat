@@ -45,6 +45,7 @@ dependencies {
     compileOnly(libs.compose.gradle.plugin)
     compileOnly(libs.detekt.gradle.plugin)
     compileOnly(libs.kotlin.gradle.plugin)
+    compileOnly(libs.room.gradle.plugin)
 }
 
 /**
@@ -73,6 +74,10 @@ gradlePlugin {
         register("multiplatform-library") {
             id = libs.plugins.chat.multiplatform.library.get().pluginId
             implementationClass = "MultiplatformLibraryConventionPlugin"
+        }
+        register("room") {
+            id = libs.plugins.chat.room.get().pluginId
+            implementationClass = "RoomConventionPlugin"
         }
     }
 }

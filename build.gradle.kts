@@ -8,6 +8,8 @@ plugins {
     alias(libs.plugins.detekt) apply false
     alias(libs.plugins.google.services) apply false
     alias(libs.plugins.koin.compiler) apply false
+    alias(libs.plugins.ksp) apply false
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.room) apply false
 }
