@@ -8,6 +8,7 @@ plugins {
 kotlin {
     sourceSets {
         commonMain.dependencies {
+            implementation(projects.core.database)
             implementation(projects.core.navigation)
             implementation(projects.core.preferences)
             implementation(projects.core.ui)

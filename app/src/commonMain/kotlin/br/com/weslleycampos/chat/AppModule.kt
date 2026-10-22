@@ -1,5 +1,6 @@
 package br.com.weslleycampos.chat
 
+import br.com.weslleycampos.chat.core.database.CoreDatabaseModule
 import br.com.weslleycampos.chat.core.navigation.NavigationModule
 import br.com.weslleycampos.chat.core.preferences.PreferencesModule
 import br.com.weslleycampos.chat.core.ui.CoreUiModule
@@ -18,6 +19,7 @@ import org.koin.core.annotation.Module
 @Module(
     includes = [
         PreferencesModule::class,
+        CoreDatabaseModule::class,
         NavigationModule::class,
         CoreUiModule::class,
         DataAuthModule::class,
