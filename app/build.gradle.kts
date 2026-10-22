@@ -13,6 +13,7 @@ kotlin {
             implementation(projects.core.preferences)
             implementation(projects.core.ui)
             implementation(projects.data.auth)
+            implementation(projects.data.chat)
             implementation(projects.feature.auth)
         }
     }

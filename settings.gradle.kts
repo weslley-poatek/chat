@@ -36,6 +36,7 @@ include(":core:navigation")
 include(":core:preferences")
 include(":core:ui")
 include(":data:auth")
+include(":data:chat")
 include(":feature:auth")
 
 check(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {

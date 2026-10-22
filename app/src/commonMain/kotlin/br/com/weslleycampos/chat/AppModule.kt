@@ -5,6 +5,7 @@ import br.com.weslleycampos.chat.core.navigation.NavigationModule
 import br.com.weslleycampos.chat.core.preferences.PreferencesModule
 import br.com.weslleycampos.chat.core.ui.CoreUiModule
 import br.com.weslleycampos.chat.data.auth.DataAuthModule
+import br.com.weslleycampos.chat.data.chat.DataChatModule
 import br.com.weslleycampos.chat.feature.auth.AuthModule
 import org.koin.core.annotation.ComponentScan
 import org.koin.core.annotation.Configuration
@@ -23,6 +24,7 @@ import org.koin.core.annotation.Module
         NavigationModule::class,
         CoreUiModule::class,
         DataAuthModule::class,
+        DataChatModule::class,
         AuthModule::class,
     ]
 )
