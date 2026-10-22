@@ -6,11 +6,24 @@ here: they survive restarts and never leave the device.
 
 | Type | Package | Role |
 | --- | --- | --- |
-| `ChatDatabase` | `core.database` | The `@Database`: its entities, version, auto-migrations and one getter per DAO |
-| `DATABASE_VERSION` | `core.database` | The schema version, `1`. Tests compare against it, so they need no edit when it rises |
+| `ChatDatabase` | `core.database` | The `@Database`: its entities, version, auto-migrations, column converters and one getter per DAO |
+| `DATABASE_VERSION` | `core.database` | The schema version, `2`. Tests compare against it, so they need no edit when it rises |
 | `ChatDatabaseConstructor` | `core.database` | The `expect object` that `@ConstructedBy` names; Room's compiler writes the `actual` on each target |
-| `CoreDatabaseModule` | `core.database` | The Koin module: the `ChatDatabase` singleton and every DAO |
+| `CoreDatabaseModule` | `core.database` | The Koin module: the `ChatDatabase` singleton, every DAO and the `TransactionRunner` |
+| `TransactionRunner` | `core.database` | Runs DAO calls from more than one DAO as one write transaction |
+| `ChatTypeConverters` | `core.database` | Stores enums as fixed lowercase values and reply blocks as a JSON array |
 | `PlaceholderEntity` | `core.database.entities` | Version 1's only table, `placeholder`. It stays empty and is never dropped |
+| `ConversationEntity` | `core.database.entities` | Version 2, `conversations`: one chat thread, its title, model and timestamps |
+| `MessageEntity` | `core.database.entities` | Version 2, `messages`: a user message or a reply, its blocks, status and latency |
+| `StoredBlock` | `core.database.entities` | One reply block in the `blocks` column: paragraph, code or numbered list |
+| `ConversationDao`, `MessageDao` | `core.database.daos` | The queries on those two tables |
+
+## Versions
+
+| Version | Added | Migration |
+| --- | --- | --- |
+| 1 | `placeholder` | — |
+| 2 | `conversations`, `messages` (foreign key to `conversations`, cascade delete, index on `conversationId`) | `AutoMigration(from = 1, to = 2)` |
 
 The module uses Room 3 (`androidx.room3`), which is Kotlin-only and KSP-only: DAO functions are
 `suspend` or return `Flow`, and there is no `SupportSQLiteDatabase`.
@@ -31,26 +44,37 @@ user's history.
 
 Add `implementation(projects.core.database)` to the consuming module's `commonMain` dependencies.
 `CoreDatabaseModule` is already in the `includes` of `AppModule`. Inject the DAO you need rather than
-`ChatDatabase`:
+`ChatDatabase`, and `TransactionRunner` when one change writes through more than one DAO:
 
 ```kotlin
-@Single
-class ConversationRepository(private val conversationDao: ConversationDao) {
-    val conversations: Flow<List<ConversationEntity>> = conversationDao.observeAll()
+class ConversationStarter(
+    private val conversationDao: ConversationDao,
+    private val messageDao: MessageDao,
+    private val transactions: TransactionRunner,
+) {
+    val recent: Flow<List<ConversationEntity>> = conversationDao.observeRecent(limit = 3)
+
+    suspend fun start(conversation: ConversationEntity, first: MessageEntity) = transactions.inWriteTransaction {
+        val id = conversationDao.insert(conversation)
+        messageDao.insert(first.copy(conversationId = id))
+    }
 }
 ```
+
+`:data:chat`'s `RoomChatRepository` is the real consumer.
 
 ## Adding a table
 
 Every table, DAO and migration lives in this module, so each change is one commit here.
 
-**1.** Declare the entity under `entities/`:
+**1.** Declare the entity under `entities/`. A column added to an existing table needs a
+`@ColumnInfo(defaultValue = …)` so the auto-migration can fill the rows already there:
 
 ```kotlin
-@Entity(tableName = "conversations")
-data class ConversationEntity(
-    @PrimaryKey val id: String,
-    val title: String,
+@Entity(tableName = "notes")
+data class NoteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val text: String,
     val updatedAt: Long,
 )
 ```
@@ -60,14 +84,18 @@ data class ConversationEntity(
 
 ```kotlin
 @Dao
-interface ConversationDao {
-    @Query("SELECT * FROM conversations ORDER BY updatedAt DESC")
-    fun observeAll(): Flow<List<ConversationEntity>>
+interface NoteDao {
+    @Query("SELECT * FROM notes ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<NoteEntity>>
 
     @Upsert
-    suspend fun upsert(conversation: ConversationEntity)
+    suspend fun upsert(note: NoteEntity)
 }
 ```
+
+A column type SQLite has no affinity for needs a converter in `ChatTypeConverters`. Room 3 names
+them `@ColumnTypeConverter` and `@ColumnTypeConverters`; KSP reports an unresolved
+`@TypeConverter` only as "references a type that is not present".
 
 **3.** Add the entity to `ChatDatabase`, raise `DATABASE_VERSION` by one, add an `@AutoMigration`
 from the previous version, and add the DAO getter:
@@ -77,16 +105,24 @@ from the previous version, and add the DAO getter:
     entities = [
         PlaceholderEntity::class,
         ConversationEntity::class,
+        MessageEntity::class,
+        NoteEntity::class,
     ],
-    version = DATABASE_VERSION, // now 2
+    version = DATABASE_VERSION, // now 3
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3),
     ],
     exportSchema = true,
 )
 @ConstructedBy(ChatDatabaseConstructor::class)
+@ColumnTypeConverters(ChatTypeConverters::class)
 abstract class ChatDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
+
+    abstract fun messageDao(): MessageDao
+
+    abstract fun noteDao(): NoteDao
 }
 ```
 
@@ -94,15 +130,15 @@ Renaming or deleting a table or column needs an `AutoMigrationSpec` with `@Renam
 `@RenameColumn`, `@DeleteTable` or `@DeleteColumn`. Room's compiler stops and says so when a change
 is ambiguous.
 
-**4.** Bind the DAO next to it, in `commonMain`, so `@ComponentScan` registers it:
+**4.** Bind the DAO in `DatabaseBindings.kt`, in `commonMain`, so `@ComponentScan` registers it:
 
 ```kotlin
 @Single
-internal fun conversationDao(database: ChatDatabase): ConversationDao = database.conversationDao()
+internal fun noteDao(database: ChatDatabase): NoteDao = database.noteDao()
 ```
 
 **5.** Build once (any compile or test task) and commit the schema Room exports for the new version,
-`schemas/br.com.weslleycampos.chat.core.database.ChatDatabase/2.json`, with the code.
+`schemas/br.com.weslleycampos.chat.core.database.ChatDatabase/3.json`, with the code.
 
 > [!IMPORTANT]
 > Never add a destructive migration fallback, and never edit or delete a schema JSON once it is
@@ -121,9 +157,9 @@ DAO tests go in `commonTest` and open an empty in-memory database with the app's
 dispatcher:
 
 ```kotlin
-class ConversationDaoTest {
+class NoteDaoTest {
     private val database = inMemoryChatDatabase()
-    private val dao = database.conversationDao()
+    private val dao = database.noteDao()
 
     @AfterTest
     fun closeDatabase() {
@@ -131,10 +167,10 @@ class ConversationDaoTest {
     }
 
     @Test
-    fun upsertedConversationIsObserved() = runTest {
-        dao.upsert(ConversationEntity(id = "1", title = "Hello", updatedAt = 0))
+    fun upsertedNoteIsObserved() = runTest {
+        dao.upsert(NoteEntity(text = "Hello", updatedAt = 0))
 
-        assertEquals(listOf("Hello"), dao.observeAll().first().map { it.title })
+        assertEquals(listOf("Hello"), dao.observeAll().first().map { it.text })
     }
 }
 ```
@@ -143,6 +179,10 @@ class ConversationDaoTest {
 `Room.inMemoryDatabaseBuilder<ChatDatabase>()` per platform. Its actuals are in `androidHostTest`
 and `iosTest`. The Android artifact of the bundled driver only carries `.so` files for devices, so
 `chat.room` swaps in the desktop artifact on the host-test classpath.
+
+The JSON column uses `kotlinx-serialization-json` through its BOM. Room's migration code, which
+`MigrationTestHelper` reads schemas with, depends on an older `kotlinx-serialization-json-okio`
+that fails to link against a newer JSON runtime; the BOM keeps the whole family on one version.
 
 Migration tests use Room's `MigrationTestHelper` in `iosTest`. It builds the old version from its
 exported schema, runs the auto-migration, and checks the result against the new schema:
@@ -157,10 +197,10 @@ private val helper = MigrationTestHelper(
 )
 
 @Test
-fun conversationsTableIsAdded() = runTest {
-    helper.createDatabase(version = 1).close()
+fun notesTableIsAdded() = runTest {
+    helper.createDatabase(version = 2).close()
 
-    helper.runMigrationsAndValidate(version = 2)
+    helper.runMigrationsAndValidate(version = 3)
 }
 ```
 
@@ -184,12 +224,17 @@ Run from the repository root:
 ```
 
 - `ChatDatabaseTest` (common) opens the in-memory database on the current version and queries its
-  table.
+  version 1 table.
 - `ExportedSchemaTest` (common) checks that the schema for the current version is exported with
   the identity hash Room compiled.
-- `MigrationTestHelperTest` (iOS) creates version 1 from its exported schema.
+- `ConversationDaoTest` and `MessageDaoTest` (common) cover every query: observing by id, "recent"
+  order and limit, message order, the blocks JSON, reply progress, reply counts, unfinished and
+  interrupted replies, the foreign key and its cascade delete.
+- `BlocksJsonTest` (common) covers the empty array and skipping a block type a version does not know.
+- `TransactionRunnerTest` (common) commits writes from two DAOs together and rolls them back together.
+- `MigrationTestHelperTest` (iOS) creates version 1 from its exported schema and migrates it to 2.
 - `CoreDatabaseModuleTest` (iOS) gets the `ChatDatabase` singleton from `CoreDatabaseModule` and
-  opens it on disk, then deletes the file.
+  opens it on disk, then deletes the file; it also gets the DAOs and the `TransactionRunner`.
 
 Not covered by tests: the Android builder and its file location, since a host test has no
 `Context`. The Koin compiler plugin does not catch a missing dependency of this module's
