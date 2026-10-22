@@ -116,7 +116,7 @@ flowchart TD
 | [`:core:navigation`](core/navigation) | The shared `Navigator`, navigation keys, `EntryProvider` contract and back-stack saving. [Read the module guide →](core/navigation/README.md) |
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
 | [`:core:ui`](core/ui) | The design system: `ChatTheme`, per-model palettes, typography, tokens and components. [Read the module guide →](core/ui/README.md) |
-| [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
+| [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. Both on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
 | [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
 
 <details>
@@ -187,7 +187,8 @@ cd chat
 
 ### 🔥 Firebase setup
 
-Both apps need a Firebase project with **Google** enabled under **Authentication → Sign-in method**.
+Both apps need a Firebase project with **Google** and **Email/Password** enabled under
+**Authentication → Sign-in method**.
 The config files are local-only and gitignored, so download them from the Firebase console:
 
 | | 🤖 Android | 🍎 iOS |

@@ -3,11 +3,14 @@ package br.com.weslleycampos.chat.data.auth
 import br.com.weslleycampos.chat.data.auth.utils.toAuthException
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.FirebaseTooManyRequestsException
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import kotlin.test.Test
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 
 class FirebaseAuthExceptionMappingTest {
     @Test
@@ -25,7 +28,36 @@ class FirebaseAuthExceptionMappingTest {
                 "exists",
             ).toAuthException()
         )
-        assertIs<AuthException.Unknown>(FirebaseTooManyRequestsException("throttled").toAuthException())
+        assertIs<AuthException.Unknown>(
+            FirebaseAuthException("ERROR_OPERATION_NOT_ALLOWED", "provider disabled").toAuthException()
+        )
         assertIs<AuthException.Unknown>(IllegalStateException("boom").toAuthException())
+    }
+
+    @Test
+    fun mapsEmailPasswordFailuresToTheirOwnAuthExceptions() {
+        assertIs<AuthException.InvalidEmail>(
+            FirebaseAuthInvalidCredentialsException("ERROR_INVALID_EMAIL", "badly formatted").toAuthException()
+        )
+        assertIs<AuthException.InvalidCredentials>(
+            FirebaseAuthInvalidCredentialsException("ERROR_WRONG_PASSWORD", "wrong").toAuthException()
+        )
+        assertIs<AuthException.UserNotFound>(
+            FirebaseAuthInvalidUserException("ERROR_USER_NOT_FOUND", "no user").toAuthException()
+        )
+        assertIs<AuthException.EmailAlreadyInUse>(
+            FirebaseAuthUserCollisionException("ERROR_EMAIL_ALREADY_IN_USE", "taken").toAuthException()
+        )
+        assertIs<AuthException.WeakPassword>(
+            FirebaseAuthWeakPasswordException("ERROR_WEAK_PASSWORD", "weak", "too short").toAuthException()
+        )
+        assertIs<AuthException.TooManyRequests>(FirebaseTooManyRequestsException("throttled").toAuthException())
+    }
+
+    @Test
+    fun keepsTheFirebaseExceptionAsTheCause() {
+        val failure = FirebaseAuthUserCollisionException("ERROR_EMAIL_ALREADY_IN_USE", "taken")
+
+        assertSame(failure, failure.toAuthException().cause)
     }
 }
