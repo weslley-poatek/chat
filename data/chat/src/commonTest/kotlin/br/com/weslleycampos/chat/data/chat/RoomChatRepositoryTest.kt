@@ -71,6 +71,7 @@ class RoomChatRepositoryTest {
             conversationDao = database.conversationDao,
             historyDao = database.historyDao,
             messageDao = database.messageDao,
+            compareDao = database.compareDao,
             transactions = database.transactions,
             models = models,
             streamer = ReplyStreamer(messageDao = database.messageDao, clock = clock, random = FixedRandom()),

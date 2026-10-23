@@ -18,6 +18,10 @@ import kotlin.time.Instant
  *   its messages and still opens by id. A message sent in it brings it back.
  * @property fork For a conversation made by "⑂ fork here", where it was forked from, for the fork
  *   banner; `null` for every other conversation.
+ * @property compareOn Compare mode is on for its next message ([ModelChoice.compareOn]); never while a
+ *   [persona] answers.
+ * @property compareWith The second model its next message is compared with while [compareOn]
+ *   ([ModelChoice.compareWith]), or `null`.
  */
 data class Conversation(
     val id: Long,
@@ -29,8 +33,17 @@ data class Conversation(
     val pinned: Boolean = false,
     val archived: Boolean = false,
     val fork: ForkOrigin? = null,
+    val compareOn: Boolean = false,
+    val compareWith: ChatModel? = null,
 ) {
-    /** [model] and [persona] as the model picker marks them. */
+    /** [model], [persona] and the compare choice, as the model picker marks them. */
     val choice: ModelChoice
-        get() = ModelChoice(model = model, persona = persona)
+        get() = ModelChoice(model = model, persona = persona, compareOn = compareOn, compareWith = compareWith)
+
+    /**
+     * The model its next message is compared with, in a compare pair beside [model], or `null`:
+     * [ModelChoice.comparing]. History's row shows it as its extra, "⇄ gpt-5".
+     */
+    val comparing: ChatModel?
+        get() = choice.comparing
 }

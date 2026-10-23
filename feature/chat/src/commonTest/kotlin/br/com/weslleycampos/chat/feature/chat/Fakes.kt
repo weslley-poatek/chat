@@ -98,13 +98,17 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         }
         .distinctUntilChanged()
 
-    /** Like the real one: not archived, newest first, the trimmed query in a title, user text or short name. */
+    /**
+     * Like the real one: not archived, newest first, the trimmed query in a title, user text, short
+     * name or, while comparing, the compared model's short name.
+     */
     override fun observeHistory(query: String): Flow<List<Conversation>> =
         combine(conversations, messages) { all, threads ->
             val text = query.trim()
             fun matches(conversation: Conversation) = text.isEmpty() ||
                 conversation.title.contains(text, ignoreCase = true) ||
                 conversation.model.shortName.contains(text, ignoreCase = true) ||
+                conversation.comparing?.shortName?.contains(text, ignoreCase = true) == true ||
                 threads[conversation.id].orEmpty().any { message ->
                     message is Message.User && message.text.contains(text, ignoreCase = true)
                 }
@@ -122,16 +126,26 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         return play(conversationId, text.trim(), newChat ?: ModelChoice(ModelCatalogue.default))
     }
 
-    /** Like the real one: a model drops the persona, a persona answers with its own model. */
+    /**
+     * Like the real one: a model drops the persona, a persona answers with its own model and turns
+     * compare off, and turning compare off drops the second model.
+     */
     override suspend fun choose(conversationId: Long, choice: ModelChoice): Boolean {
         chooses += conversationId to choice
         if (chooseAnswer?.invoke(conversationId, choice) == false) return false
         if (conversations.value.none { it.id == conversationId }) return false
-        val model = choice.persona?.model ?: choice.model
-        conversations.update { all ->
-            all.map { if (it.id == conversationId) it.copy(model = model, persona = choice.persona) else it }
-        }
+        conversations.update { all -> all.map { if (it.id == conversationId) it.chosen(choice) else it } }
         return true
+    }
+
+    private fun Conversation.chosen(choice: ModelChoice): Conversation {
+        val compareOn = choice.persona == null && choice.compareOn
+        return copy(
+            model = choice.persona?.model ?: choice.model,
+            persona = choice.persona,
+            compareOn = compareOn,
+            compareWith = choice.compareWith?.takeIf { compareOn },
+        )
     }
 
     override suspend fun setPinned(conversationId: Long, pinned: Boolean): Boolean =
@@ -200,7 +214,9 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         val index = thread.indexOfFirst { it.id == messageId }
         if (index < 0) return null
         val kept = thread.take(index + 1)
-        if (kept.any { it is Message.Assistant && it.status.isInProgress }) return null
+        // Like the real one: never at a compare pair, and never copying a reply on its way.
+        val onItsWay = kept.any { it is Message.Assistant && it.status.isInProgress }
+        if (kept.last() is Message.ComparePair || onItsWay) return null
         val fork = source.copy(
             id = nextId++,
             createdAt = Now,
@@ -213,6 +229,11 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
             when (message) {
                 is Message.User -> message.copy(id = nextId++, conversationId = fork.id)
                 is Message.Assistant -> message.copy(id = nextId++, conversationId = fork.id)
+                is Message.ComparePair -> message.copy(
+                    id = nextId,
+                    conversationId = fork.id,
+                    sides = message.sides.map { it.copy(id = nextId++) },
+                )
             }
         }
         conversations.update { it + fork }
@@ -234,11 +255,10 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
             Conversation(
                 id = nextId++,
                 title = text,
-                model = newChat.persona?.model ?: newChat.model,
-                persona = newChat.persona,
+                model = newChat.model,
                 createdAt = Now,
                 updatedAt = Now,
-            ).also { created -> conversations.update { it + created } }
+            ).chosen(newChat).also { created -> conversations.update { it + created } }
         } else {
             conversations.value.firstOrNull { it.id == conversationId } ?: return null
         }

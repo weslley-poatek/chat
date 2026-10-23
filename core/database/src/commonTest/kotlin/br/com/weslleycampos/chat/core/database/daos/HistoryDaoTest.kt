@@ -75,6 +75,25 @@ class HistoryDaoTest {
     }
 
     @Test
+    fun searchMatchesTheModelAConversationIsComparedWithOnlyWhileCompareIsOn() = runTest {
+        val comparing = conversations.insert(
+            conversation(
+                title = "SSE vs WebSocket",
+                updatedAt = 1,
+                modelId = "gemini",
+                compareOn = true,
+                compareModelId = "gpt5",
+            ),
+        )
+        conversations.insert(conversation(title = "Hello", updatedAt = 2, modelId = "gemini", compareModelId = "gpt5"))
+        conversations.insert(conversation(title = "Rust ownership", updatedAt = 3, modelId = "o3", compareOn = true))
+
+        val matches = dao.search(containsPattern("gpt"), modelIds = listOf("gpt5")).first()
+
+        assertEquals(listOf(comparing), matches.map { it.id })
+    }
+
+    @Test
     fun searchTreatsPercentUnderscoreAndBackslashAsThemselves() = runTest {
         val percent = conversations.insert(conversation(title = "Cut costs by 50% now"))
         val underscore = conversations.insert(conversation(title = "snake_case keys"))

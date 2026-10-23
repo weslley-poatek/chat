@@ -3,6 +3,7 @@ package br.com.weslleycampos.chat.data.chat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import br.com.weslleycampos.chat.core.database.TransactionRunner
+import br.com.weslleycampos.chat.core.database.daos.CompareDao
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
 import br.com.weslleycampos.chat.core.database.daos.ForkDao
 import br.com.weslleycampos.chat.core.database.daos.HistoryDao
@@ -28,12 +29,14 @@ internal fun chatRepository(
     conversationDao: ConversationDao,
     historyDao: HistoryDao,
     messageDao: MessageDao,
+    compareDao: CompareDao,
     transactions: TransactionRunner,
     models: ModelRepository,
 ): ChatRepository = RoomChatRepository(
     conversationDao = conversationDao,
     historyDao = historyDao,
     messageDao = messageDao,
+    compareDao = compareDao,
     transactions = transactions,
     models = models,
     streamer = ReplyStreamer(messageDao = messageDao, clock = Clock.System, random = Random.Default),
@@ -52,6 +55,18 @@ internal fun forkRepository(
     forkDao = forkDao,
     transactions = transactions,
     clock = Clock.System,
+)
+
+/** The app's one [CompareRepository]. */
+@Single
+internal fun compareRepository(
+    conversationDao: ConversationDao,
+    compareDao: CompareDao,
+    transactions: TransactionRunner,
+): CompareRepository = RoomCompareRepository(
+    conversationDao = conversationDao,
+    compareDao = compareDao,
+    transactions = transactions,
 )
 
 /**

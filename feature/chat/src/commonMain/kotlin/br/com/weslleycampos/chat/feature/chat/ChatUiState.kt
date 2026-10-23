@@ -169,6 +169,18 @@ data class RecentConversationUi(val id: Long, val title: String, val time: Strin
 fun Message.toUi(times: ChatTimes): MessageUi = when (this) {
     is Message.User -> MessageUi.User(id = id, time = times.messageTime(createdAt), text = text)
     is Message.Assistant -> toUi(time = times.messageTime(createdAt))
+    // Until row 7's compare cards draw both sides, a compare pair draws as its first side.
+    is Message.ComparePair -> sides.first().let { side ->
+        Message.Assistant(
+            id = id,
+            conversationId = conversationId,
+            model = side.model,
+            blocks = side.blocks,
+            status = side.status,
+            latency = side.latency,
+            createdAt = createdAt,
+        ).toUi(time = times.messageTime(createdAt))
+    }
 }
 
 /** The reply as the thread draws it, with [time] already formatted. */

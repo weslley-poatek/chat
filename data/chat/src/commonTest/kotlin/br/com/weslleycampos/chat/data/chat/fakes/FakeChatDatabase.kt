@@ -1,6 +1,7 @@
 package br.com.weslleycampos.chat.data.chat.fakes
 
 import br.com.weslleycampos.chat.core.database.TransactionRunner
+import br.com.weslleycampos.chat.core.database.daos.CompareDao
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
 import br.com.weslleycampos.chat.core.database.daos.ForkDao
 import br.com.weslleycampos.chat.core.database.daos.HistoryDao
@@ -10,6 +11,7 @@ import br.com.weslleycampos.chat.core.database.entities.ConversationEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
+import br.com.weslleycampos.chat.core.database.entities.PAIR_SECOND_SIDE
 import br.com.weslleycampos.chat.core.database.entities.PersonaEntity
 import br.com.weslleycampos.chat.core.database.entities.ReplyProgress
 import kotlinx.coroutines.flow.Flow
@@ -44,7 +46,7 @@ private fun containedText(pattern: String): String {
 }
 
 /**
- * The five DAOs and a transaction runner over in-memory tables. Like Room, every observer re-reads
+ * The six DAOs and a transaction runner over in-memory tables. Like Room, every observer re-reads
  * its table whenever any row of it changes, and ids are assigned in insertion order.
  */
 internal class FakeChatDatabase(
@@ -62,6 +64,9 @@ internal class FakeChatDatabase(
 
     /** Every reply write, in order, a write to a reply that is gone included. */
     val replyUpdates = mutableListOf<ReplyProgress>()
+
+    /** Every write of several replies at once, a compare pair's tick, in order. */
+    val replyBatches = mutableListOf<List<ReplyProgress>>()
 
     /** The id of every conversation deleted, in order. */
     val deletes = mutableListOf<Long>()
@@ -196,13 +201,29 @@ internal class FakeChatDatabase(
                     .map { it.conversationId }
                     .toSet()
                 rows.filter { row ->
-                    !row.archived &&
-                        (row.title.contains(text, ignoreCase = true) || row.modelId in modelIds || row.id in byMessage)
+                    val byModel = row.modelId in modelIds || (row.compareOn && row.compareModelId in modelIds)
+                    !row.archived && (row.title.contains(text, ignoreCase = true) || byModel || row.id in byMessage)
                 }.sortedWith(newestFirst)
             }
         }
 
         override fun observeCount(): Flow<Int> = conversationRows.map { rows -> rows.count { !it.archived } }
+    }
+
+    val compareDao = object : CompareDao {
+        override suspend fun setCompare(id: Long, compareOn: Boolean, compareModelId: String?): Int {
+            if (conversationRows.value.none { it.id == id }) return 0
+            write()
+            conversationRows.update { rows ->
+                rows.map { if (it.id == id) it.copy(compareOn = compareOn, compareModelId = compareModelId) else it }
+            }
+            return 1
+        }
+
+        override suspend fun pairFrom(conversationId: Long, firstSideId: Long): List<MessageEntity> =
+            messageRows.value.filter { it.conversationId == conversationId && it.id >= firstSideId }
+                .sortedBy { it.id }
+                .take(2)
     }
 
     val personaDao = object : PersonaDao {
@@ -227,22 +248,33 @@ internal class FakeChatDatabase(
             return id
         }
 
-        override suspend fun updateReply(progress: ReplyProgress): Int {
-            beforeReplyUpdate(progress)
+        override suspend fun updateReply(progress: ReplyProgress): Int = updateReplies(listOf(progress), batch = false)
+
+        /** One write for the lot, as Room's one transaction; [beforeReplyUpdate] runs for each before any applies. */
+        override suspend fun updateReplies(progress: List<ReplyProgress>): Int =
+            updateReplies(progress, batch = true)
+
+        private fun updateReplies(progress: List<ReplyProgress>, batch: Boolean): Int {
+            progress.forEach(beforeReplyUpdate)
             replyUpdates += progress
-            if (messageRows.value.none { it.id == progress.id }) return 0
+            if (batch) replyBatches += progress
+            val byId = progress.associateBy { it.id }
+            val changed = messageRows.value.count { it.id in byId }
+            if (changed == 0) return 0
             write()
             messageRows.update { rows ->
-                rows.map {
-                    if (it.id != progress.id) return@map it
-                    it.copy(blocks = progress.blocks, status = progress.status, latencyMillis = progress.latencyMillis)
+                rows.map { row ->
+                    val update = byId[row.id] ?: return@map row
+                    row.copy(blocks = update.blocks, status = update.status, latencyMillis = update.latencyMillis)
                 }
             }
-            return 1
+            return changed
         }
 
-        override suspend fun countReplies(conversationId: Long): Int =
-            messageRows.value.count { it.conversationId == conversationId && it.role == MessageRole.ASSISTANT }
+        /** A compare pair counts once, by its first side. */
+        override suspend fun countReplies(conversationId: Long): Int = messageRows.value.count {
+            it.conversationId == conversationId && it.role == MessageRole.ASSISTANT && it.pairSide != PAIR_SECOND_SIDE
+        }
 
         override suspend fun hasUnfinishedReply(conversationId: Long): Boolean =
             messageRows.value.any { it.conversationId == conversationId && it.status in unfinished }

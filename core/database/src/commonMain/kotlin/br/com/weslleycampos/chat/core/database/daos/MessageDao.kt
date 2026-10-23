@@ -25,8 +25,22 @@ interface MessageDao {
     @Update(entity = MessageEntity::class)
     suspend fun updateReply(progress: ReplyProgress): Int
 
-    /** The conversation's assistant messages, finished or not. */
-    @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId AND role = 'assistant'")
+    /**
+     * [updateReply] for several replies in one transaction, as a compare pair's two sides on one
+     * tick, so observers read both changes at once. Returns how many replies it changed: `0` once
+     * they are gone with their deleted conversation.
+     */
+    @Update(entity = MessageEntity::class)
+    suspend fun updateReplies(progress: List<ReplyProgress>): Int
+
+    /**
+     * The conversation's replies, finished or not. A compare pair counts once, as the one reply to
+     * the message it answers: only its first side is counted.
+     */
+    @Query(
+        "SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId AND role = 'assistant' " +
+            "AND (pairSide IS NULL OR pairSide = 0)",
+    )
     suspend fun countReplies(conversationId: Long): Int
 
     /** Whether a reply in the conversation is still thinking or streaming. */

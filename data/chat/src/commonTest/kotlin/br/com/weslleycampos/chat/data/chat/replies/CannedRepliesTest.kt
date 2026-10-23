@@ -53,4 +53,37 @@ class CannedRepliesTest {
             assertSame(CannedReplies.replies[script], picked[reply])
         }
     }
+
+    @Test
+    fun theAlternativesAreThePrototypesReplyAltBlockByBlockAndToTheCharacter() {
+        val shapes = CannedReplies.alternatives.map { reply ->
+            reply.map { block ->
+                when (block) {
+                    is Block.Paragraph -> "p"
+                    is Block.Code -> "code ${block.language}"
+                    is Block.NumberedList -> "list ${block.items.size}"
+                }
+            }
+        }
+
+        assertEquals(listOf(listOf("p", "code ts"), listOf("code bash", "p"), listOf("code python", "p")), shapes)
+        assertEquals(
+            listOf(listOf(114, 127), listOf(38, 75), listOf(99, 36)),
+            CannedReplies.alternatives.map { reply -> reply.map { it.revealLength } },
+        )
+        assertEquals(
+            Block.Code(language = "bash", text = "find . -name \"*.log\" -mtime +7 -delete"),
+            CannedReplies.alternatives[1][0],
+        )
+        assertEquals(Block.Paragraph("Iterative, O(n), no recursion limit."), CannedReplies.alternatives[2][1])
+    }
+
+    @Test
+    fun theAlternativesRotateInStepWithTheReplies() {
+        (0..6).forEach { repliesSoFar ->
+            val place = repliesSoFar % 3
+            assertSame(CannedReplies.replies[place], CannedReplies.next(repliesSoFar))
+            assertSame(CannedReplies.alternatives[place], CannedReplies.alternative(repliesSoFar))
+        }
+    }
 }

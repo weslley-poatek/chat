@@ -29,6 +29,8 @@ internal fun ConversationEntity.toConversation(personas: Map<String, Persona>): 
     pinned = pinned,
     archived = archived,
     fork = forkOrigin(),
+    compareOn = compareOn,
+    compareWith = compareModelId?.let(ModelCatalogue::find),
 )
 
 /** The fork's origin, or `null` for a row that is not a fork (or lost one of its two columns). */

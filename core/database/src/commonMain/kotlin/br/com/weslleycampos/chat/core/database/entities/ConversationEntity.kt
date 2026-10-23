@@ -33,6 +33,12 @@ import androidx.room3.PrimaryKey
  *   conversation that is not a fork. Rows from version 4 read `null`.
  * @property forkBannerDismissed Version 5: whether the fork banner's "×" hid the banner, for good.
  *   Always `false` for a conversation that is not a fork. Rows from version 4 read `false`.
+ * @property compareOn Version 6: compare mode is on, the model picker's "compare · on". It is never
+ *   on while [personaId] is set. Rows from version 5 read `false`.
+ * @property compareModelId Version 6: the catalogue id of the model compared with [modelId] while
+ *   [compareOn], the prototype's `compareId`; `null` while compare is off, or on before a second
+ *   model is picked. While both are set, a message sent in the conversation is answered by a compare
+ *   pair ([MessageEntity.pairSide]). Rows from version 5 read `null`.
  */
 @Entity(tableName = "conversations")
 data class ConversationEntity(
@@ -47,4 +53,6 @@ data class ConversationEntity(
     val forkedFromTitle: String? = null,
     val forkedAtMessage: Int? = null,
     @ColumnInfo(defaultValue = "0") val forkBannerDismissed: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val compareOn: Boolean = false,
+    val compareModelId: String? = null,
 )

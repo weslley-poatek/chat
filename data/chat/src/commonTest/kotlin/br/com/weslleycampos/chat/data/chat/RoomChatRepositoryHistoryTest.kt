@@ -39,6 +39,7 @@ class RoomChatRepositoryHistoryTest {
             conversationDao = database.conversationDao,
             historyDao = database.historyDao,
             messageDao = database.messageDao,
+            compareDao = database.compareDao,
             transactions = database.transactions,
             models = LocalModelRepository(
                 personaDao = database.personaDao,

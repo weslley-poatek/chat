@@ -23,6 +23,11 @@ import androidx.room3.PrimaryKey
  * @property createdAt Epoch milliseconds.
  * @property personaId Version 3: the id of the [PersonaEntity] a reply was written as, or `null` for a
  *   user message and a reply from the model on its own. Rows from version 2 read `null`.
+ * @property pairSide Version 6: for one side of a compare pair, which one: [PAIR_FIRST_SIDE], the
+ *   conversation's model, or [PAIR_SECOND_SIDE], the model compared with it. A pair is two assistant
+ *   rows written one right after the other in one transaction, first side first, each with its own
+ *   model, blocks, status and latency; it answers one user message as one reply would. `null` for a
+ *   user message and a single reply. Rows from version 5 read `null`.
  */
 @Entity(
     tableName = "messages",
@@ -47,7 +52,14 @@ data class MessageEntity(
     val latencyMillis: Long?,
     val createdAt: Long,
     val personaId: String? = null,
+    val pairSide: Int? = null,
 )
+
+/** [MessageEntity.pairSide] of a compare pair's first side: the conversation's own model, the left card. */
+const val PAIR_FIRST_SIDE = 0
+
+/** [MessageEntity.pairSide] of a compare pair's second side: the model compared with it, the right card. */
+const val PAIR_SECOND_SIDE = 1
 
 /** The author of a message. [value] is what the `role` column holds. */
 enum class MessageRole(val value: String) {

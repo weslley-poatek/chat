@@ -142,6 +142,42 @@ class MigrationTestHelperTest {
         )
     }
 
+    @Test
+    fun migratesVersionFiveToSixKeepingEveryConversationNotComparingAndEveryMessageOnNoPairSide() = runTest {
+        helper.createDatabase(version = 5).use { connection ->
+            connection.execSQL(
+                "INSERT INTO conversations (id, title, modelId, createdAt, updatedAt, personaId, pinned, archived, " +
+                    "forkedFromTitle, forkedAtMessage, forkBannerDismissed) " +
+                    "VALUES (1, 'Postgres index', 'gpt5', 10, 20, 'terse', 1, 0, NULL, NULL, 0), " +
+                    "(2, 'Postgres index', 'gpt5', 30, 40, NULL, 0, 1, 'Postgres index', 2, 1)",
+            )
+            connection.execSQL(
+                "INSERT INTO messages " +
+                    "(id, conversationId, role, text, blocks, modelId, status, latencyMillis, createdAt, personaId) " +
+                    "VALUES (1, 1, 'user', 'why?', '[]', NULL, 'done', NULL, 10, NULL), " +
+                    "(2, 1, 'assistant', '', '[{\"type\":\"p\",\"text\":\"ok\"}]', 'gpt5', 'done', 800, 10, 'terse')",
+            )
+        }
+
+        val connection = helper.runMigrationsAndValidate(version = 6)
+
+        assertEquals(
+            listOf(
+                "1|Postgres index|gpt5|10|20|terse|1|0|null|null|0|0|null",
+                "2|Postgres index|gpt5|30|40|null|0|1|Postgres index|2|1|0|null",
+            ),
+            connection.rows(
+                "SELECT id, title, modelId, createdAt, updatedAt, personaId, pinned, archived, " +
+                    "forkedFromTitle, forkedAtMessage, forkBannerDismissed, compareOn, compareModelId " +
+                    "FROM conversations ORDER BY id",
+            ),
+        )
+        assertEquals(
+            listOf("1|user|null|null", "2|assistant|terse|null"),
+            connection.rows("SELECT id, role, personaId, pairSide FROM messages ORDER BY id"),
+        )
+    }
+
     /** Every row of [sql], its columns joined by `|`, a NULL as `null`. */
     private fun SQLiteConnection.rows(sql: String): List<String> = prepare(sql).use { statement ->
         buildList {

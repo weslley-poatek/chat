@@ -21,15 +21,16 @@ interface HistoryDao {
 
     /**
      * The conversations of [observeAll] whose title or one of whose user messages is `LIKE`
-     * [pattern], with `\` as its escape character (build it with [containsPattern]), or whose model
-     * is one of [modelIds], in the same order. SQLite's `LIKE` ignores the case of ASCII letters
-     * only. Replies are not searched. It reads `messages` too, so it re-runs on every write there, a
-     * streaming tick included.
+     * [pattern], with `\` as its escape character (build it with [containsPattern]), or whose model,
+     * or the model it is compared with while compare is on, is one of [modelIds], in the same order.
+     * SQLite's `LIKE` ignores the case of ASCII letters only. Replies are not searched. It reads
+     * `messages` too, so it re-runs on every write there, a streaming tick included.
      */
     @Query(
         "SELECT * FROM conversations WHERE archived = 0 AND (" +
             "title LIKE :pattern ESCAPE '\\' " +
             "OR modelId IN (:modelIds) " +
+            "OR (compareOn = 1 AND compareModelId IN (:modelIds)) " +
             "OR EXISTS(SELECT 1 FROM messages WHERE messages.conversationId = conversations.id " +
             "AND messages.role = 'user' AND messages.text LIKE :pattern ESCAPE '\\')" +
             ") ORDER BY updatedAt DESC, id DESC",

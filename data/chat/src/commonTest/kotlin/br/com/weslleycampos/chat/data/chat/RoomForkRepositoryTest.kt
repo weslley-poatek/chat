@@ -14,6 +14,7 @@ import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
+import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
@@ -30,6 +31,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -42,6 +44,11 @@ import kotlin.time.Duration.Companion.minutes
 class RoomForkRepositoryTest {
     private var database = FakeChatDatabase()
     private val reviewer: Persona = PersonaPresets.personas.single { it.id == "reviewer" }
+    private val comparing = ModelChoice(
+        model = ModelCatalogue["sonnet"],
+        compareOn = true,
+        compareWith = ModelCatalogue["gpt5"],
+    )
 
     /** Streams at the slowest pace and shortest thinking time, in the test's own scope. */
     private fun TestScope.chat(): RoomChatRepository {
@@ -50,6 +57,7 @@ class RoomForkRepositoryTest {
             conversationDao = database.conversationDao,
             historyDao = database.historyDao,
             messageDao = database.messageDao,
+            compareDao = database.compareDao,
             transactions = database.transactions,
             models = LocalModelRepository(
                 personaDao = database.personaDao,
@@ -94,6 +102,7 @@ class RoomForkRepositoryTest {
     private fun Message.movedTo(conversationId: Long): Message = when (this) {
         is Message.User -> copy(id = 0, conversationId = conversationId)
         is Message.Assistant -> copy(id = 0, conversationId = conversationId)
+        is Message.ComparePair -> copy(id = 0, conversationId = conversationId, sides = sides.map { it.copy(id = 0) })
     }
 
     @Test
@@ -329,6 +338,58 @@ class RoomForkRepositoryTest {
 
         assertEquals(writes + 2, database.writes)
         assertEquals(writesInTransactions + 2, database.writesInTransactions)
+    }
+
+    @Test
+    fun aForkAfterAComparePairCopiesBothItsSidesAndCountsThePairAsOneMessage() = runTest {
+        val chat = chat()
+        val source = conversationOf(chat, "SSE or WebSocket?", newChat = comparing)
+        assertTrue(chat.choose(source, comparing.toggledCompare()))
+        assertEquals(source, chat.send(source, "and reconnects?"))
+        advanceUntilIdle()
+        val thread = chat.thread(source)
+        assertIs<Message.ComparePair>(thread[1])
+
+        val atTheReply = assertNotNull(forks().fork(source, messageId = thread[3].id))
+        val atTheUser = assertNotNull(forks().fork(source, messageId = thread[2].id))
+
+        assertEquals(thread.map { it.movedTo(atTheReply) }, chat.thread(atTheReply).map { it.movedTo(atTheReply) })
+        assertEquals(thread.take(3).map { it.movedTo(atTheUser) }, chat.thread(atTheUser).map { it.movedTo(atTheUser) })
+        val origin = ForkOrigin(sourceTitle = "SSE or WebSocket?", messageNumber = 4)
+        assertEquals(origin, chat.conversation(atTheReply).fork)
+        assertEquals(origin.copy(messageNumber = 3), chat.conversation(atTheUser).fork)
+        assertEquals(5, database.messageRows.value.count { it.conversationId == atTheReply })
+    }
+
+    @Test
+    fun aForkAtAComparePairOrEitherOfItsSidesIsRefused() = runTest {
+        val chat = chat()
+        val source = conversationOf(chat, "SSE or WebSocket?", newChat = comparing)
+        val pair = assertIs<Message.ComparePair>(chat.thread(source).last())
+        val writes = database.writes
+
+        assertNull(forks().fork(source, messageId = pair.id))
+        assertNull(forks().fork(source, messageId = pair.sides[1].id))
+
+        assertEquals(writes, database.writes)
+        assertNotNull(forks().fork(source, messageId = chat.thread(source).first().id))
+    }
+
+    @Test
+    fun aForkOfAComparingConversationComparesAsItsSourceDoesAndItsNextSendIsAPair() = runTest {
+        val chat = chat()
+        val source = assertNotNull(chat.send(null, "SSE or WebSocket?", newChat = comparing))
+        val question = chat.thread(source).first()
+
+        val fork = assertNotNull(forks().fork(source, messageId = question.id))
+        advanceUntilIdle()
+
+        assertEquals(comparing, chat.conversation(fork).choice)
+        assertEquals(listOf(question.movedTo(fork)), chat.thread(fork).map { it.movedTo(fork) })
+        assertEquals(fork, chat.send(fork, "and reconnects?"))
+        advanceUntilIdle()
+        val pair = assertIs<Message.ComparePair>(chat.thread(fork).last())
+        assertEquals(listOf(CannedReplies.replies[0], CannedReplies.alternatives[0]), pair.sides.map { it.blocks })
     }
 
     private fun message(

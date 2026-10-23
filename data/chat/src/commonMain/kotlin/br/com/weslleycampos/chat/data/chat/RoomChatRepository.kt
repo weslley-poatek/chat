@@ -1,6 +1,7 @@
 package br.com.weslleycampos.chat.data.chat
 
 import br.com.weslleycampos.chat.core.database.TransactionRunner
+import br.com.weslleycampos.chat.core.database.daos.CompareDao
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
 import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
@@ -9,6 +10,8 @@ import br.com.weslleycampos.chat.core.database.entities.ConversationEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
+import br.com.weslleycampos.chat.core.database.entities.PAIR_FIRST_SIDE
+import br.com.weslleycampos.chat.core.database.entities.PAIR_SECOND_SIDE
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.ConversationTitles
 import br.com.weslleycampos.chat.data.chat.models.HistorySearch
@@ -18,6 +21,7 @@ import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.replies.CannedReplies
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
+import br.com.weslleycampos.chat.data.chat.replies.StreamedReply
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -41,12 +45,14 @@ import kotlin.time.Clock
  * Personas and the default model come from [models], so a persona read here is one that
  * [ModelRepository.observePersonas] lists. Replies stream in [scope], which outlives any screen.
  * History's lists come from [historyDao]; pinning, archiving and deleting go through
- * [conversationDao], one at a time with sends and choices.
+ * [conversationDao], one at a time with sends and choices. A choice's compare columns are written
+ * through [compareDao], in the transaction that writes its model.
  */
 internal class RoomChatRepository(
     private val conversationDao: ConversationDao,
     private val historyDao: HistoryDao,
     private val messageDao: MessageDao,
+    private val compareDao: CompareDao,
     private val transactions: TransactionRunner,
     private val models: ModelRepository,
     private val streamer: ReplyStreamer,
@@ -69,7 +75,7 @@ internal class RoomChatRepository(
 
     override fun observeMessages(conversationId: Long): Flow<List<Message>> = afterRecovery(recovery) {
         combine(messageDao.observeByConversation(conversationId), models.personasById()) { rows, personas ->
-            rows.map { it.toMessage(personas) }
+            rows.toMessages(personas)
         }
     }
 
@@ -104,14 +110,18 @@ internal class RoomChatRepository(
                 transactions.inWriteTransaction { turns.continueIn(conversationId, message) }
             }
         } ?: return null
-        scope.launch { streamer.stream(turn.replyId, CannedReplies.next(repliesSoFar = turn.repliesBefore)) }
+        scope.launch { streamer.stream(turn.replies()) }
         return turn.conversationId
     }
 
     override suspend fun choose(conversationId: Long, choice: ModelChoice): Boolean {
         val stored = models.stored(choice) ?: return false
         return sending.withLock {
-            conversationDao.setModel(conversationId, modelId = stored.modelId, personaId = stored.personaId) > 0
+            transactions.inWriteTransaction {
+                val found = conversationDao.setModel(conversationId, stored.modelId, stored.personaId) > 0
+                if (found) compareDao.setCompare(conversationId, stored.compareOn, stored.compareModelId)
+                found
+            }
         }
     }
 
@@ -128,7 +138,8 @@ internal class RoomChatRepository(
 
 /**
  * A send's writes, run inside the caller's transaction: the conversation (created, or moved to the
- * top and back from the archive), the user's message and a thinking reply.
+ * top and back from the archive), the user's message and a thinking reply, or the two thinking
+ * sides of a compare pair.
  */
 private class TurnWriter(
     private val conversationDao: ConversationDao,
@@ -151,6 +162,8 @@ private class TurnWriter(
             personaId = choice.personaId,
             createdAt = now,
             updatedAt = now,
+            compareOn = choice.compareOn,
+            compareModelId = choice.compareModelId,
         )
         return created.copy(id = conversationDao.insert(created))
     }
@@ -167,7 +180,11 @@ private class TurnWriter(
         return existing
     }
 
-    /** Saves the user's message and a thinking reply from the conversation's model and persona. */
+    /**
+     * Saves the user's message and its thinking reply: from the conversation's model and persona, or,
+     * while it compares its model with a second one, a pair of sides with no persona, the
+     * conversation's model first.
+     */
     private suspend fun startTurn(conversation: ConversationEntity, text: String): Turn {
         val now = clock.now().toEpochMilliseconds()
         val repliesBefore = messageDao.countReplies(conversation.id)
@@ -183,24 +200,55 @@ private class TurnWriter(
                 createdAt = now,
             ),
         )
-        val replyId = messageDao.insert(
-            MessageEntity(
-                conversationId = conversation.id,
-                role = MessageRole.ASSISTANT,
-                text = "",
-                blocks = emptyList(),
-                modelId = conversation.modelId,
-                status = MessageStatus.THINKING,
-                latencyMillis = null,
-                createdAt = now,
-                personaId = conversation.personaId,
-            ),
-        )
-        return Turn(conversationId = conversation.id, replyId = replyId, repliesBefore = repliesBefore)
+        val reply = thinking(conversation.id, createdAt = now)
+        val second = conversation.comparedModelId()
+        val replyIds = if (second == null) {
+            listOf(messageDao.insert(reply.copy(modelId = conversation.modelId, personaId = conversation.personaId)))
+        } else {
+            listOf(
+                messageDao.insert(reply.copy(modelId = conversation.modelId, pairSide = PAIR_FIRST_SIDE)),
+                messageDao.insert(reply.copy(modelId = second, pairSide = PAIR_SECOND_SIDE)),
+            )
+        }
+        return Turn(conversationId = conversation.id, replyIds = replyIds, repliesBefore = repliesBefore)
     }
+
+    /** A thinking reply in the conversation, before its model, persona and pair side are set. */
+    private fun thinking(conversationId: Long, createdAt: Long): MessageEntity = MessageEntity(
+        conversationId = conversationId,
+        role = MessageRole.ASSISTANT,
+        text = "",
+        blocks = emptyList(),
+        modelId = null,
+        status = MessageStatus.THINKING,
+        latencyMillis = null,
+        createdAt = createdAt,
+    )
 }
 
-private class Turn(val conversationId: Long, val replyId: Long, val repliesBefore: Int)
+/**
+ * The model the conversation's next reply is compared with: its second model while compare is on,
+ * no persona answers, and the catalogue still has that model, which is not the conversation's own.
+ * `null` for a single reply.
+ */
+private fun ConversationEntity.comparedModelId(): String? = compareModelId?.takeIf {
+    compareOn && personaId == null && it != modelId && ModelCatalogue.find(it) != null
+}
+
+/**
+ * A send's rows: [replyIds] holds its reply, or a compare pair's two sides in their order, which
+ * play the canned reply that comes after [repliesBefore] replies and its alternative.
+ */
+private class Turn(val conversationId: Long, val replyIds: List<Long>, val repliesBefore: Int) {
+    fun replies(): List<StreamedReply> = replyIds.mapIndexed { side, id ->
+        val blocks = if (side == PAIR_FIRST_SIDE) {
+            CannedReplies.next(repliesSoFar = repliesBefore)
+        } else {
+            CannedReplies.alternative(repliesSoFar = repliesBefore)
+        }
+        StreamedReply(replyId = id, blocks = blocks)
+    }
+}
 
 /** [source] without repeats, once [recovery] has marked the replies an earlier run left playing. */
 private fun <T> afterRecovery(recovery: Deferred<*>, source: () -> Flow<T>): Flow<T> = flow {
@@ -208,20 +256,37 @@ private fun <T> afterRecovery(recovery: Deferred<*>, source: () -> Flow<T>): Flo
     emitAll(source().distinctUntilChanged())
 }
 
-/** A [ModelChoice] as the `modelId` and `personaId` columns store it. */
-private class StoredChoice(val modelId: String, val personaId: String?)
+/** A [ModelChoice] as the `modelId`, `personaId`, `compareOn` and `compareModelId` columns store it. */
+private class StoredChoice(
+    val modelId: String,
+    val personaId: String? = null,
+    val compareOn: Boolean = false,
+    val compareModelId: String? = null,
+)
 
 /**
- * [choice] as the columns store it: a persona with the model its stored row names, a model on its
- * own, or the default model with no persona for `null`. `null` for a model the catalogue does not
- * have or a persona that is not stored.
+ * [choice] as the columns store it: a persona with the model its stored row names and compare off,
+ * a model on its own or compared with a second one, or the default model with no persona and compare
+ * off for `null`. `null` for a model the catalogue does not have or a persona that is not stored.
  */
 private suspend fun ModelRepository.stored(choice: ModelChoice?): StoredChoice? {
-    if (choice == null) return StoredChoice(modelId = observeDefaultModel().first().id, personaId = null)
-    val persona = choice.persona
-        ?: return ModelCatalogue.find(choice.model.id)?.let { StoredChoice(modelId = it.id, personaId = null) }
+    if (choice == null) return StoredChoice(modelId = observeDefaultModel().first().id)
+    val persona = choice.persona ?: return choice.storedModel()
     val stored = observePersonas().first().firstOrNull { it.id == persona.id } ?: return null
     return StoredChoice(modelId = stored.model.id, personaId = stored.id)
+}
+
+/**
+ * A choice with no persona as the columns store it: its model, and with compare on the second
+ * model, which turning compare off drops. `null` for a model the catalogue does not have, or a
+ * second model that is not in it or is the first one.
+ */
+private fun ModelChoice.storedModel(): StoredChoice? {
+    val first = ModelCatalogue.find(model.id) ?: return null
+    if (!compareOn) return StoredChoice(modelId = first.id)
+    val second = compareWith ?: return StoredChoice(modelId = first.id, compareOn = true)
+    if (second.id == first.id || ModelCatalogue.find(second.id) == null) return null
+    return StoredChoice(modelId = first.id, compareOn = true, compareModelId = second.id)
 }
 
 private fun ModelRepository.personasById(): Flow<Map<String, Persona>> =

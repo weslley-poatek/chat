@@ -26,6 +26,10 @@ import kotlinx.coroutines.flow.Flow
  *
  * A fork ([ForkRepository.fork]) is a conversation like any other here; its [Conversation.fork]
  * carries what the fork banner shows.
+ *
+ * Compare mode is part of the [ModelChoice]: while a conversation compares its model with a second
+ * one ([Conversation.comparing]), [send] answers with a [Message.ComparePair], and
+ * [CompareRepository.continueWith] goes on with one side's model.
  */
 interface ChatRepository {
     /**
@@ -37,9 +41,11 @@ interface ChatRepository {
 
     /**
      * The conversation's messages, oldest first: each [Message.User] followed by its
-     * [Message.Assistant], except in a fork made at a user message ([ForkRepository.fork]), where
-     * that message has no reply and the next send follows it. Emits on every tick of a reply that
-     * is streaming, about every 28 ms. Empty for an id with no conversation.
+     * [Message.Assistant], or by a [Message.ComparePair] when it was sent while compare was on,
+     * except in a fork made at a user message ([ForkRepository.fork]), where that message has no
+     * reply and the next send follows it. Emits on every tick of a reply that is streaming, about
+     * every 28 ms, a pair's two sides changing in one emission. Empty for an id with no
+     * conversation.
      */
     fun observeMessages(conversationId: Long): Flow<List<Message>>
 
@@ -60,11 +66,12 @@ interface ChatRepository {
      * - its title;
      * - the text of one of the user's own messages (replies are canned, the same in every
      *   conversation, so they are not searched);
-     * - its model's short name, as the row shows it: "gpt" finds every GPT-5 conversation.
+     * - its model's short name, as the row shows it: "gpt" finds every GPT-5 conversation;
+     * - while it compares, the short name of the model it is compared with, the row's "⇄ gpt-5".
      *
      * Letters A–Z match whatever their case; other letters, such as "ç" or "É", only as typed.
      * `%`, `_` and `\` are matched as themselves. Emits again whenever the list changes: a send,
-     * a pin, an archive, a delete, a model choice; while a query is set, also a reply that streams
+     * a pin, an archive, a delete, a model or compare choice; while a query is set, also a reply that streams
      * into a matching conversation's thread, but only when the matches change.
      */
     fun observeHistory(query: String = ""): Flow<List<Conversation>>
@@ -77,21 +84,28 @@ interface ChatRepository {
      * waiting for the reply.
      *
      * With a `null` [conversationId] it first creates a conversation, titled after [text], on
-     * [newChat]: the model and persona the picker picked before this first send, or the default
-     * model with no persona when it is `null`. Observe the returned id from then on. A conversation
-     * that exists answers with its own model and persona and ignores [newChat]; [choose] changes
-     * them. The reply records the model and persona it is written with.
+     * [newChat]: the model, persona and compare choice the picker picked before this first send,
+     * or the default model with no persona and compare off when it is `null`. Observe the returned
+     * id from then on. A conversation that exists answers with its own choice and ignores
+     * [newChat]; [choose] changes it. The reply records the model and persona it is written with.
+     *
+     * While the conversation compares ([ModelChoice.comparing]), the reply is a
+     * [Message.ComparePair]: its first side from the conversation's model with the canned reply a
+     * single reply would have, its second from the compared model with that reply's alternative.
+     * The pair counts as one reply in the rotation of canned replies.
      *
      * Sends nothing and returns `null` when [text] is blank, when [conversationId] names no
-     * conversation, when [newChat]'s model is not in the catalogue or its persona is not stored, or
-     * while the conversation's last reply [ReplyStatus.isInProgress], so replies never overlap in
-     * one conversation.
+     * conversation, when [newChat]'s model or second model is not in the catalogue, its second model
+     * is its model, or its persona is not stored, or while the conversation's last reply, either
+     * side of a pair, [ReplyStatus.isInProgress], so replies never overlap in one conversation.
      *
      * The reply thinks for 320–619 ms, then streams one tick every 28 ms until it is
      * [ReplyStatus.DONE] with its latency. It keeps playing, and is saved, after the UI that sent
      * it is gone; one that was still playing when the app was closed reads as
      * [ReplyStatus.INTERRUPTED] the next time the app starts. Archiving its conversation lets it
-     * finish; deleting it stops it at its next tick.
+     * finish; deleting it stops it at its next tick. A pair's sides think once, together, then
+     * stream on the same ticks, each finishing on its own with its own latency; closing the app or
+     * deleting the conversation stops both.
      *
      * A message sent in an archived conversation brings it back to History and "recent", at the
      * top, as it was pinned or not.
@@ -100,10 +114,13 @@ interface ChatRepository {
 
     /**
      * Makes [choice] answer the conversation's next message, as a pick in the model picker does: a
-     * model on its own drops the persona, and a persona answers with its own model. The conversation
-     * keeps its place in "recent", and a reply already on its way keeps the model and persona it
-     * started with. Returns `false`, changing nothing, when [conversationId] names no conversation,
-     * the model is not in the catalogue or the persona is not stored.
+     * model on its own drops the persona, and a persona answers with its own model. Compare is
+     * stored with it: [ModelChoice.toggledCompare] and [ModelChoice.picked] apply the picker's
+     * rules (a persona turns compare off, turning compare off drops the second model). The
+     * conversation keeps its place in "recent", and a reply already on its way keeps the model and
+     * persona it started with. Returns `false`, changing nothing, when [conversationId] names no
+     * conversation, the model or second model is not in the catalogue, the second model is the
+     * model itself, or the persona is not stored.
      */
     suspend fun choose(conversationId: Long, choice: ModelChoice): Boolean
 

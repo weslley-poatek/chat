@@ -3,6 +3,8 @@ package br.com.weslleycampos.chat.core.database.daos
 import androidx.room3.useReaderConnection
 import androidx.room3.useWriterConnection
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
+import br.com.weslleycampos.chat.core.database.entities.PAIR_FIRST_SIDE
+import br.com.weslleycampos.chat.core.database.entities.PAIR_SECOND_SIDE
 import br.com.weslleycampos.chat.core.database.entities.ReplyProgress
 import br.com.weslleycampos.chat.core.database.entities.StoredBlock
 import br.com.weslleycampos.chat.core.database.inMemoryChatDatabase
@@ -153,6 +155,80 @@ class MessageDaoTest {
 
         assertEquals(2, dao.countReplies(conversationId))
         assertEquals(1, dao.countReplies(other))
+    }
+
+    @Test
+    fun aComparePairCountsAsOneReply() = runTest {
+        val conversationId = conversations.insert(conversation())
+        dao.insert(userMessage(conversationId))
+        dao.insert(reply(conversationId))
+        dao.insert(userMessage(conversationId))
+        dao.insert(pairSide(conversationId, PAIR_FIRST_SIDE, status = MessageStatus.THINKING))
+        dao.insert(pairSide(conversationId, PAIR_SECOND_SIDE, status = MessageStatus.THINKING))
+
+        assertEquals(2, dao.countReplies(conversationId))
+    }
+
+    @Test
+    fun aReplyKeepsItsPairSideAndAUserMessageOrASingleReplyHasNone() = runTest {
+        val conversationId = conversations.insert(conversation())
+        val user = dao.insert(userMessage(conversationId))
+        val single = dao.insert(reply(conversationId))
+        val first = dao.insert(pairSide(conversationId, PAIR_FIRST_SIDE))
+        val second = dao.insert(pairSide(conversationId, PAIR_SECOND_SIDE, modelId = "gemini"))
+
+        val rows = dao.observeByConversation(conversationId).first().associateBy { it.id }
+
+        assertEquals(
+            mapOf(user to null, single to null, first to PAIR_FIRST_SIDE, second to PAIR_SECOND_SIDE),
+            rows.mapValues { it.value.pairSide },
+        )
+        assertEquals("gemini", rows.getValue(second).modelId)
+    }
+
+    @Test
+    fun updatingSeveralRepliesRewritesEachOnlyInItsBlocksStatusAndLatencyAndSaysHowManyAreStillThere() = runTest {
+        val conversationId = conversations.insert(conversation())
+        val first = dao.insert(pairSide(conversationId, PAIR_FIRST_SIDE, status = MessageStatus.THINKING))
+        val second = dao.insert(pairSide(conversationId, PAIR_SECOND_SIDE, status = MessageStatus.THINKING))
+        val left = listOf(StoredBlock.Paragraph("Two"))
+        val right = listOf(StoredBlock.Paragraph("Most"))
+
+        val written = dao.updateReplies(
+            listOf(
+                ReplyProgress(id = first, blocks = left, status = MessageStatus.STREAMING, latencyMillis = null),
+                ReplyProgress(id = second, blocks = right, status = MessageStatus.DONE, latencyMillis = 1_100),
+            ),
+        )
+
+        assertEquals(2, written)
+        assertEquals(
+            listOf(
+                pairSide(conversationId, PAIR_FIRST_SIDE, status = MessageStatus.STREAMING, blocks = left)
+                    .copy(id = first, latencyMillis = null),
+                pairSide(conversationId, PAIR_SECOND_SIDE, status = MessageStatus.DONE, blocks = right)
+                    .copy(id = second, latencyMillis = 1_100),
+            ),
+            dao.observeByConversation(conversationId).first(),
+        )
+        conversations.delete(conversationId)
+        val progress = ReplyProgress(id = first, blocks = left, status = MessageStatus.STREAMING, latencyMillis = null)
+        assertEquals(0, dao.updateReplies(listOf(progress, progress.copy(id = second))))
+    }
+
+    @Test
+    fun aPairIsUnfinishedWhileEitherSideThinksOrStreams() = runTest {
+        val conversationId = conversations.insert(conversation())
+        dao.insert(userMessage(conversationId))
+        val first = dao.insert(pairSide(conversationId, PAIR_FIRST_SIDE, status = MessageStatus.DONE))
+        val second = dao.insert(pairSide(conversationId, PAIR_SECOND_SIDE, status = MessageStatus.STREAMING))
+
+        assertTrue(dao.hasUnfinishedReply(conversationId))
+        assertEquals(1, dao.interruptUnfinishedReplies())
+        val statuses = dao.observeByConversation(conversationId).first().associate { it.id to it.status }
+        assertEquals(MessageStatus.DONE, statuses[first])
+        assertEquals(MessageStatus.INTERRUPTED, statuses[second])
+        assertFalse(dao.hasUnfinishedReply(conversationId))
     }
 
     @Test

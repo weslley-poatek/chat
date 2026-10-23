@@ -2,6 +2,7 @@ package br.com.weslleycampos.chat.data.chat
 
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
+import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 
 /**
@@ -19,16 +20,18 @@ interface ForkRepository {
      *
      * In one transaction it creates a conversation with copies of the source's messages up to and
      * including [messageId], in their order, under new ids: the user's messages and the replies,
-     * each with its text, blocks, model, persona, status, latency and time as stored. The fork has
-     * the source's title, model and persona, is created and updated now (so it tops History and
-     * "recent"), is neither pinned nor archived, and records its [ForkOrigin]: the source's title and
-     * the message's position in its thread, counting from 1. The source is not changed.
+     * each with its text, blocks, model, persona, status, latency and time as stored, a compare
+     * pair with both its sides. The fork has the source's title, model, persona and compare choice,
+     * is created and updated now (so it tops History and "recent"), is neither pinned nor archived,
+     * and records its [ForkOrigin]: the source's title and the message's position in its thread,
+     * counting from 1, a compare pair counting as one message. The source is not changed.
      *
      * A fork at a user message ends on that message: no reply is started, and the next send
      * continues the fork as in any conversation, its canned replies going on from the ones copied.
      *
      * Forks nothing and returns `null` when [conversationId] names no conversation, when
-     * [messageId] is not one of its messages, or when a reply up to [messageId]
+     * [messageId] is not one of its messages, when it is a [Message.ComparePair] or one of its
+     * sides (a pair has no action row), or when a reply up to [messageId], a pair's side included,
      * [ReplyStatus.isInProgress]: a reply still on its way is never copied. Only the last message
      * of a conversation can be on its way, so a fork at the message before it still works, without
      * that reply.

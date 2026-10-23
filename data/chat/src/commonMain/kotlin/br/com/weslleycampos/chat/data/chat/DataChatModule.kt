@@ -4,8 +4,9 @@ import org.koin.core.annotation.ComponentScan
 import org.koin.core.annotation.Module
 
 /**
- * The chat's data: [ChatRepository] and [ModelRepository] on the DAOs of `CoreDatabaseModule` and
- * the plain DataStore of `PreferencesModule`, which the app's root module includes next to this one.
+ * The chat's data: [ChatRepository], [ForkRepository], [CompareRepository] and [ModelRepository] on
+ * the DAOs of `CoreDatabaseModule` and the plain DataStore of `PreferencesModule`, which the app's
+ * root module includes next to this one.
  */
 @Module
 @ComponentScan

@@ -83,6 +83,22 @@ class EntityMappersTest {
     }
 
     @Test
+    fun aComparingRowReadsWithItsCompareAndASecondModelTheCatalogueNoLongerHasAsNone() {
+        val row = ConversationEntity(id = 3, title = "Hello", modelId = "sonnet", createdAt = 1_000, updatedAt = 2_000)
+
+        val comparing = row.copy(compareOn = true, compareModelId = "gpt5").toConversation(personas)
+        val waiting = row.copy(compareOn = true).toConversation(personas)
+        val retired = row.copy(compareOn = true, compareModelId = "retired").toConversation(personas)
+
+        assertEquals(true to ModelCatalogue["gpt5"], comparing.compareOn to comparing.compareWith)
+        assertEquals(ModelCatalogue["gpt5"], comparing.comparing)
+        assertEquals(true to null, waiting.compareOn to waiting.compareWith)
+        assertEquals(true to null, retired.compareOn to retired.compareWith)
+        assertNull(retired.comparing)
+        assertEquals(false to null, row.toConversation(personas).let { it.compareOn to it.compareWith })
+    }
+
+    @Test
     fun aConversationRowReadsWithItsStoredPersonaAndAnUnknownOneAsNone() {
         val row = ConversationEntity(
             id = 3,

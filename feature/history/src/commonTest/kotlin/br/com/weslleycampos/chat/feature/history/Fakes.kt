@@ -33,8 +33,8 @@ internal val Llama: ChatModel = ModelCatalogue["llama"]
 /**
  * An in-memory [ChatRepository] that keeps the real one's History contract: the list leaves archived
  * conversations out, newest first, the later id on a tie; the trimmed query matches a title, the
- * user's text or the short name; pin, archive and delete say whether they changed anything. History
- * never sends or chooses.
+ * user's text, the short name or, while comparing, the compared model's; pin, archive and delete
+ * say whether they changed anything. History never sends or chooses.
  */
 internal class FakeChatRepository : ChatRepository {
     val conversations = MutableStateFlow<List<Conversation>>(emptyList())
@@ -68,6 +68,7 @@ internal class FakeChatRepository : ChatRepository {
             fun matches(conversation: Conversation) = text.isEmpty() ||
                 conversation.title.contains(text, ignoreCase = true) ||
                 conversation.model.shortName.contains(text, ignoreCase = true) ||
+                conversation.comparing?.shortName?.contains(text, ignoreCase = true) == true ||
                 threads[conversation.id].orEmpty().any { message ->
                     message is Message.User && message.text.contains(text, ignoreCase = true)
                 }
