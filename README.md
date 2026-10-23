@@ -35,8 +35,9 @@
 > **Status: foundation.** The build system, dependency injection, secure storage, the local database
 > and sign-in with Google or an email and password are in place, and so is the chat data layer:
 > conversations and messages in Room, with canned replies streamed into them, the model picker's
-> favorites, personas and default model, and History's data: the conversation list, its search,
-> pins, archives and deletes. After sign-in the app opens the chat thread: send
+> favorites, personas and default model, History's data: the conversation list, its search,
+> pins, archives and deletes, and forks: a conversation copied up to a message, with where it came
+> from. After sign-in the app opens the chat thread: send
 > a message, watch the reply think, stream and finish, copy its code, and reopen a recent
 > conversation. The model chip opens the model picker: pick one of the eight models or a persona,
 > star favorites, and the accent follows at once. The History button opens every conversation on
@@ -103,7 +104,7 @@ flowchart TD
     featureChat[":feature:chat<br/><i>Chat thread · composer · model picker</i>"]
     featureHistory[":feature:history<br/><i>History · search · swipe to pin, archive, delete</i>"]
     dataAuth[":data:auth<br/><i>AuthManager · Firebase Auth</i>"]
-    dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · canned streamed replies · history</i>"]
+    dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · ForkRepository · canned streamed replies · history</i>"]
 
     androidApp -- "implementation" --> app
     androidApp -- "implementation" --> nav
@@ -134,7 +135,7 @@ flowchart TD
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
 | [`:core:ui`](core/ui) | The design system: `ChatTheme`, per-model palettes, typography, tokens and components. [Read the module guide →](core/ui/README.md) |
 | [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. Both on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
-| [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency, and `choose`, which changes a conversation's model and persona. For History, the list of conversations that are not archived and its search over titles, the user's messages and model names, `setPinned`, `archive` and `delete`, and `groupHistory`, which splits the list into pinned, today, yesterday and earlier. `ModelRepository`: the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
+| [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency, and `choose`, which changes a conversation's model and persona. For History, the list of conversations that are not archived and its search over titles, the user's messages and model names, `setPinned`, `archive` and `delete`, and `groupHistory`, which splits the list into pinned, today, yesterday and earlier. `ModelRepository`: the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. `ForkRepository`: "fork here", a new conversation copied from another one up to a message, which records where it came from for the fork banner, and the banner's dismissal. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
 | [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen: Google, email + password sign-in, account creation and the password-reset email, as modes of one screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
 | [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. The model picker sheet: favorites, personas and every model, stars, and a pick that changes the conversation or the new chat. The accent follows the conversation's model. The History button opens History. |
 | [`:feature:history`](feature/history) | History: every conversation on the device in "pinned", "today", "yesterday" and "earlier", newest first, regrouped when the date changes; the search over titles, the user's messages and model names; rows that swipe left to pin, archive or delete, with the "archived" and "deleted" toasts, and the same actions for screen readers; a tap that reopens the conversation in the chat. The status row says how many conversations are on this device, since nothing syncs. |
@@ -376,7 +377,7 @@ chat/
 │   └── ui/                        🎨 ChatTheme, tokens and components
 ├── data/
 │   ├── auth/                      🔑 AuthManager and EmailAuthManager on Firebase Auth
-│   └── chat/                      💬 ChatRepository, ModelRepository, canned streamed replies, models, personas, History's groups
+│   └── chat/                      💬 ChatRepository, ModelRepository, ForkRepository, canned streamed replies, models, personas, History's groups
 ├── feature/
 │   ├── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)
 │   ├── chat/                      💬 The chat thread: empty state, messages, code blocks, composer, model picker

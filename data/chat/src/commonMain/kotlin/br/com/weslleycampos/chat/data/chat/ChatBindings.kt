@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import br.com.weslleycampos.chat.core.database.TransactionRunner
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.ForkDao
 import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
@@ -38,6 +39,19 @@ internal fun chatRepository(
     streamer = ReplyStreamer(messageDao = messageDao, clock = Clock.System, random = Random.Default),
     clock = Clock.System,
     scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, _ -> }),
+)
+
+/** The app's one [ForkRepository], dating its forks by the system clock. */
+@Single
+internal fun forkRepository(
+    conversationDao: ConversationDao,
+    forkDao: ForkDao,
+    transactions: TransactionRunner,
+): ForkRepository = RoomForkRepository(
+    conversationDao = conversationDao,
+    forkDao = forkDao,
+    transactions = transactions,
+    clock = Clock.System,
 )
 
 /**

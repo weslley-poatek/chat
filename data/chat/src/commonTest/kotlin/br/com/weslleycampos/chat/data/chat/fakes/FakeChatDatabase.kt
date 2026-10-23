@@ -2,6 +2,7 @@ package br.com.weslleycampos.chat.data.chat.fakes
 
 import br.com.weslleycampos.chat.core.database.TransactionRunner
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.ForkDao
 import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
@@ -43,7 +44,7 @@ private fun containedText(pattern: String): String {
 }
 
 /**
- * The four DAOs and a transaction runner over in-memory tables. Like Room, every observer re-reads
+ * The five DAOs and a transaction runner over in-memory tables. Like Room, every observer re-reads
  * its table whenever any row of it changes, and ids are assigned in insertion order.
  */
 internal class FakeChatDatabase(
@@ -152,6 +153,32 @@ internal class FakeChatDatabase(
             if (conversationRows.value.none { it.id == id && changes(it) }) return 0
             write()
             conversationRows.update { rows -> rows.map { if (it.id == id) update(it) else it } }
+            return 1
+        }
+    }
+
+    val forkDao = object : ForkDao {
+        override suspend fun messagesThrough(conversationId: Long, messageId: Long): List<MessageEntity> =
+            messageRows.value.filter { it.conversationId == conversationId && it.id <= messageId }.sortedBy { it.id }
+
+        /** One write for the lot, as Room's one statement per row inside the caller's transaction. */
+        override suspend fun insertMessages(messages: List<MessageEntity>) {
+            val conversationIds = conversationRows.value.map { it.id }.toSet()
+            check(messages.all { it.conversationId in conversationIds }) { "FOREIGN KEY constraint failed" }
+            write()
+            val inserted = messages.map { it.copy(id = nextMessageId++) }
+            messageRows.update { it + inserted }
+        }
+
+        override suspend fun dismissBanner(id: Long): Int {
+            val showing = { row: ConversationEntity ->
+                row.id == id && row.forkedFromTitle != null && !row.forkBannerDismissed
+            }
+            if (conversationRows.value.none(showing)) return 0
+            write()
+            conversationRows.update { rows ->
+                rows.map { if (showing(it)) it.copy(forkBannerDismissed = true) else it }
+            }
             return 1
         }
     }

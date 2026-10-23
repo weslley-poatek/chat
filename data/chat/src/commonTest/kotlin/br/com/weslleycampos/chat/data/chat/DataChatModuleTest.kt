@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import br.com.weslleycampos.chat.core.database.TransactionRunner
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.ForkDao
 import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
@@ -38,6 +39,20 @@ class DataChatModuleTest {
     }
 
     @Test
+    fun koinProvidesOneRoomForkRepositoryOnTheDatabasesDaos() {
+        val koin = koinApplication {
+            module<FakeDatabaseModule>()
+            module<DataChatModule>()
+        }.koin
+        try {
+            assertIs<RoomForkRepository>(koin.get<ForkRepository>())
+            assertSame(koin.get<ForkRepository>(), koin.get<ForkRepository>())
+        } finally {
+            koin.close()
+        }
+    }
+
+    @Test
     fun koinProvidesOneLocalModelRepositoryOnThePersonaDaoAndThePlainPreferences() {
         val koin = koinApplication {
             module<FakeDatabaseModule>()
@@ -59,6 +74,9 @@ internal class FakeDatabaseModule {
 
     @Single
     fun conversationDao(database: FakeChatDatabase): ConversationDao = database.conversationDao
+
+    @Single
+    fun forkDao(database: FakeChatDatabase): ForkDao = database.forkDao
 
     @Single
     fun historyDao(database: FakeChatDatabase): HistoryDao = database.historyDao

@@ -23,6 +23,9 @@ import kotlinx.coroutines.flow.Flow
  * History lists [observeHistory], grouped by [groupHistory], and pins, archives and deletes with
  * [setPinned], [archive] and [delete]; it opens a conversation by id with [observeConversation] and
  * [observeMessages], as "recent" does.
+ *
+ * A fork ([ForkRepository.fork]) is a conversation like any other here; its [Conversation.fork]
+ * carries what the fork banner shows.
  */
 interface ChatRepository {
     /**
@@ -34,8 +37,9 @@ interface ChatRepository {
 
     /**
      * The conversation's messages, oldest first: each [Message.User] followed by its
-     * [Message.Assistant]. Emits on every tick of a reply that is streaming, about every 28 ms.
-     * Empty for an id with no conversation.
+     * [Message.Assistant], except in a fork made at a user message ([ForkRepository.fork]), where
+     * that message has no reply and the next send follows it. Emits on every tick of a reply that
+     * is streaming, about every 28 ms. Empty for an id with no conversation.
      */
     fun observeMessages(conversationId: Long): Flow<List<Message>>
 

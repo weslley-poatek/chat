@@ -16,6 +16,8 @@ import kotlin.time.Instant
  * @property pinned Whether History lists it under "pinned", above the days.
  * @property archived Whether it is archived: History and "recent" leave it out, but it is kept with
  *   its messages and still opens by id. A message sent in it brings it back.
+ * @property fork For a conversation made by "⑂ fork here", where it was forked from, for the fork
+ *   banner; `null` for every other conversation.
  */
 data class Conversation(
     val id: Long,
@@ -26,6 +28,7 @@ data class Conversation(
     val updatedAt: Instant,
     val pinned: Boolean = false,
     val archived: Boolean = false,
+    val fork: ForkOrigin? = null,
 ) {
     /** [model] and [persona] as the model picker marks them. */
     val choice: ModelChoice

@@ -8,6 +8,7 @@ import br.com.weslleycampos.chat.core.database.entities.PersonaEntity
 import br.com.weslleycampos.chat.core.database.entities.StoredBlock
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.Conversation
+import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.Persona
@@ -27,7 +28,15 @@ internal fun ConversationEntity.toConversation(personas: Map<String, Persona>): 
     updatedAt = Instant.fromEpochMilliseconds(updatedAt),
     pinned = pinned,
     archived = archived,
+    fork = forkOrigin(),
 )
+
+/** The fork's origin, or `null` for a row that is not a fork (or lost one of its two columns). */
+private fun ConversationEntity.forkOrigin(): ForkOrigin? {
+    val title = forkedFromTitle ?: return null
+    val number = forkedAtMessage ?: return null
+    return ForkOrigin(sourceTitle = title, messageNumber = number, bannerDismissed = forkBannerDismissed)
+}
 
 internal fun MessageEntity.toMessage(personas: Map<String, Persona>): Message = when (role) {
     MessageRole.USER -> Message.User(

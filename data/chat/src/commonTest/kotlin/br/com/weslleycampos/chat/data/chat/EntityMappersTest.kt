@@ -8,6 +8,7 @@ import br.com.weslleycampos.chat.core.database.entities.PersonaEntity
 import br.com.weslleycampos.chat.core.database.entities.StoredBlock
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.Conversation
+import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.Persona
@@ -61,6 +62,24 @@ class EntityMappersTest {
         assertEquals(false to false, plain.pinned to plain.archived)
         assertEquals(true to false, pinned.pinned to pinned.archived)
         assertEquals(false to true, archived.pinned to archived.archived)
+    }
+
+    @Test
+    fun aForkedRowReadsWithItsOriginAndAnyOtherRowAsNoFork() {
+        val row = ConversationEntity(id = 3, title = "Hello", modelId = "gpt5", createdAt = 1_000, updatedAt = 2_000)
+        val forked = row.copy(forkedFromTitle = "useDebounce hook with leading edge", forkedAtMessage = 2)
+
+        assertNull(row.toConversation(personas).fork)
+        assertEquals(
+            ForkOrigin(sourceTitle = "useDebounce hook with leading edge", messageNumber = 2),
+            forked.toConversation(personas).fork,
+        )
+        assertEquals(
+            ForkOrigin(sourceTitle = "useDebounce hook with leading edge", messageNumber = 2, bannerDismissed = true),
+            forked.copy(forkBannerDismissed = true).toConversation(personas).fork,
+        )
+        assertNull(forked.copy(forkedAtMessage = null).toConversation(personas).fork)
+        assertNull(forked.copy(forkedFromTitle = null).toConversation(personas).fork)
     }
 
     @Test
