@@ -8,18 +8,19 @@ favorite models and the default model, are preferences in `:core:preferences` in
 | Type | Package | Role |
 | --- | --- | --- |
 | `ChatDatabase` | `core.database` | The `@Database`: its entities, version, auto-migrations, column converters and one getter per DAO |
-| `DATABASE_VERSION` | `core.database` | The schema version, `4`. Tests compare against it, so they need no edit when it rises |
+| `DATABASE_VERSION` | `core.database` | The schema version, `5`. Tests compare against it, so they need no edit when it rises |
 | `ChatDatabaseConstructor` | `core.database` | The `expect object` that `@ConstructedBy` names; Room's compiler writes the `actual` on each target |
 | `CoreDatabaseModule` | `core.database` | The Koin module: the `ChatDatabase` singleton, every DAO and the `TransactionRunner` |
 | `TransactionRunner` | `core.database` | Runs DAO calls from more than one DAO as one write transaction |
 | `ChatTypeConverters` | `core.database` | Stores enums as fixed lowercase values and reply blocks as a JSON array |
 | `PlaceholderEntity` | `core.database.entities` | Version 1's only table, `placeholder`. It stays empty and is never dropped |
-| `ConversationEntity` | `core.database.entities` | Version 2, `conversations`: one chat thread, its title, model and timestamps; version 3 adds its `personaId`, version 4 its `pinned` and `archived` flags |
+| `ConversationEntity` | `core.database.entities` | Version 2, `conversations`: one chat thread, its title, model and timestamps; version 3 adds its `personaId`, version 4 its `pinned` and `archived` flags, version 5 a fork's origin and whether its banner was dismissed |
 | `MessageEntity` | `core.database.entities` | Version 2, `messages`: a user message or a reply, its blocks, status and latency; version 3 adds the reply's `personaId` |
 | `PersonaEntity` | `core.database.entities` | Version 3, `personas`: a persona's name, model, prompt and place in the picker |
 | `StoredBlock` | `core.database.entities` | One reply block in the `blocks` column: paragraph, code or numbered list |
 | `ConversationDao`, `MessageDao`, `PersonaDao` | `core.database.daos` | The queries on those three tables |
 | `HistoryDao` | `core.database.daos` | Version 4: History's lists of `conversations`, every one that is not archived, its search and its count |
+| `ForkDao` | `core.database.daos` | Version 5: a fork's queries: a thread up to one of its messages, the insert of its copies, and the fork banner's dismissal |
 | `containsPattern` | `core.database.daos` | The `LIKE` pattern `HistoryDao.search` takes: any value containing the text, with `%`, `_` and `\` matching only themselves |
 
 ## Versions
@@ -30,6 +31,7 @@ favorite models and the default model, are preferences in `:core:preferences` in
 | 2 | `conversations`, `messages` (foreign key to `conversations`, cascade delete, index on `conversationId`) | `AutoMigration(from = 1, to = 2)` |
 | 3 | `personas` (text primary key); nullable `personaId` on `conversations` and `messages`, without a foreign key | `AutoMigration(from = 2, to = 3)` |
 | 4 | `pinned` and `archived` on `conversations`, `INTEGER NOT NULL DEFAULT 0`, so every row already there reads unpinned and not archived | `AutoMigration(from = 3, to = 4)` |
+| 5 | A fork's origin on `conversations`: nullable `forkedFromTitle` (TEXT) and `forkedAtMessage` (INTEGER), and `forkBannerDismissed`, `INTEGER NOT NULL DEFAULT 0`, so every row already there reads as no fork | `AutoMigration(from = 4, to = 5)` |
 
 The module uses Room 3 (`androidx.room3`), which is Kotlin-only and KSP-only: DAO functions are
 `suspend` or return `Flow`, and there is no `SupportSQLiteDatabase`.
@@ -77,8 +79,8 @@ Every table, DAO and migration lives in this module, so each change is one commi
 
 **1.** Declare the entity under `entities/`. A non-null column added to an existing table needs a
 `@ColumnInfo(defaultValue = …)` so the auto-migration can fill the rows already there, as version
-4's `pinned` and `archived` have `"0"`; a nullable one, like version 3's `personaId`, reads `null`
-on them:
+4's `pinned` and `archived` and version 5's `forkBannerDismissed` have `"0"`; a nullable one, like
+version 3's `personaId` or version 5's `forkedFromTitle`, reads `null` on them:
 
 ```kotlin
 @Entity(tableName = "notes")
@@ -119,12 +121,13 @@ from the previous version, and add the DAO getter:
         PersonaEntity::class,
         NoteEntity::class,
     ],
-    version = DATABASE_VERSION, // now 5
+    version = DATABASE_VERSION, // now 6
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 5, to = 6),
     ],
     exportSchema = true,
 )
@@ -153,7 +156,7 @@ internal fun noteDao(database: ChatDatabase): NoteDao = database.noteDao()
 ```
 
 **5.** Build once (any compile or test task) and commit the schema Room exports for the new version,
-`schemas/br.com.weslleycampos.chat.core.database.ChatDatabase/5.json`, with the code.
+`schemas/br.com.weslleycampos.chat.core.database.ChatDatabase/6.json`, with the code.
 
 > [!IMPORTANT]
 > Never add a destructive migration fallback, and never edit or delete a schema JSON once it is
@@ -213,9 +216,9 @@ private val helper = MigrationTestHelper(
 
 @Test
 fun notesTableIsAdded() = runTest {
-    helper.createDatabase(version = 4).close()
+    helper.createDatabase(version = 5).close()
 
-    helper.runMigrationsAndValidate(version = 5)
+    helper.runMigrationsAndValidate(version = 6)
 }
 ```
 
@@ -242,11 +245,12 @@ Run from the repository root:
   version 1 table.
 - `ExportedSchemaTest` (common) checks that the schema for the current version is exported with
   the identity hash Room compiled.
-- `ConversationDaoTest`, `HistoryDaoTest` and `MessageDaoTest` (common) cover every query:
+- `ConversationDaoTest`, `ForkDaoTest`, `HistoryDaoTest` and `MessageDaoTest` (common) cover every query:
   observing by id, "recent" order and limit without archived conversations, History's order and
   count, its search (titles and user messages, ASCII case, no replies, the given models, escaped
   `%`, `_` and `\`), pinning, archiving and deleting with whether each changed anything, setting
-  the model and persona, message order, the blocks JSON, a reply's persona, reply progress and
+  the model and persona, a fork's origin, a thread up to one message, its copies under new ids in
+  their order, dismissing the fork banner with whether it changed anything, message order, the blocks JSON, a reply's persona, reply progress and
   whether the reply is still there, reply counts, unfinished and interrupted replies, the foreign
   key and its cascade delete.
 - `LikePatternsTest` (common) covers the wildcards and escapes of `containsPattern`.
@@ -256,9 +260,10 @@ Run from the repository root:
 - `TransactionRunnerTest` (common) commits writes from two DAOs together and rolls them back together.
 - `MigrationTestHelperTest` (iOS) creates version 1 from its exported schema and migrates it to 2,
   migrates a version 2 database with rows to 3, keeping every row without a persona, and a version
-  3 one to 4, keeping every row neither pinned nor archived.
+  3 one to 4, keeping every row neither pinned nor archived, and a version 4 one to 5, keeping every
+  row as no fork with its banner not dismissed.
 - `CoreDatabaseModuleTest` (iOS) gets the `ChatDatabase` singleton from `CoreDatabaseModule` and
-  opens it on disk, then deletes the file; it also gets the four DAOs and the `TransactionRunner`.
+  opens it on disk, then deletes the file; it also gets the five DAOs and the `TransactionRunner`.
 
 Not covered by tests: the Android builder and its file location, since a host test has no
 `Context`. The Koin compiler plugin does not catch a missing dependency of this module's

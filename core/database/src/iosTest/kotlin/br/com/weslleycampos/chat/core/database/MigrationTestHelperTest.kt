@@ -108,6 +108,40 @@ class MigrationTestHelperTest {
         )
     }
 
+    @Test
+    fun migratesVersionFourToFiveKeepingEveryConversationAsNoForkWithItsBannerNotDismissed() = runTest {
+        helper.createDatabase(version = 4).use { connection ->
+            connection.execSQL(
+                "INSERT INTO conversations (id, title, modelId, createdAt, updatedAt, personaId, pinned, archived) " +
+                    "VALUES (1, 'Postgres index', 'gpt5', 10, 20, 'terse', 1, 0), " +
+                    "(2, 'Hello', 'sonnet', 30, 40, NULL, 0, 1)",
+            )
+            connection.execSQL(
+                "INSERT INTO messages " +
+                    "(id, conversationId, role, text, blocks, modelId, status, latencyMillis, createdAt, personaId) " +
+                    "VALUES (1, 1, 'user', 'why?', '[]', NULL, 'done', NULL, 10, NULL), " +
+                    "(2, 1, 'assistant', '', '[{\"type\":\"p\",\"text\":\"ok\"}]', 'gpt5', 'done', 800, 10, 'terse')",
+            )
+        }
+
+        val connection = helper.runMigrationsAndValidate(version = 5)
+
+        assertEquals(
+            listOf(
+                "1|Postgres index|gpt5|10|20|terse|1|0|null|null|0",
+                "2|Hello|sonnet|30|40|null|0|1|null|null|0",
+            ),
+            connection.rows(
+                "SELECT id, title, modelId, createdAt, updatedAt, personaId, pinned, archived, " +
+                    "forkedFromTitle, forkedAtMessage, forkBannerDismissed FROM conversations ORDER BY id",
+            ),
+        )
+        assertEquals(
+            listOf("1|user|null", "2|assistant|terse"),
+            connection.rows("SELECT id, role, personaId FROM messages ORDER BY id"),
+        )
+    }
+
     /** Every row of [sql], its columns joined by `|`, a NULL as `null`. */
     private fun SQLiteConnection.rows(sql: String): List<String> = prepare(sql).use { statement ->
         buildList {

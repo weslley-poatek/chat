@@ -24,6 +24,15 @@ import androidx.room3.PrimaryKey
  * @property archived Version 4: hidden from History and "recent", but kept with its messages until
  *   it is deleted. The chat repository clears it when a message is sent in it. Rows from version 3
  *   read `false`.
+ * @property forkedFromTitle Version 5: for a fork, the title of the conversation it was forked from,
+ *   as that title was at the fork; `null` for a conversation that is not a fork. It is a copy rather
+ *   than a reference, so the fork banner reads the same after that conversation is deleted. Rows
+ *   from version 4 read `null`.
+ * @property forkedAtMessage Version 5: for a fork, the position of the message it was forked at in
+ *   that conversation's thread, counting from 1 over user messages and replies alike; `null` for a
+ *   conversation that is not a fork. Rows from version 4 read `null`.
+ * @property forkBannerDismissed Version 5: whether the fork banner's "×" hid the banner, for good.
+ *   Always `false` for a conversation that is not a fork. Rows from version 4 read `false`.
  */
 @Entity(tableName = "conversations")
 data class ConversationEntity(
@@ -35,4 +44,7 @@ data class ConversationEntity(
     val personaId: String? = null,
     @ColumnInfo(defaultValue = "0") val pinned: Boolean = false,
     @ColumnInfo(defaultValue = "0") val archived: Boolean = false,
+    val forkedFromTitle: String? = null,
+    val forkedAtMessage: Int? = null,
+    @ColumnInfo(defaultValue = "0") val forkBannerDismissed: Boolean = false,
 )

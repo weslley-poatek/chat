@@ -7,6 +7,7 @@ import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import br.com.weslleycampos.chat.core.database.daos.ConversationDao
+import br.com.weslleycampos.chat.core.database.daos.ForkDao
 import br.com.weslleycampos.chat.core.database.daos.HistoryDao
 import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
@@ -22,8 +23,10 @@ import br.com.weslleycampos.chat.core.database.entities.PlaceholderEntity
  * - 2: `conversations` and `messages`.
  * - 3: `personas`, and a nullable `personaId` on `conversations` and `messages`.
  * - 4: `pinned` and `archived` on `conversations`, both `0` on the rows already there.
+ * - 5: a fork's origin on `conversations`: nullable `forkedFromTitle` and `forkedAtMessage`, and
+ *   `forkBannerDismissed`, `0` on the rows already there.
  */
-internal const val DATABASE_VERSION = 4
+internal const val DATABASE_VERSION = 5
 
 /**
  * The app's single on-device database: everything Chat keeps lives here and survives restarts.
@@ -45,6 +48,7 @@ internal const val DATABASE_VERSION = 4
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5),
     ],
     exportSchema = true,
 )
@@ -52,6 +56,8 @@ internal const val DATABASE_VERSION = 4
 @ColumnTypeConverters(ChatTypeConverters::class)
 abstract class ChatDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
+
+    abstract fun forkDao(): ForkDao
 
     abstract fun historyDao(): HistoryDao
 

@@ -98,6 +98,22 @@ class ConversationDaoTest {
     }
 
     @Test
+    fun aNewConversationIsNoForkAndAForksOriginIsStoredWithIt() = runTest {
+        val plain = dao.insert(conversation())
+        val fork = dao.insert(
+            conversation(title = "Postgres index", forkedFromTitle = "Postgres index", forkedAtMessage = 2),
+        )
+
+        val plainRow = dao.get(plain)
+        assertNull(plainRow?.forkedFromTitle)
+        assertNull(plainRow?.forkedAtMessage)
+        assertFalse(plainRow?.forkBannerDismissed ?: true)
+        val forkRow = dao.get(fork)
+        assertEquals("Postgres index" to 2, forkRow?.forkedFromTitle to forkRow?.forkedAtMessage)
+        assertFalse(forkRow?.forkBannerDismissed ?: true)
+    }
+
+    @Test
     fun recentConversationsLeaveTheArchivedOnesOut() = runTest {
         val kept = dao.insert(conversation(updatedAt = 1))
         dao.insert(conversation(updatedAt = 2, archived = true))

@@ -12,6 +12,8 @@ internal fun conversation(
     modelId: String = "sonnet",
     pinned: Boolean = false,
     archived: Boolean = false,
+    forkedFromTitle: String? = null,
+    forkedAtMessage: Int? = null,
 ) = ConversationEntity(
     title = title,
     modelId = modelId,
@@ -19,6 +21,8 @@ internal fun conversation(
     updatedAt = updatedAt,
     pinned = pinned,
     archived = archived,
+    forkedFromTitle = forkedFromTitle,
+    forkedAtMessage = forkedAtMessage,
 )
 
 internal fun userMessage(conversationId: Long, text: String = "hi", createdAt: Long = 0) = MessageEntity(
