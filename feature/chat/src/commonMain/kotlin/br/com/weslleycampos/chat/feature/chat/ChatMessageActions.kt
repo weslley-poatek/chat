@@ -73,8 +73,9 @@ private const val ActionRowFadeInMillis = 150
 private val ReadTrackHeight = 2.dp
 
 /**
- * What a message does: a tap on it (the prototype's `m.select`), its action row, and the read-aloud
- * bar under a reply. Each takes the message's id where it needs one.
+ * What a message does: a tap on it (the prototype's `m.select`), its action row, the read-aloud bar
+ * under a reply, and a compare card's "continue with this →" ([onContinueWith], the pair's id and
+ * the card's index). Each takes the message's id where it needs one.
  */
 @Immutable
 data class MessageActionCallbacks(
@@ -85,6 +86,7 @@ data class MessageActionCallbacks(
     val onRetry: (Long) -> Unit = {},
     val onPlayPause: () -> Unit = {},
     val onStopReading: () -> Unit = {},
+    val onContinueWith: (pairId: Long, side: Int) -> Unit = { _, _ -> },
 )
 
 /**
@@ -128,6 +130,8 @@ internal fun MessageActionRow(
                 label = stringResource(FeatureChatRes.string.chat_action_retry),
                 onClick = { actions.onRetry(message.id) },
             )
+            // Never selected, so never here: a pair has no action row.
+            is MessageUi.ComparePair -> Unit
         }
     }
 }

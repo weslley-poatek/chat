@@ -118,6 +118,24 @@ class HistoryUiStateTest {
     }
 
     @Test
+    fun aComparingConversationsRowShowsTheComparedModelAsItsExtraAndOtherRowsNone() {
+        val base = conversation(id = 4, title = "SSE vs WebSocket", updatedAt = Now - 20.hours, modelId = "gemini")
+        val comparing = base.copy(compareOn = true, compareWith = ModelCatalogue["gpt5"])
+            .toRowUi(now = Now, timeZone = TimeZone.UTC)
+        val pickingSecond = base.copy(compareOn = true).toRowUi(now = Now, timeZone = TimeZone.UTC)
+        val stale = base.copy(compareOn = false, compareWith = ModelCatalogue["gpt5"])
+            .toRowUi(now = Now, timeZone = TimeZone.UTC)
+
+        assertEquals("gpt-5", comparing.comparedWith)
+        assertEquals("⇄ gpt-5", comparing.extra)
+        assertEquals("gemini-2.5-pro", comparing.modelShortName)
+        // Compare on without a second model, or a second model left over with compare off: no extra.
+        assertNull(pickingSecond.extra)
+        assertNull(stale.extra)
+        assertNull(row.extra)
+    }
+
+    @Test
     fun aRowOffersPinOrUnpinThenArchiveAndDeleteToTouchAndScreenReadersAlike() {
         assertEquals(
             listOf(
@@ -214,6 +232,9 @@ class HistoryUiStateTest {
             states.getValue("Grouped").groups.map { it.section },
         )
         assertTrue(states.getValue("Grouped").groups.first().rows.all { it.pinned })
+        assertEquals("⇄ gpt-5", states.getValue("Grouped").row(4)?.extra)
+        val comparing = states.getValue("Grouped").groups.flatMap { it.rows }.filter { it.extra != null }
+        assertEquals(listOf(4L), comparing.map { it.id })
         val filtered = states.getValue("Filtered")
         assertTrue(filtered.showsClearQuery)
         assertTrue(filtered.groups.flatMap { it.rows }.all { it.modelShortName.contains("gpt") })

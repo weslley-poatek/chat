@@ -162,11 +162,121 @@ Fork and History
 
 ### UI (`:feature:chat`, `:feature:history`)
 
-<!-- FEATURE AGENT: replace this placeholder with the UI acceptance criteria (compare cards,
-"continue with this →", the picker's compare states, chip, placeholder, toasts, History's extra,
-previews), each naming its test. -->
+The row adds to `:feature:chat` the picker's compare button, hint and "◐", the chip and
+placeholder while comparing, a pair's two cards in a carousel with "continue with this →", and
+their toasts; and to `:feature:history` the row's "⇄ gpt-5" extra. Its previews (402 × 874, light
+and dark) draw these states:
 
-_To be written by the feature agent._
+| Preview | What it shows | Design source |
+| --- | --- | --- |
+| `ModelPickerPreviewParameterProvider` "Chat · compare" | "compare · on" filled in the accent; hint "pick a second model to run beside sonnet-4.5"; "●" on sonnet | header 484, hint 487 |
+| "Chat · compare · second" | the hint "sonnet-4.5 ⇄ gpt-5 · tap another model to swap the second"; "◐" on gpt-5 in favorites and all models | `mRow` 848–853 |
+| `ChatScreenPreviewParameterProvider` "Compare · empty" | a new chat comparing: chip "sonnet-4.5 ⇄ gpt-5", placeholder "ask sonnet-4.5 and gpt-5…", the empty state as ever | `chipLabel` 888, placeholder 897 |
+| "Compare · thinking" | the question, the pair's meta "sonnet-4.5 ⇄ gpt-5 · 14:02" and both cards' lone caret, each in its model's accent; send disabled | lines 186–196 |
+| "Compare · streaming" | sonnet's card streaming with the caret, gpt-5's done "GPT-5 · 1.9s" with "continue with this →", the second card peeking at the right | lines 189–203 |
+| "Compare · done" | both cards done, each with its latency and "continue with this →" | lines 198–203 |
+| "Compare · continued" | after "continue with this →" on gpt-5: chip "GPT-5", the pair as it was, toast "continuing with gpt-5" | `keep` 823 |
+| `HistoryScreenPreviewParameterProvider` "Grouped" | "SSE vs WebSocket for streaming chat": "gemini-2.5-pro ⇄ gpt-5" on line 2 | seed `h4` 561, row 289–290 |
+
+Criteria run on the Android host and the iOS simulator. As in rows 3 to 6 there is no
+`runComposeUiTest` (no Robolectric on the Android host): every tap, pick and toast is
+`ChatViewModel` / `CompareActions` state over fakes on virtual time, or a pure function, tested
+below; the drawing, the swipe and the snap are checked in the previews and on a device.
+
+The compare button and the pick rules
+
+- [x] The compare button turns compare on and off in an open conversation, saved with `choose`,
+  and keeps the sheet open; on, it reads "compare · on" and the hint says what to pick —
+  `ChatViewModelCompareTest.theCompareButtonTurnsCompareOnAndOffInAnOpenConversationKeepingTheSheetOpen`,
+  `ModelPickerUiStateTest.theCompareButtonIsOnWhileComparingAndTheHintSaysWhatToPickNext`
+- [x] The compare button drops a persona; turning compare off drops the second model —
+  `ChatViewModelCompareTest.theCompareButtonDropsAPersonaAndTurningCompareOffDropsTheSecondModel`
+- [x] A refused toggle shows the conversation's own choice again —
+  `ChatViewModelCompareTest.aRefusedToggleShowsTheConversationsOwnChoiceAgain`
+- [x] Picking a second model closes the sheet, saves it and toasts "comparing sonnet-4.5 ⇄ gpt-5";
+  another model row swaps the second; the chat keeps the first model's accent —
+  `ChatViewModelCompareTest.pickingTheSecondModelClosesTheSheetSavesItAndToastsComparing`
+- [x] While comparing, the first model's own row changes nothing and the sheet stays open
+  (`picked` is `null`) — `ChatViewModelCompareTest.whileComparingTheFirstModelsOwnRowChangesNothingAndTheSheetStaysOpen`
+- [x] A persona row turns compare off, without the comparing toast —
+  `ChatViewModelCompareTest.aPersonaRowTurnsCompareOffWithoutTheComparingToast`
+- [x] "◐" marks the second model's rows, "●" the first's; none before a second model is picked —
+  `ModelPickerUiStateTest.whileComparingTheSecondModelsRowsCarryTheHalfMarkAndThePrimarysTheDot`
+- [x] The Default model sheet has no compare button, hint or "◐" —
+  `ModelPickerUiStateTest.theDefaultSheetHasNoCompareButtonHintOrHalfMark`
+
+The chat while comparing
+
+- [x] The chip reads "sonnet-4.5 ⇄ gpt-5" and the composer "ask sonnet-4.5 and gpt-5…" once a
+  second model is picked, else as before —
+  `CompareFormatsTest.theChipNamesBothModelsOnlyOnceASecondIsPicked`,
+  `CompareFormatsTest.theComposerAsksBothModelsWhileComparingElseMessagesTheOne`
+- [x] In a new chat, compare is kept for its first send, which a pair answers —
+  `ChatViewModelCompareTest.inANewChatCompareIsKeptForItsFirstSendWhichAPairAnswers`
+- [x] "new chat" turns compare off, from an open conversation or a new chat —
+  `ChatViewModelCompareTest.newChatTurnsCompareOffWhetherItWasPickedInANewChatOrOpen`
+- [x] A comparing conversation opens comparing, from its entry or from "recent" —
+  `ChatViewModelCompareTest.aComparingConversationOpensComparingFromItsEntryOrRecent`
+
+A pair
+
+- [x] A send while comparing is answered by a pair whose cards think, stream and finish on their
+  own, each with its latency — `ChatViewModelCompareTest.aSendWhileComparingIsAnsweredByAPairWhoseCardsFinishOnTheirOwn`
+- [x] Send waits while either card is on its way —
+  `ChatViewModelCompareTest.sendWaitsWhileEitherCardIsOnItsWay`,
+  `CompareFormatsTest.aCardDoneBesideOneOnItsWayKeepsThePairInProgress`
+- [x] A pair's cards are its sides in order, each in its own model's palette, headed by the model's
+  name and, once done, its latency; the pair's meta is "sonnet-4.5 ⇄ gpt-5 · 14:02" —
+  `CompareFormatsTest.aPairsCardsAreItsSidesInOrderEachInItsOwnModelsPalette`,
+  `CompareFormatsTest.aCardsHeaderIsItsModelThenItsLatencyOnceDoneOrInterrupted`,
+  `CompareFormatsTest.aPairsMetaIsBothShortNamesAndTheTimeWithoutLatency`
+- [x] A thinking card shows the lone caret; a streaming one its last paragraph's caret, never in
+  code; an interrupted one what it revealed, without caret or "continue with this →" —
+  `CompareFormatsTest.aThinkingCardHasTheLoneCaretAndAStreamingOneItsLastParagraphsButNeverInCode`,
+  `CompareFormatsTest.anInterruptedCardShowsWhatItRevealedWithoutCaretOrContinue`
+- [x] A pair is not selectable: no action row, read aloud, fork or copy; a card's code block still
+  copies — `ChatViewModelCompareTest.aPairIsNeitherSelectedNorReadAloudNorForkedNorCopied`,
+  `CompareFormatsTest.aPairIsNeverSelectableAndItsCardsCodeIsFoundForCopy`,
+  `CompareFormatsTest.aPairsCopyTextIsBothCardsInOrder`
+- [x] A pair that finishes is never read aloud, auto read on or off —
+  `ChatViewModelCompareTest.aPairThatFinishesIsNotReadAloudEvenWithAutoReadOn`
+- [x] A card is 86 % of the carousel inside its 16 dp gutters, so the other peeks; the carousel
+  settles on the nearer card unless a fling goes on —
+  `CompareFormatsTest.aCardIsEightySixPercentOfTheCarouselInsideItsGuttersSoTheOtherPeeks`,
+  `CompareFormatsTest.theCarouselSettlesOnTheNearerCardUnlessAFlingGoesOn`
+
+Continue with this →
+
+- [x] "continue with this →" switches the chat to that card's model alone, toasts "continuing with
+  gpt-5", keeps the pair, and the next send is a single reply —
+  `ChatViewModelCompareTest.continuingWithACardSwitchesTheChatToItsModelAloneAndToasts`
+- [x] A continue that changes nothing or fails toasts "couldn’t continue, try again" and keeps
+  comparing — `ChatViewModelCompareTest.aContinueThatChangesNothingOrFailsToastsTryAgainAndKeepsComparing`
+- [x] Only a done card continues, even while the other streams, and one continue at a time; a new
+  chat has nothing to continue — `ChatViewModelCompareTest.onlyADoneCardCanBeContinuedWithAndOnlyOnceAtATime`,
+  `ChatViewModelCompareTest.aNewChatHasNothingToContinueWith`
+- [x] Koin builds `ChatViewModel` with `CompareRepository` —
+  `ChatModuleTest.koinBuildsAChatViewModelForTheEntryItIsGiven`
+
+History
+
+- [x] A comparing conversation's row shows "⇄ gpt-5" after its model, and other rows none —
+  `HistoryUiStateTest.aComparingConversationsRowShowsTheComparedModelAsItsExtraAndOtherRowsNone`,
+  `HistoryFormatsTest.aComparingRowsExtraIsTheCompareMarkAndTheSecondModelsShortName`
+
+Previews
+
+- [x] The previews cover every state above in light and dark —
+  `ChatUiStateTest.previewsCoverEveryStateInLightAndDark`,
+  `ModelPickerUiStateTest.previewsCoverEveryVariantInLightAndDark`,
+  `HistoryUiStateTest.previewsCoverEveryStateInLightAndDark`
+
+On a device (not automatable here): the carousel's swipe and snap (a slow drag settles on the
+nearer card, a flick goes on), the 60 dp peek and the cards' equal height; each card's dot and
+caret in its own model's accent in light and dark; the compare button's 44 dp target and its
+"compare" switch, "second model" on a "◐" row, card headers as headings and "continue with
+Claude Sonnet 4.5" in TalkBack and VoiceOver, and swiping into the second card scrolling it into
+view; a long code block inside a card; the toasts over the composer.
 
 ## Data contract
 
@@ -238,6 +348,38 @@ _To be written by the feature agent._
     `"a ⇄ b · time"`, no latency. A pair is not selectable (no action row, no read aloud, no fork).
   - History row: `conversation.comparing?.let { "⇄ ${it.shortName}" }`.
 
+## UI contract
+
+What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.chat`) and
+`:feature:history`.
+
+- **ViewModel:** `ChatViewModel(…, forks, compares: CompareRepository, relay)` exposes
+  `compareActions: CompareActions` (`onToggleCompare()`, `onContinueWith(pairId, side)`).
+  `onPick(row)` applies `ModelChoice.picked(row)`; `null` keeps the sheet open. Both go through the
+  internal `ChatChoices`, which saves with `choose` in an open conversation or keeps the new chat's
+  choice. The ViewModel stays at ten functions: compare is its helper's, as `MessageActions` is.
+- **State:** the toast is `ChatToastUi(message: StringResource, args: List<String>)`, at most two
+  args; `ChatToastRelay` still carries a plain `StringResource`. `MessageUi.ComparePair(id, time,
+  sides: List<CompareSideUi>)`, `selectable = false`; `CompareSideUi(id, index, modelName,
+  modelShortName, palette, blocks, latency, interrupted, thinking, inProgress, done)`.
+  `ChatUiState.composerPlaceholder`; `chipLabel` reads compare. `ModelPickerUiState` gains
+  `compareOn`, `compareHint` and `showsCompare` (the chat variant only); `ModelPickerMark.Compare`
+  is "◐".
+- **Composables:** `ModelPickerCompareButton(on, onClick)` for the sheet's `headerAction`;
+  `ChatComposer(…, placeholder: String, …)` takes its placeholder as text;
+  `MessageActionCallbacks.onContinueWith(pairId, side)`; `CodeBlock(…, compact)` for a card.
+- **Formats:** `compareLabel(model, comparing)`, `composerPlaceholder(choice)`, `compareMeta(pair)`,
+  `compareSideLabel(side, interruptedLabel)`, `compareHint(choice)`, `compareCardWidth(viewport,
+  gutter)`, `compareSnapTarget(current, max, velocity, flingThreshold)`; History's
+  `historyCompareExtra(shortName)` and `HistoryRowUi.comparedWith` / `extra`.
+- **Row 8 (attachments):** History's line-2 extra is `HistoryRowUi.extra`, the compare one for now;
+  "1 image" joins it there. A pair's cards draw blocks only.
+- **Row 10 (auto read):** `finishedReply` never names a pair, so `autoRead` needs no compare check.
+- **Row 11 (voice):** `chipLabel` reads "sonnet-4.5 ⇄ gpt-5" while comparing; a voice chip that
+  names the model should read `ChatUiState.model` (the first model) or show the compare label on
+  purpose. A send from voice while comparing is answered by a pair, which has no read aloud: voice
+  must speak a single reply only, or say how it picks a side.
+
 ## Decided
 
 - Decided: compare lives in `ModelChoice` (`compareOn`, `compareWith`) and is persisted per
@@ -278,11 +420,39 @@ _To be written by the feature agent._
 - Decided: a new chat starts from `ModelChoice(defaultModel)`, so compare is off, as the
   prototype's `newChat` keeps it only within the session; the UI applies this. The Default model
   sheet (Settings) has no compare: its frames quirk 12 is not reproduced.
+- Decided (UI): compare's controls live in `CompareActions` (`ChatViewModel.compareActions`) and
+  choosing in the internal `ChatChoices`, so `ChatViewModel` stays at ten functions, under detekt's
+  `TooManyFunctions` (11). Picking the second model is a sheet row, so it stays `onPick(row)`.
+- Decided (UI): the carousel is a `Row` under `horizontalScroll` with a snap fling of two
+  positions, not a `LazyRow` or pager: two cards need no laziness, and only a non-lazy row can
+  measure their intrinsic height, so both cards are as tall as the taller one, as the prototype's
+  flex `stretch`. A release settles on the nearer card; a fling faster than 400 dp/s goes on in its
+  direction (`scroll-snap-type:x mandatory`).
+- Decided (UI): a card is 86 % of the width inside the 16 dp gutters, 318 of a 402 screen, with
+  8 dp between, so about 60 dp of the other card peeks; the pair bleeds to the screen's edges
+  (`margin:0 -16px`) and its meta row keeps the gutter.
+- Decided (UI): each card is drawn in its own model's `ChatTheme` palette, so its dot and caret
+  wear that model's accent; the chat, the chip and the pair's meta dot keep the first model's.
+- Decided (UI): a card's header is the model's full name, then " · 1.9s" once done or
+  " · interrupted"; a card's text is 14 px (`bodyMedium`), its code block compact (28 dp header,
+  12 sp code), and code has no caret, as the prototype's cards. "continue with this →" is the
+  `:core:ui` small outlined button, 30 dp tall rather than the frame's 28.
+- Decided (UI): after "continue with this →" both cards stay as they were, buttons included, as
+  the prototype's `p.done` draws them; the chip follows the conversation, and a tap on either
+  button again continues with that card's model. A continue that changes nothing or fails toasts
+  "couldn’t continue, try again", which the prototype has no case for.
+- Decided (UI): to screen readers the carousel is a collection of two, each card's header a
+  heading; "continue with this →" reads "continue with Claude Sonnet 4.5"; the compare button is a
+  44 dp "compare" switch; a "◐" row adds "second model". Moving into the second card scrolls it into
+  view (checked on a device).
+- Decided (UI): the empty state does not change while comparing, as the prototype's; only the chip
+  and the placeholder say so. The placeholder is the pure `composerPlaceholder`, not a string
+  resource, as the chip is.
+- Decided (UI): History's extra is drawn after the short name in line 2, mono 11 `--fg3`, and
+  reads "compared with gpt-5" to screen readers.
 
 ## Out of scope
 
-- The compare cards, carousel, picker states, toasts and History's extra drawing: the feature
-  agent's part of this row.
 - Comparing more than two models, or a persona in a compare: the prototype has neither.
 - Selecting, copying, reading aloud or forking a pair: it has no action row.
 - Auto read of a pair: the prototype never auto-reads a pair (row 10).

@@ -11,6 +11,7 @@ import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntryProvider
 import br.com.weslleycampos.chat.core.ui.ChatTheme
+import br.com.weslleycampos.chat.feature.chat.picker.ModelPickerCompareButton
 import br.com.weslleycampos.chat.feature.chat.picker.ModelPickerSheet
 import kotlinx.coroutines.launch
 import kotlinx.serialization.modules.SerializersModule
@@ -37,7 +38,8 @@ class ChatEntryProvider : EntryProvider {
                 }
             }
             val actions = viewModel.messageActions
-            val messageActions = remember(actions, copyToClipboard) {
+            val compare = viewModel.compareActions
+            val messageActions = remember(actions, compare, copyToClipboard) {
                 MessageActionCallbacks(
                     onSelect = actions::onSelect,
                     onCopy = { message -> actions.onCopy(message, copyToClipboard) },
@@ -46,6 +48,7 @@ class ChatEntryProvider : EntryProvider {
                     onRetry = actions::onRetry,
                     onPlayPause = actions.player::onPlayPause,
                     onStopReading = actions.player::onStop,
+                    onContinueWith = compare::onContinueWith,
                 )
             }
             // Leaving the chat, for History, another app or a rotation, closes the action row and
@@ -71,13 +74,17 @@ class ChatEntryProvider : EntryProvider {
                     onDismissForkBanner = actions::onDismissForkBanner,
                     messageActions = messageActions,
                 )
-                // Row 7 adds the compare button to the sheet's `headerAction`.
                 ModelPickerSheet(
                     open = uiState.modelPickerOpen,
                     state = modelPicker,
                     onDismissRequest = viewModel::onDismissModelPicker,
                     onPick = viewModel::onPick,
                     onToggleFavorite = viewModel::onToggleFavorite,
+                    headerAction = {
+                        if (modelPicker.showsCompare) {
+                            ModelPickerCompareButton(on = modelPicker.compareOn, onClick = compare::onToggleCompare)
+                        }
+                    },
                 )
             }
         }

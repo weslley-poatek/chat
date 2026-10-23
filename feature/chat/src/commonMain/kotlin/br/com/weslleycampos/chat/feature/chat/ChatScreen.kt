@@ -17,6 +17,7 @@ import br.com.weslleycampos.chat.core.ui.ChatTheme
 import br.com.weslleycampos.chat.core.ui.components.ChatToast
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
+import br.com.weslleycampos.chat.data.chat.models.CompareSide
 import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
@@ -25,6 +26,7 @@ import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
+import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_continuing
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_forked
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_send_failed
 import org.jetbrains.compose.resources.stringResource
@@ -36,9 +38,11 @@ import kotlin.time.Instant
  * The Chat frame (frames.md §1.2–1.7): the top bar, a fork's banner, the thread or, for a new chat,
  * the empty state, and the composer. It sits inside the safe area and above the keyboard, which
  * shortens the thread rather than covering it. The toast floats over the thread's bottom edge. A
- * tap on a message, its action row and the read-aloud bar call [messageActions].
+ * tap on a message, its action row, the read-aloud bar and a compare card's "continue with this →"
+ * call [messageActions].
  *
- * The accent is the [ChatUiState.model]'s: wrap the screen in `ChatTheme(palette = uiState.model.palette)`.
+ * The accent is the [ChatUiState.model]'s, the primary model's while comparing: wrap the screen in
+ * `ChatTheme(palette = uiState.model.palette)`. Each compare card wears its own model's.
  * The Model picker sheet the chip opens is [br.com.weslleycampos.chat.feature.chat.picker.ModelPickerSheet],
  * shown next to the screen.
  */
@@ -95,7 +99,7 @@ fun ChatScreen(
                 )
             }
             ChatToast(
-                message = uiState.toast?.let { stringResource(it) },
+                message = uiState.toast?.let { toastText(it) },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     // The prototype's toast sits 84 px over the bottom edge: about 24 over the composer.
@@ -105,7 +109,7 @@ fun ChatScreen(
         ChatComposer(
             draft = uiState.draft,
             draftRows = uiState.draftRows,
-            modelShortName = uiState.model.shortName,
+            placeholder = uiState.composerPlaceholder,
             canSend = uiState.canSend,
             onDraftChange = onDraftChange,
             onSend = onSend,
@@ -115,11 +119,25 @@ fun ChatScreen(
     }
 }
 
+/**
+ * The toast's text, with its [ChatToastUi.args] in the placeholders: none, one ("continuing with
+ * gpt-5") or two ("comparing sonnet-4.5 ⇄ gpt-5"), which is as many as a chat toast has.
+ */
+@Composable
+private fun toastText(toast: ChatToastUi): String = when (toast.args.size) {
+    0 -> stringResource(toast.message)
+    1 -> stringResource(toast.message, toast.args[0])
+    else -> stringResource(toast.message, toast.args[0], toast.args[1])
+}
+
 private const val PreviewConversationId = 1L
 private const val PreviewUserTime = "14:01"
 private const val PreviewReplyTime = "14:02"
 private val PreviewLatency = 800.milliseconds
 private val PreviewGemini = ModelCatalogue["gemini"]
+private val PreviewGpt5 = ModelCatalogue["gpt5"]
+private val PreviewCompare = ModelChoice(ModelCatalogue.default, compareOn = true, compareWith = PreviewGpt5)
+private val PreviewSecondLatency = 1900.milliseconds
 private val PreviewReviewer = PersonaPresets.personas.first()
 private val PreviewFork = ForkOrigin(sourceTitle = "useDebounce hook with leading edge", messageNumber = 2)
 
@@ -166,7 +184,48 @@ private val PreviewReplyBlocks = listOf(
     Block.Paragraph("If it still reads stale, log value inside the callback and check the render count."),
 )
 
+/** The prototype's first alternative reply, `REPLY_ALT[0]`: the compared model's card. */
+private val PreviewAltBlocks = listOf(
+    Block.Paragraph(
+        "Most likely a stale closure. Include every value the effect reads in its dependency array, " +
+            "and return the cleanup:",
+    ),
+    Block.Code(
+        language = "ts",
+        text = "useEffect(() => {\n" +
+            "  const t = setTimeout(() => setDebounced(value), delay);\n" +
+            "  return () => clearTimeout(t);\n" +
+            "}, [value, delay]);",
+    ),
+)
+
 private fun previewUser(id: Long, text: String) = MessageUi.User(id = id, time = PreviewUserTime, text = text)
+
+/** A pair of sonnet's [first] blocks and gpt-5's [second], each with its status. */
+private fun previewPair(
+    first: Pair<ReplyStatus, List<Block>>,
+    second: Pair<ReplyStatus, List<Block>>,
+) = Message.ComparePair(
+    id = 2,
+    conversationId = PreviewConversationId,
+    sides = listOf(
+        CompareSide(
+            id = 2,
+            model = ModelCatalogue.default,
+            blocks = first.second,
+            status = first.first,
+            latency = PreviewLatency.takeIf { first.first == ReplyStatus.DONE },
+        ),
+        CompareSide(
+            id = 3,
+            model = PreviewGpt5,
+            blocks = second.second,
+            status = second.first,
+            latency = PreviewSecondLatency.takeIf { second.first == ReplyStatus.DONE },
+        ),
+    ),
+    createdAt = Instant.fromEpochMilliseconds(0),
+).toUi(time = PreviewReplyTime)
 
 private fun previewReply(
     id: Long,
@@ -193,7 +252,11 @@ private fun previewThread(
     conversationId = PreviewConversationId,
     choice = choice,
     messages = messages.toList(),
-    replyInProgress = (messages.lastOrNull() as? MessageUi.Assistant)?.inProgress == true,
+    replyInProgress = when (val last = messages.lastOrNull()) {
+        is MessageUi.Assistant -> last.inProgress
+        is MessageUi.ComparePair -> last.inProgress
+        is MessageUi.User, null -> false
+    },
 )
 
 private const val PreviewMultiLineDraft = "Add a leading option.\nKeep it generic,\nand cancel on unmount."
@@ -211,6 +274,10 @@ class ChatScreenPreviewParameterProvider : PreviewParameterProvider<ChatPreviewC
     private val streaming = previewThread(
         question,
         previewReply(id = 2, status = ReplyStatus.STREAMING, blocks = PreviewReplyBlocks.take(1)),
+    )
+    private val comparedDone = previewPair(
+        first = ReplyStatus.DONE to PreviewReplyBlocks,
+        second = ReplyStatus.DONE to PreviewAltBlocks,
     )
     private val states = listOf(
         "Empty" to ChatUiState(),
@@ -251,7 +318,7 @@ class ChatScreenPreviewParameterProvider : PreviewParameterProvider<ChatPreviewC
         "Toast" to ChatUiState(
             recent = PreviewRecent,
             draft = "Add a leading option",
-            toast = FeatureChatRes.string.chat_toast_send_failed,
+            toast = ChatToastUi(FeatureChatRes.string.chat_toast_send_failed),
         ),
         "Copied · Gemini" to previewThread(
             question,
@@ -266,7 +333,27 @@ class ChatScreenPreviewParameterProvider : PreviewParameterProvider<ChatPreviewC
             readAloud = ReadAloudUi(messageId = 2, ticks = PreviewPausedTicks, playing = false),
         ),
         "Fork banner" to done.copy(forkOrigin = PreviewFork),
-        "Toast · forked" to done.copy(forkOrigin = PreviewFork, toast = FeatureChatRes.string.chat_toast_forked),
+        "Toast · forked" to done.copy(
+            forkOrigin = PreviewFork,
+            toast = ChatToastUi(FeatureChatRes.string.chat_toast_forked),
+        ),
+        "Compare · empty" to ChatUiState(choice = PreviewCompare, recent = PreviewRecent),
+        "Compare · thinking" to previewThread(
+            question,
+            previewPair(first = ReplyStatus.THINKING to emptyList(), second = ReplyStatus.THINKING to emptyList()),
+            choice = PreviewCompare,
+        ).copy(draft = "Add a leading option"),
+        "Compare · streaming" to previewThread(
+            question,
+            previewPair(
+                first = ReplyStatus.STREAMING to PreviewReplyBlocks.take(3),
+                second = ReplyStatus.DONE to PreviewAltBlocks,
+            ),
+            choice = PreviewCompare,
+        ),
+        "Compare · done" to previewThread(question, comparedDone, choice = PreviewCompare),
+        "Compare · continued" to previewThread(question, comparedDone, choice = ModelChoice(PreviewGpt5))
+            .copy(toast = ChatToastUi(FeatureChatRes.string.chat_toast_continuing, listOf(PreviewGpt5.shortName))),
     )
 
     override val values: Sequence<ChatPreviewCase> = sequence {

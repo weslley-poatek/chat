@@ -11,6 +11,7 @@ import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import br.com.weslleycampos.chat.feature.chat.picker.ModelPickerVariant
 import br.com.weslleycampos.chat.feature.chat.picker.modelPickerUiState
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
+import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_continuing
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_forked
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_send_failed
 import kotlin.test.Test
@@ -279,6 +280,11 @@ class ChatUiStateTest {
             "Reading · paused",
             "Fork banner",
             "Toast · forked",
+            "Compare · empty",
+            "Compare · thinking",
+            "Compare · streaming",
+            "Compare · done",
+            "Compare · continued",
         )
 
         assertEquals(names + names, cases.map { it.name })
@@ -303,7 +309,7 @@ class ChatUiStateTest {
         assertTrue(states.getValue("Composer · multi-line draft").draftRows > 1)
         assertFalse(states.getValue("Send disabled").canSend)
         assertTrue(states.getValue("Send disabled").draft.isNotEmpty())
-        assertEquals(FeatureChatRes.string.chat_toast_send_failed, states.getValue("Toast").toast)
+        assertEquals(FeatureChatRes.string.chat_toast_send_failed, states.getValue("Toast").toast?.message)
         val copied = states.getValue("Copied · Gemini")
         assertEquals(Gemini, copied.model)
         val copiedBlock = assertNotNull(copied.copiedBlock)
@@ -322,6 +328,26 @@ class ChatUiStateTest {
         assertNotNull(states.getValue("Fork banner").forkBanner)
         val forked = states.getValue("Toast · forked")
         assertNotNull(forked.forkBanner)
-        assertEquals(FeatureChatRes.string.chat_toast_forked, forked.toast)
+        assertEquals(FeatureChatRes.string.chat_toast_forked, forked.toast?.message)
+        val compareEmpty = states.getValue("Compare · empty")
+        assertTrue(compareEmpty.showsEmptyState)
+        assertEquals("sonnet-4.5 ⇄ gpt-5", compareEmpty.chipLabel)
+        assertEquals("ask sonnet-4.5 and gpt-5…", compareEmpty.composerPlaceholder)
+        val thinkingPair = assertIs<MessageUi.ComparePair>(states.getValue("Compare · thinking").messages.last())
+        assertTrue(thinkingPair.sides.all { it.thinking })
+        assertFalse(states.getValue("Compare · thinking").canSend)
+        val streaming = states.getValue("Compare · streaming")
+        val streamingPair = assertIs<MessageUi.ComparePair>(streaming.messages.last())
+        assertTrue(streaming.replyInProgress)
+        assertEquals(listOf(false, true), streamingPair.sides.map { it.done })
+        val done = states.getValue("Compare · done")
+        val donePair = assertIs<MessageUi.ComparePair>(done.messages.last())
+        assertFalse(done.replyInProgress)
+        assertTrue(donePair.sides.all { it.done })
+        assertEquals(listOf(ModelCatalogue.default.palette, Gpt5.palette), donePair.sides.map { it.palette })
+        val continued = states.getValue("Compare · continued")
+        assertEquals("GPT-5", continued.chipLabel)
+        assertEquals(listOf("gpt-5"), continued.toast?.args)
+        assertEquals(FeatureChatRes.string.chat_toast_continuing, continued.toast?.message)
     }
 }

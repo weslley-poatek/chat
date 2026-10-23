@@ -1,10 +1,12 @@
 package br.com.weslleycampos.chat.feature.chat
 
 import br.com.weslleycampos.chat.data.chat.ChatRepository
+import br.com.weslleycampos.chat.data.chat.CompareRepository
 import br.com.weslleycampos.chat.data.chat.ForkRepository
 import br.com.weslleycampos.chat.data.chat.ModelRepository
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
+import br.com.weslleycampos.chat.data.chat.models.CompareSide
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
@@ -65,10 +67,28 @@ internal val ReplyLatency: Duration = 800.milliseconds
 /** From the send to the reply being done. */
 internal val ReplyTime: Duration = ThinkingTime + TickTime * ReplyBlocks.size
 
+/** The compared model's card: the prototype's first alternative answer. Block 1 is the code. */
+internal val AltBlocks = listOf(
+    Block.Paragraph("Most likely a stale closure. Include every value the effect reads in its dependency array:"),
+    Block.Code(language = "ts", text = "}, [value, delay]);"),
+)
+internal val AltLatency: Duration = 1900.milliseconds
+
+/** From the send to a pair's second card being done; the first is done at [ReplyTime]. */
+internal val AltTime: Duration = ThinkingTime + TickTime * AltBlocks.size
+
+/** The reply on its way at the end of a thread, a pair's either side included, as the real one checks. */
+private fun List<Message>.replyOnItsWay(): Boolean = when (val last = lastOrNull()) {
+    is Message.Assistant -> last.status.isInProgress
+    is Message.ComparePair -> last.isInProgress
+    is Message.User, null -> false
+}
+
 /**
  * An in-memory [ChatRepository] that keeps the real one's contract: [send] saves the message and a
- * thinking reply, returns the conversation's id, and plays the reply on [scope]. [answer], when
- * set, replaces all of that.
+ * thinking reply, returns the conversation's id, and plays the reply on [scope]. While the
+ * conversation compares, the reply is a pair: its first card plays [ReplyBlocks] and its second
+ * [AltBlocks], each done on its own. [answer], when set, replaces all of that.
  */
 internal class FakeChatRepository(private val scope: CoroutineScope? = null) : ChatRepository {
     val conversations = MutableStateFlow<List<Conversation>>(emptyList())
@@ -169,7 +189,9 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
 
     /**
      * A conversation of [model], or of [persona] on its model, with one done exchange: the user's
-     * [title], then [ReplyBlocks] written by the same. With [fork], it is a fork from there.
+     * [title], then [ReplyBlocks] written by the same. With [fork], it is a fork from there. With
+     * [comparing], it compares [model] with that model, and the reply is a done pair: [ReplyBlocks]
+     * beside [AltBlocks].
      */
     fun seed(
         title: String,
@@ -177,6 +199,7 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         persona: Persona? = null,
         updatedAt: Instant = Now,
         fork: ForkOrigin? = null,
+        comparing: ChatModel? = null,
     ): Conversation {
         val conversation = Conversation(
             id = nextId++,
@@ -186,21 +209,75 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
             createdAt = updatedAt,
             updatedAt = updatedAt,
             fork = fork,
+            compareOn = comparing != null,
+            compareWith = comparing,
         )
         conversations.update { it + conversation }
         val user = Message.User(id = nextId++, conversationId = conversation.id, text = title, createdAt = updatedAt)
-        val reply = Message.Assistant(
-            id = nextId++,
-            conversationId = conversation.id,
-            model = conversation.model,
-            persona = persona,
-            blocks = ReplyBlocks,
-            status = ReplyStatus.DONE,
-            latency = ReplyLatency,
-            createdAt = updatedAt,
-        )
+        val reply = if (comparing == null) {
+            Message.Assistant(
+                id = nextId++,
+                conversationId = conversation.id,
+                model = conversation.model,
+                persona = persona,
+                blocks = ReplyBlocks,
+                status = ReplyStatus.DONE,
+                latency = ReplyLatency,
+                createdAt = updatedAt,
+            )
+        } else {
+            pair(conversation = conversation, second = comparing, tick = ReplyBlocks.size + 1, createdAt = updatedAt)
+                .also { nextId += it.sides.size }
+        }
         messages.update { it + (conversation.id to listOf(user, reply)) }
         return conversation
+    }
+
+    /**
+     * The pair answering [conversation] with its model beside [second], [tick] ticks after its
+     * thinking: each card shows that many blocks while it streams, and is done the tick after its
+     * last. Its id is its first card's, the next free one, and the second card's follows it.
+     */
+    private fun pair(conversation: Conversation, second: ChatModel, tick: Int, createdAt: Instant = Now) =
+        Message.ComparePair(
+            id = nextId,
+            conversationId = conversation.id,
+            sides = listOf(
+                side(
+                    id = nextId,
+                    model = conversation.model,
+                    blocks = ReplyBlocks,
+                    tick = tick,
+                    latency = ReplyLatency,
+                ),
+                side(id = nextId + 1, model = second, blocks = AltBlocks, tick = tick, latency = AltLatency),
+            ),
+            createdAt = createdAt,
+        )
+
+    private fun side(id: Long, model: ChatModel, blocks: List<Block>, tick: Int, latency: Duration) = CompareSide(
+        id = id,
+        model = model,
+        blocks = blocks.take(tick),
+        status = when {
+            tick == 0 -> ReplyStatus.THINKING
+            tick <= blocks.size -> ReplyStatus.STREAMING
+            else -> ReplyStatus.DONE
+        },
+        latency = latency.takeIf { tick > blocks.size },
+    )
+
+    /**
+     * Like the real one: the pair's side [side] continues on its own once done, with its model, no
+     * persona and compare off; anything else changes nothing.
+     */
+    fun continueWith(conversationId: Long, pairMessageId: Long, side: Int): Boolean {
+        val pair = messages.value[conversationId].orEmpty()
+            .firstOrNull { it.id == pairMessageId } as? Message.ComparePair ?: return false
+        val kept = pair.sides.getOrNull(side)?.takeIf { it.status == ReplyStatus.DONE } ?: return false
+        return rewrite(conversationId, { true }) {
+            it.copy(model = kept.model, persona = null, compareOn = false, compareWith = null)
+        }
     }
 
     /**
@@ -263,8 +340,12 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
             conversations.value.firstOrNull { it.id == conversationId } ?: return null
         }
         val thread = messages.value[conversation.id].orEmpty()
-        if ((thread.lastOrNull() as? Message.Assistant)?.status?.isInProgress == true) return null
+        if (thread.replyOnItsWay()) return null
         val user = Message.User(id = nextId++, conversationId = conversation.id, text = text, createdAt = Now)
+        conversation.comparing?.let { second ->
+            playPair(conversation = conversation, second = second, thread = thread + user)
+            return conversation.id
+        }
         val replyId = nextId++
         fun reply(blocks: List<Block>, status: ReplyStatus, latency: Duration? = null) = Message.Assistant(
             id = replyId,
@@ -288,7 +369,35 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         return conversation.id
     }
 
-    private fun update(reply: Message.Assistant) = messages.update { all ->
+    /** Saves the thinking pair after [thread] and plays both its cards a block a tick, each done on its own. */
+    private fun playPair(conversation: Conversation, second: ChatModel, thread: List<Message>) {
+        val thinking = pair(conversation = conversation, second = second, tick = 0)
+        nextId += thinking.sides.size
+        messages.update { it + (conversation.id to thread + thinking) }
+        checkNotNull(scope) { "Pass a scope to play replies" }.launch {
+            delay(ThinkingTime)
+            var tick = 1
+            while (true) {
+                val current = thinking.copy(
+                    sides = thinking.sides.mapIndexed { index, side ->
+                        side(
+                            id = side.id,
+                            model = side.model,
+                            blocks = if (index == 0) ReplyBlocks else AltBlocks,
+                            tick = tick,
+                            latency = if (index == 0) ReplyLatency else AltLatency,
+                        )
+                    },
+                )
+                update(current)
+                if (!current.isInProgress) break
+                delay(TickTime)
+                tick++
+            }
+        }
+    }
+
+    private fun update(reply: Message) = messages.update { all ->
         all + (reply.conversationId to all.getValue(reply.conversationId).map { if (it.id == reply.id) reply else it })
     }
 }
@@ -314,6 +423,22 @@ internal class FakeForkRepository(private val chats: FakeChatRepository = FakeCh
     override suspend fun dismissForkBanner(conversationId: Long): Boolean {
         dismissals += conversationId
         return chats.dismissForkBanner(conversationId)
+    }
+}
+
+/**
+ * A [CompareRepository] on [chats]' conversations that keeps the real one's contract. [answer],
+ * when set, replaces the continue.
+ */
+internal class FakeCompareRepository(private val chats: FakeChatRepository = FakeChatRepository()) : CompareRepository {
+    /** Every `continueWith`: the conversation, the pair and the side, in order. */
+    val continues = mutableListOf<Triple<Long, Long, Int>>()
+    var answer: (suspend (conversationId: Long, pairMessageId: Long, side: Int) -> Boolean)? = null
+
+    override suspend fun continueWith(conversationId: Long, pairMessageId: Long, side: Int): Boolean {
+        continues += Triple(conversationId, pairMessageId, side)
+        answer?.let { return it(conversationId, pairMessageId, side) }
+        return chats.continueWith(conversationId = conversationId, pairMessageId = pairMessageId, side = side)
     }
 }
 

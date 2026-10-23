@@ -7,6 +7,7 @@ import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntryProvider
 import br.com.weslleycampos.chat.data.chat.ChatRepository
+import br.com.weslleycampos.chat.data.chat.CompareRepository
 import br.com.weslleycampos.chat.data.chat.ForkRepository
 import br.com.weslleycampos.chat.data.chat.ModelRepository
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
@@ -64,7 +65,7 @@ class ChatModuleTest {
         val viewModel = koin.get<ChatViewModel> { parametersOf(ChatEntry(conversationId = 7)) }
 
         assertSame(relay, koin.get<ChatToastRelay>())
-        assertEquals(FeatureChatRes.string.chat_toast_forked, viewModel.uiState.value.toast)
+        assertEquals(FeatureChatRes.string.chat_toast_forked, viewModel.uiState.value.toast?.message)
         assertNull(relay.take())
     }
 
@@ -90,6 +91,9 @@ internal class FakeAppModule {
 
     @Single
     fun forks(): ForkRepository = FakeForkRepository()
+
+    @Single
+    fun compares(): CompareRepository = FakeCompareRepository()
 
     @Single
     fun navigator(): Navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(ChatEntry()) })

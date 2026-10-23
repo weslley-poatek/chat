@@ -23,11 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.LineBreak
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
 import br.com.weslleycampos.chat.core.ui.ChatTheme
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
 import br.com.weslleycampos.chat.feature.chat.resources.chat_message_hide_actions
@@ -42,9 +38,9 @@ private const val MessageFadeInMillis = 200
 
 /**
  * The thread (frame lines 119 and 142–217): the messages, oldest first, the [selectedMessage]'s
- * action row and the read-aloud bar under the reply [readAloud] reads. Whenever the messages
- * change, a send and every streaming tick included, or the thread gets shorter under the keyboard,
- * it snaps to its end, as the prototype's `scrollTop = scrollHeight`.
+ * action row, the read-aloud bar under the reply [readAloud] reads, and each compare pair's cards.
+ * Whenever the messages change, a send and every streaming tick included, or the thread gets
+ * shorter under the keyboard, it snaps to its end, as the prototype's `scrollTop = scrollHeight`.
  */
 @Composable
 internal fun ChatThread(
@@ -100,7 +96,8 @@ private suspend fun LazyListState.scrollToEnd() {
 /**
  * One message: its meta row and its bubble or blocks, which a tap selects (the prototype's
  * `m.select`, "Show actions" to screen readers), then a reply's read-aloud bar while it is read
- * and the action row while the message is selected.
+ * and the action row while the message is selected. A compare pair is its meta row over its cards,
+ * which bleed to the screen's edges, and nothing selects it.
  */
 @Composable
 private fun ChatMessage(
@@ -123,12 +120,14 @@ private fun ChatMessage(
         ),
         onClick = { actions.onSelect(message.id) },
     )
+    // The prototype's `padding:10px 16px 2px`; a pair's carousel has `margin:0 -16px` (line 187).
+    val gutter = if (message is MessageUi.ComparePair) 0.dp else ChatTheme.spacing.xxLarge
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(
-                start = ChatTheme.spacing.xxLarge,
-                end = ChatTheme.spacing.xxLarge,
+                start = gutter,
+                end = gutter,
                 top = ChatTheme.spacing.medium,
                 bottom = ChatTheme.spacing.xxxSmall,
             ),
@@ -159,6 +158,12 @@ private fun ChatMessage(
                     ReadAloudBar(reading = reading, onPlayPause = actions.onPlayPause, onStop = actions.onStopReading)
                 }
             }
+            is MessageUi.ComparePair -> ComparePairBody(
+                pair = message,
+                copiedBlock = copiedBlock,
+                onCopyCode = onCopyCode,
+                onContinueWith = actions.onContinueWith,
+            )
         }
         if (selected && message.selectable) MessageActionRow(message = message, copied = copied, actions = actions)
     }
@@ -177,11 +182,14 @@ private fun Modifier.messageTap(enabled: Boolean, label: String, onClick: () -> 
         this
     }
 
-/** The meta row: a 6 px accent circle for a reply, a 6 px square for the user, then the meta text. */
+/**
+ * The meta row: a 6 px accent circle for a reply or a compare pair, a 6 px square for the user, then
+ * the meta text. The circle is the chat's accent, the model that answers now (frames quirk 2).
+ */
 @Composable
-private fun MetaRow(text: String, assistant: Boolean) {
+internal fun MetaRow(text: String, assistant: Boolean, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier.padding(bottom = ChatTheme.spacing.xSmall),
+        modifier = modifier.padding(bottom = ChatTheme.spacing.xSmall),
         horizontalArrangement = Arrangement.spacedBy(ChatTheme.spacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -219,76 +227,12 @@ private fun AssistantBody(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(ChatTheme.spacing.medium)) {
-        for (block in message.blocks) {
-            when (block) {
-                is BlockUi.Paragraph -> Paragraph(block)
-                is BlockUi.NumberedList -> NumberedList(block)
-                is BlockUi.Code -> CodeBlock(
-                    block = block,
-                    copied = block.key == copiedBlock,
-                    onCopy = { onCopyCode(block.key) },
-                )
-            }
-        }
+        ReplyBlocks(
+            blocks = message.blocks,
+            copiedBlock = copiedBlock,
+            onCopyCode = onCopyCode,
+            textStyle = ChatTheme.typography.bodyLarge,
+        )
         if (message.thinking) ThinkingCaret()
     }
-}
-
-@Composable
-private fun Paragraph(block: BlockUi.Paragraph) {
-    val style = ChatTheme.typography.bodyLarge.copy(lineBreak = LineBreak.Paragraph)
-    if (!block.caret) {
-        Text(text = block.text, style = style, color = ChatTheme.colors.text.primary)
-        return
-    }
-    val alpha by caretAlpha(StreamingCaretBlinkMillis)
-    val caret = caretStyle(alpha)
-    Text(
-        text = buildAnnotatedString {
-            append(block.text)
-            withStyle(caret) { append(Caret) }
-        },
-        style = style,
-        color = ChatTheme.colors.text.primary,
-    )
-}
-
-@Composable
-private fun NumberedList(block: BlockUi.NumberedList) {
-    val text = ChatTheme.typography.bodyLarge
-    val number = text.copy(fontFamily = ChatTheme.typography.input.fontFamily)
-    Column(verticalArrangement = Arrangement.spacedBy(ChatTheme.spacing.xxSmall)) {
-        for (item in block.items) {
-            Row(horizontalArrangement = Arrangement.spacedBy(ChatTheme.spacing.medium)) {
-                Text(
-                    text = item.number,
-                    modifier = Modifier.alignByBaseline(),
-                    style = number,
-                    color = ChatTheme.colors.text.tertiary,
-                )
-                Text(
-                    text = item.text,
-                    modifier = Modifier
-                        .weight(1f)
-                        .alignByBaseline(),
-                    style = text.copy(lineBreak = LineBreak.Paragraph),
-                    color = ChatTheme.colors.text.primary,
-                )
-            }
-        }
-    }
-}
-
-/** The prototype's `thinking`: a lone accent caret, blinking every 0.8 s. */
-@Composable
-private fun ThinkingCaret() {
-    val alpha by caretAlpha(ThinkingCaretBlinkMillis)
-    Text(
-        text = Caret,
-        modifier = Modifier
-            .graphicsLayer { this.alpha = alpha }
-            .clearAndSetSemantics {},
-        style = ChatTheme.typography.labelMedium,
-        color = ChatTheme.colors.accent.primary,
-    )
 }

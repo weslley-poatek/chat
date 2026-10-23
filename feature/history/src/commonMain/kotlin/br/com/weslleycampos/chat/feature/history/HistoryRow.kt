@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import br.com.weslleycampos.chat.core.ui.ChatTheme
 import br.com.weslleycampos.chat.core.ui.theme.ChatColors
 import br.com.weslleycampos.chat.feature.history.resources.FeatureHistoryRes
+import br.com.weslleycampos.chat.feature.history.resources.history_compared_with
 import br.com.weslleycampos.chat.feature.history.resources.history_section_pinned
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
@@ -144,7 +145,10 @@ private suspend fun DraggableState.settle(from: Float, to: Float, onValue: (Floa
     }
 }
 
-/** The title line and the model line, in the screen's colour over the actions. */
+/**
+ * The title line and the model line, in the screen's colour over the actions. The model line's
+ * extra, "⇄ gpt-5", reads "compared with gpt-5" to screen readers.
+ */
 @Composable
 private fun RowContent(
     row: HistoryRowUi,
@@ -215,6 +219,19 @@ private fun RowContent(
                 color = ChatTheme.colors.text.tertiary,
                 maxLines = 1,
             )
+            row.extra?.let { extra ->
+                val description = stringResource(
+                    FeatureHistoryRes.string.history_compared_with,
+                    row.comparedWith.orEmpty(),
+                )
+                Text(
+                    text = extra,
+                    modifier = Modifier.semantics { contentDescription = description },
+                    style = ChatTheme.typography.labelSmall,
+                    color = ChatTheme.colors.text.tertiary,
+                    maxLines = 1,
+                )
+            }
             Spacer(modifier = Modifier.weight(1f))
             Text(text = row.time, style = ChatTheme.typography.labelSmall, color = ChatTheme.colors.text.tertiary)
         }

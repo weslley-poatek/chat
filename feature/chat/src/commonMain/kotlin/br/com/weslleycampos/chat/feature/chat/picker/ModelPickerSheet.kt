@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -66,6 +67,7 @@ import br.com.weslleycampos.chat.feature.chat.HairlineWidth
 import br.com.weslleycampos.chat.feature.chat.palette
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
 import br.com.weslleycampos.chat.feature.chat.resources.model_picker_all_models
+import br.com.weslleycampos.chat.feature.chat.resources.model_picker_compared
 import br.com.weslleycampos.chat.feature.chat.resources.model_picker_favorite
 import br.com.weslleycampos.chat.feature.chat.resources.model_picker_favorites
 import br.com.weslleycampos.chat.feature.chat.resources.model_picker_new_persona
@@ -109,8 +111,11 @@ private const val Plus = "+"
  * `ModelRepository.setDefaultModel`. Either way the caller closes the sheet by setting [open] to
  * `false`. Favorites are `ModelRepository.setFavorite(model, model !in favorites)`.
  *
- * [headerAction] sits at the end of the header, opposite the title: row 7's compare button.
- * The mark and nothing else is in the accent, so wrap the sheet in the `ChatTheme` of what answers.
+ * [headerAction] sits at the end of the header, opposite the title: the chat passes
+ * [ModelPickerCompareButton] while [ModelPickerUiState.showsCompare], which turns compare on and off
+ * without closing the sheet; while it is on, [ModelPickerUiState.compareHint] shows under the
+ * header. The marks and the compare button "on" are all that is in the accent, so wrap the sheet in
+ * the `ChatTheme` of what answers.
  */
 @Composable
 fun ModelPickerSheet(
@@ -164,6 +169,7 @@ fun ModelPickerContent(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Header(title = stringResource(state.variant.title), action = headerAction)
+        state.compareHint?.let { hint -> ModelPickerCompareHint(text = hint) }
         Column(
             modifier = Modifier
                 .weight(weight = 1f, fill = false)
@@ -192,19 +198,17 @@ fun ModelPickerContent(
     }
 }
 
-/** The title, 16 px 600, and the compare slot; as tall as row 7's 30 px compare button. */
+/**
+ * The title, 16 px 600, and the compare slot: 44 tall, the prototype's 30 px compare button inside
+ * `padding:6px 16px 8px`, so the button's target can take the whole height.
+ */
 @Composable
 private fun Header(title: String, action: @Composable () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(
-                start = ChatTheme.spacing.xxLarge,
-                end = ChatTheme.spacing.xxLarge,
-                top = ChatTheme.spacing.xSmall,
-                bottom = ChatTheme.spacing.small,
-            )
-            .heightIn(min = ChatTheme.sizes.large),
+            .padding(horizontal = ChatTheme.spacing.xxLarge)
+            .heightIn(min = ChatTheme.sizes.xxLarge),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -260,6 +264,7 @@ private fun PickerRow(row: ModelPickerRow, onPick: () -> Unit, onToggleFavorite:
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val label = "${row.name}, ${row.meta}"
+    val compared = stringResource(FeatureChatRes.string.model_picker_compared)
     Box(modifier = Modifier.fillMaxWidth().heightIn(min = RowMinHeight)) {
         Box(
             modifier = Modifier
@@ -269,6 +274,7 @@ private fun PickerRow(row: ModelPickerRow, onPick: () -> Unit, onToggleFavorite:
                 .semantics {
                     contentDescription = label
                     selected = row.mark == ModelPickerMark.Active
+                    if (row.mark == ModelPickerMark.Compare) stateDescription = compared
                 },
         )
         Row(
@@ -394,7 +400,8 @@ data class ModelPickerPreviewCase(
 
 /**
  * Every state of the Model picker frame, in light and dark, each in the accent of what answers:
- * the chat sheet on a model, on a persona and with no favorites, and Settings' default sheet.
+ * the chat sheet on a model, on a persona, with no favorites, with compare on before a second
+ * model is picked and with one, and Settings' default sheet.
  */
 class ModelPickerPreviewParameterProvider : PreviewParameterProvider<ModelPickerPreviewCase> {
     private val gpt5 = ModelCatalogue["gpt5"]
@@ -402,6 +409,8 @@ class ModelPickerPreviewParameterProvider : PreviewParameterProvider<ModelPicker
         "Chat" to ModelChoice(ModelCatalogue.default),
         "Chat · persona" to ModelChoice(PreviewReviewer),
         "Chat · no favorites" to ModelChoice(gpt5),
+        "Chat · compare" to ModelChoice(ModelCatalogue.default, compareOn = true),
+        "Chat · compare · second" to ModelChoice(ModelCatalogue.default, compareOn = true, compareWith = gpt5),
     )
 
     private val cases = states.map { (name, active) ->
@@ -465,7 +474,14 @@ private fun ModelPickerPreview(
                         .size(width = ChatTheme.sizes.xLarge, height = ChatTheme.sizes.xxxSmall)
                         .background(color = ChatTheme.colors.surface.tertiary, shape = ChatTheme.shapes.pill),
                 )
-                ModelPickerContent(state = case.state, onPick = {}, onToggleFavorite = {})
+                ModelPickerContent(
+                    state = case.state,
+                    onPick = {},
+                    onToggleFavorite = {},
+                    headerAction = {
+                        if (case.state.showsCompare) ModelPickerCompareButton(on = case.state.compareOn, onClick = {})
+                    },
+                )
             }
         }
     }

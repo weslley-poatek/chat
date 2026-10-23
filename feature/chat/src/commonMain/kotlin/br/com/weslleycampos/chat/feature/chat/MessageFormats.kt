@@ -30,16 +30,20 @@ private const val BlockSeparator = "\n\n"
 /**
  * What a message's "copy" puts on the clipboard, the prototype's `msgText`: the user's text as
  * sent, or a reply's blocks joined by a blank line, each paragraph and code block as its text (no
- * fence, no language), and a list as its items, "1. text", a line each.
+ * fence, no language), and a list as its items, "1. text", a line each. A compare pair has no
+ * "copy"; its text would be its cards' in order.
  */
 fun MessageUi.copyText(): String = when (this) {
     is MessageUi.User -> text
-    is MessageUi.Assistant -> blocks.joinToString(BlockSeparator) { block ->
-        when (block) {
-            is BlockUi.Paragraph -> block.text
-            is BlockUi.Code -> block.text
-            is BlockUi.NumberedList -> block.items.joinToString("\n") { "${it.number} ${it.text}" }
-        }
+    is MessageUi.Assistant -> blocks.copyText()
+    is MessageUi.ComparePair -> sides.joinToString(BlockSeparator) { it.blocks.copyText() }
+}
+
+private fun List<BlockUi>.copyText(): String = joinToString(BlockSeparator) { block ->
+    when (block) {
+        is BlockUi.Paragraph -> block.text
+        is BlockUi.Code -> block.text
+        is BlockUi.NumberedList -> block.items.joinToString("\n") { "${it.number} ${it.text}" }
     }
 }
 

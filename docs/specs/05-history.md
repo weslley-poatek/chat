@@ -340,14 +340,15 @@ noted.
 - **State:** `HistoryUiState(query, groups: List<HistoryGroupUi>, loaded, conversationCount: Int?,
   openRow: Long?, toast: StringResource?)` with `status`, `showsClearQuery`, `noMatchesFor`,
   `showsEmptyState`, `showsFooterHint` and `row(id)`. `HistoryGroupUi(section, rows)` with `label`;
-  `HistoryRowUi(id, title, pinned, modelShortName, palette, time)` with `actions:
-  List<HistoryRowActionUi(action, label)>`; `enum HistoryRowAction { TogglePin, Archive, Delete }`.
+  `HistoryRowUi(id, title, pinned, modelShortName, palette, time, comparedWith: String? = null)`
+  with `extra` (row 7's "⇄ gpt-5") and `actions: List<HistoryRowActionUi(action, label)>`; `enum HistoryRowAction { TogglePin, Archive, Delete }`.
   `historyGroups(conversations, now, timeZone)` and `Conversation.toRowUi(now, timeZone)` build them.
 - **ViewModel:** `HistoryViewModel(navigator, repository: ChatRepository, times: HistoryTimes)`,
   `Navigator by navigator`, bound only to its own class: `onQueryChange`, `onClearQuery`, `onBack`,
   `onRowClick(id)`, `onSwipeStart(id)`, `onSwipeSettle(id, open)`, `onCloseRow`,
   `onRowAction(id, action)`. Its toast goes through its own `TimedValue`.
-- **Formats:** `historyRowTime(updatedAt, now, timeZone)`, `historyStatus(count)`; `HistoryTimes(clock,
+- **Formats:** `historyRowTime(updatedAt, now, timeZone)`, `historyStatus(count)`,
+  `historyCompareExtra(shortName)` (row 7); `HistoryTimes(clock,
   zone)` (Koin single) with `now()`, `timeZone()`, `today()` and `days()`, the local date re-read
   every `DayCheckInterval` (1 minute), emitting on change. The swipe's maths: `SwipeActionWidth`
   (64 dp), `SwipeOpenDistance` (192 dp), `clampSwipeOffset`, `swipeSettlesOpen`, `restingSwipeOffset`.
@@ -411,7 +412,8 @@ noted.
   `observeConversationCount()` for an honest replacement, such as how many conversations are on the
   device; the feature agent decides the copy, or drops the row.
 - Decided: the line-2 "extra" ("⇄ gpt-5" for compare, "1 image" for attachments) is not built:
-  compare is row 7 and attachments row 8, which add what it needs.
+  compare is row 7 and attachments row 8, which add what it needs. Row 7 built the compare one,
+  `HistoryRowUi.extra` from `Conversation.comparing` (spec 07); "1 image" is row 8's.
 - Decided: opening a conversation needs no data call: `observeConversation(id)` and
   `observeMessages(id)` already exist, and the prototype's `loadSeed` (quirk 8) is not copied, so
   each row opens its own thread. New chats appear in History on their first send (quirk 8 fixed).
@@ -483,7 +485,7 @@ noted.
 
 - Folders, the folder chip and filing a conversation: no frame sets a folder.
 - An archive screen, unarchiving and undo: the prototype has none.
-- The line-2 extra: compare (row 7) and attachments (row 8).
+- The line-2 extra for attachments ("1 image"): row 8. Compare's is built by row 7.
 - Sync and its status: nothing syncs (orchestrator).
 - Searching replies: canned, see Decided.
 - Memory and Settings, which History's bar opens: rows 9 and 10 (the icons are drawn and inert).

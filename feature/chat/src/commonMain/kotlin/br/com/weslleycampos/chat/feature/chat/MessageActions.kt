@@ -25,7 +25,7 @@ import org.koin.core.annotation.Single
  * function limit.
  *
  * Only a message that is not on its way can be selected or acted on: a reply thinking or streaming
- * has no action row, as the prototype's `showActions`.
+ * has no action row, as the prototype's `showActions`, and a compare pair never has one.
  *
  * @param autoRead Row 10's "Read replies aloud": while it answers `true`, [onReplyDone] reads each
  *   reply that finishes. There is no such preference yet, so it answers `false`.
@@ -36,7 +36,7 @@ class MessageActions internal constructor(
     private val forks: ForkRepository,
     private val navigator: Navigator,
     private val copied: TimedValue<CopiedLabel>,
-    private val toast: TimedValue<StringResource>,
+    private val toast: TimedValue<ChatToastUi>,
     private val relay: ChatToastRelay,
     private val autoRead: () -> Boolean = { false },
 ) {
@@ -90,7 +90,7 @@ class MessageActions internal constructor(
                 null
             }
             if (fork == null) {
-                toast.show(FeatureChatRes.string.chat_toast_fork_failed)
+                toast.show(ChatToastUi(FeatureChatRes.string.chat_toast_fork_failed))
             } else {
                 relay.post(FeatureChatRes.string.chat_toast_forked)
                 navigator.navigate(ChatEntry(fork)) { popUpTo<ChatEntry> { inclusive = true } }
@@ -166,7 +166,8 @@ class MessageActions internal constructor(
 
 /**
  * The last reply of [current] when it is done and was on its way in [previous]: a reply that has
- * just finished streaming. `null` otherwise.
+ * just finished streaming. `null` otherwise, and always for a compare pair, which the prototype
+ * never reads aloud (`!m.pair`, line 720).
  */
 internal fun finishedReply(previous: List<Message>, current: List<Message>): Long? {
     val reply = current.lastOrNull() as? Message.Assistant ?: return null

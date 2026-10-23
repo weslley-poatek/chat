@@ -55,6 +55,7 @@ class ChatViewModelTest {
             models = models,
             times = testTimes(),
             forks = FakeForkRepository(repository),
+            compares = FakeCompareRepository(repository),
             relay = ChatToastRelay(),
         )
         runCurrent()
@@ -171,11 +172,11 @@ class ChatViewModelTest {
         runCurrent()
 
         assertEquals(Question, viewModel.state.draft)
-        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast)
+        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast?.message)
         assertTrue(viewModel.state.showsEmptyState)
         assertTrue(viewModel.state.canSend)
         advance(1399.milliseconds)
-        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast)
+        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast?.message)
         advance(1.milliseconds)
         assertNull(viewModel.state.toast)
     }
@@ -189,7 +190,7 @@ class ChatViewModelTest {
         runCurrent()
 
         assertEquals(Question, viewModel.state.draft)
-        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast)
+        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast?.message)
         assertFalse(viewModel.state.sending)
     }
 
@@ -206,7 +207,7 @@ class ChatViewModelTest {
         runCurrent()
 
         assertEquals("Something else", viewModel.state.draft)
-        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast)
+        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast?.message)
     }
 
     @Test
@@ -221,7 +222,7 @@ class ChatViewModelTest {
         runCurrent()
         advance(1000.milliseconds)
 
-        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast)
+        assertEquals(FeatureChatRes.string.chat_toast_send_failed, viewModel.state.toast?.message)
         advance(400.milliseconds)
         assertNull(viewModel.state.toast)
     }

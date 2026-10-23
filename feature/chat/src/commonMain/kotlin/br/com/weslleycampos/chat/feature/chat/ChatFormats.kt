@@ -68,11 +68,19 @@ fun assistantMeta(
     .joinToString(MetaSeparator)
 
 /**
- * The model chip, the prototype's `chipLabel` without compare (row 7): "Code reviewer · sonnet-4.5"
- * while a persona answers, else the model's full name, "Claude Sonnet 4.5".
+ * The model chip, the prototype's `chipLabel`: "sonnet-4.5 ⇄ gpt-5" while two models are compared
+ * ([ModelChoice.comparing]), "Code reviewer · sonnet-4.5" while a persona answers, else the model's
+ * full name, "Claude Sonnet 4.5". With compare on and no second model yet it is the model's name.
  */
-fun chipLabel(choice: ModelChoice): String =
-    choice.persona?.let { persona -> "${persona.name}$MetaSeparator${choice.model.shortName}" } ?: choice.model.name
+fun chipLabel(choice: ModelChoice): String {
+    val persona = choice.persona
+    val comparing = choice.comparing
+    return when {
+        comparing != null -> compareLabel(choice.model, comparing)
+        persona != null -> "${persona.name}$MetaSeparator${choice.model.shortName}"
+        else -> choice.model.name
+    }
+}
 
 /**
  * The empty state's meta line, the prototype's `modelMetaLine`: "Anthropic · 200k context · $$",

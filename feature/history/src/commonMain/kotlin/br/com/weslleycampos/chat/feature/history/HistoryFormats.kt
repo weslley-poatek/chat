@@ -42,6 +42,15 @@ fun historyRowTime(updatedAt: Instant, now: Instant, timeZone: TimeZone): String
     return "${MonthAbbreviations[time.month.ordinal]} ${time.date.day}"
 }
 
+/** The prototype's compare glyph, before the compared model in a row's extra. */
+private const val CompareMark = "⇄"
+
+/**
+ * A row's extra while its conversation compares, the prototype's `extra:'⇄ gpt-5'`: the compare
+ * mark and the second model's [shortName].
+ */
+fun historyCompareExtra(shortName: String): String = "$CompareMark $shortName"
+
 /**
  * The status row, in place of the prototype's "synced · 2 min ago": nothing syncs, so it says where
  * History lives and how many conversations it lists, "on this device · 12 conversations". Just

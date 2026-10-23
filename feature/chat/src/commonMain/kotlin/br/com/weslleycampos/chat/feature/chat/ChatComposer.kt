@@ -39,7 +39,6 @@ import br.com.weslleycampos.chat.core.ui.components.ChatIconButtonVariant
 import br.com.weslleycampos.chat.core.ui.icons.ChatIcons
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
 import br.com.weslleycampos.chat.feature.chat.resources.chat_attach
-import br.com.weslleycampos.chat.feature.chat.resources.chat_composer_placeholder
 import br.com.weslleycampos.chat.feature.chat.resources.chat_send
 import br.com.weslleycampos.chat.feature.chat.resources.chat_voice
 import org.jetbrains.compose.resources.painterResource
@@ -59,13 +58,14 @@ private const val SelectionAlpha = 0.4f
 /**
  * The composer (frame lines 220–249): "+", the draft, the mic and Send, over a hairline. The draft
  * grows a line per line of text up to six, then scrolls; ⌘ / Ctrl + Enter sends from a hardware
- * keyboard. Send takes the accent only while [canSend].
+ * keyboard. Send takes the accent only while [canSend]. [placeholder] shows while the draft is
+ * empty: "message sonnet-4.5…", or "ask sonnet-4.5 and gpt-5…" while comparing.
  */
 @Composable
 internal fun ChatComposer(
     draft: String,
     draftRows: Int,
-    modelShortName: String,
+    placeholder: String,
     canSend: Boolean,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
@@ -96,7 +96,7 @@ internal fun ChatComposer(
         DraftField(
             draft = draft,
             draftRows = draftRows,
-            placeholder = stringResource(FeatureChatRes.string.chat_composer_placeholder, modelShortName),
+            placeholder = placeholder,
             onDraftChange = onDraftChange,
             onSend = { if (canSend) onSend() },
             modifier = Modifier.weight(1f),

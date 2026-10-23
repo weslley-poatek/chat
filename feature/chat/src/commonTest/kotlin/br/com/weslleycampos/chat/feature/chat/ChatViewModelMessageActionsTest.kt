@@ -70,6 +70,7 @@ class ChatViewModelMessageActionsTest {
             models = FakeModelRepository(),
             times = testTimes(),
             forks = forks,
+            compares = FakeCompareRepository(repository),
             relay = relay,
         )
         runCurrent()
@@ -241,9 +242,9 @@ class ChatViewModelMessageActionsTest {
         val forked = chatViewModel(repository, ChatEntry(fork.id), forks, relay)
         assertEquals(listOf(Title), forked.state.messages.map { assertIs<MessageUi.User>(it).text })
         assertEquals("forked from “$Title” at message 1", forked.state.forkBanner)
-        assertEquals(FeatureChatRes.string.chat_toast_forked, forked.state.toast)
+        assertEquals(FeatureChatRes.string.chat_toast_forked, forked.state.toast?.message)
         advance(ChatToastDefaults.Duration - 1.milliseconds)
-        assertEquals<StringResource?>(FeatureChatRes.string.chat_toast_forked, forked.state.toast)
+        assertEquals<StringResource?>(FeatureChatRes.string.chat_toast_forked, forked.state.toast?.message)
         advance(1.milliseconds)
         assertNull(forked.state.toast)
         // The toast is the fork's alone: the next chat entry shows none.
@@ -264,7 +265,7 @@ class ChatViewModelMessageActionsTest {
 
             assertEquals(listOf(source.id to viewModel.reply.id), forks.forks)
             assertEquals(listOf<NavKey>(ChatEntry(source.id)), viewModel.navigator.navBackStack.toList())
-            assertEquals(FeatureChatRes.string.chat_toast_fork_failed, viewModel.state.toast)
+            assertEquals(FeatureChatRes.string.chat_toast_fork_failed, viewModel.state.toast?.message)
             assertNull(relay.take())
             advance(ChatToastDefaults.Duration)
             assertNull(viewModel.state.toast)

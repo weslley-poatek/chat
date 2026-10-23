@@ -18,6 +18,7 @@ import kotlin.test.assertTrue
 class ModelPickerUiStateTest {
     private val sonnet = ModelCatalogue.default
     private val gemini = ModelCatalogue["gemini"]
+    private val gpt5 = ModelCatalogue["gpt5"]
     private val llama = ModelCatalogue["llama"]
     private val favorites = ModelRepository.DEFAULT_FAVORITE_IDS.map(ModelCatalogue::get)
     private val personas = PersonaPresets.personas
@@ -35,6 +36,10 @@ class ModelPickerUiStateTest {
 
     private val ModelPickerUiState.marked: List<String>
         get() = rows.filter { it.mark == ModelPickerMark.Active }.map { it.key }
+
+    /** The keys of the rows that carry "◐". */
+    private val ModelPickerUiState.compared: List<String>
+        get() = rows.filter { it.mark == ModelPickerMark.Compare }.map { it.key }
 
     @Test
     fun theChatSheetListsTheFavoritesThePersonasAndEveryModelInTheirOrder() {
@@ -103,6 +108,51 @@ class ModelPickerUiStateTest {
     }
 
     @Test
+    fun whileComparingTheSecondModelsRowsCarryTheHalfMarkAndThePrimarysTheDot() {
+        val state = chat(ModelChoice(sonnet, compareOn = true, compareWith = gpt5))
+
+        assertEquals(listOf("favorite:sonnet", "model:sonnet"), state.marked)
+        assertEquals(listOf("favorite:gpt5", "model:gpt5"), state.compared)
+        assertEquals("◐", ModelPickerMark.Compare.glyph)
+        // A second model outside the favorites is marked in "all models" only.
+        assertEquals(listOf("model:llama"), chat(ModelChoice(sonnet, compareOn = true, compareWith = llama)).compared)
+        // Compare on with no second model yet, or off with one left over: no half mark.
+        assertTrue(chat(ModelChoice(sonnet, compareOn = true)).compared.isEmpty())
+        assertTrue(chat(ModelChoice(sonnet, compareOn = false, compareWith = gpt5)).compared.isEmpty())
+    }
+
+    @Test
+    fun theCompareButtonIsOnWhileComparingAndTheHintSaysWhatToPickNext() {
+        val off = chat(ModelChoice(sonnet))
+        val picking = chat(ModelChoice(sonnet, compareOn = true))
+        val comparing = chat(ModelChoice(sonnet, compareOn = true, compareWith = gpt5))
+
+        assertTrue(off.showsCompare)
+        assertEquals(listOf(false, true, true), listOf(off, picking, comparing).map { it.compareOn })
+        assertNull(off.compareHint)
+        assertEquals("pick a second model to run beside sonnet-4.5", picking.compareHint)
+        assertEquals("sonnet-4.5 ⇄ gpt-5 · tap another model to swap the second", comparing.compareHint)
+        assertEquals("pick a second model to run beside llama-4", compareHint(ModelChoice(llama, compareOn = true)))
+        assertNull(compareHint(ModelChoice(sonnet, compareWith = gpt5)))
+    }
+
+    @Test
+    fun theDefaultSheetHasNoCompareButtonHintOrHalfMark() {
+        val state = modelPickerUiState(
+            variant = ModelPickerVariant.Default,
+            favorites = favorites,
+            personas = personas,
+            active = ModelChoice(sonnet, compareOn = true, compareWith = gpt5),
+        )
+
+        assertFalse(state.showsCompare)
+        assertFalse(state.compareOn)
+        assertNull(state.compareHint)
+        assertTrue(state.compared.isEmpty())
+        assertEquals(listOf("favorite:sonnet", "model:sonnet"), state.marked)
+    }
+
+    @Test
     fun theSheetIsTitledModelForTheChatAndDefaultModelForSettings() {
         assertEquals(FeatureChatRes.string.model_picker_title_chat, ModelPickerVariant.Chat.title)
         assertEquals(FeatureChatRes.string.model_picker_title_default, ModelPickerVariant.Default.title)
@@ -145,7 +195,14 @@ class ModelPickerUiStateTest {
     @Test
     fun previewsCoverEveryVariantInLightAndDark() {
         val cases = ModelPickerPreviewParameterProvider().values.toList()
-        val names = listOf("Chat", "Chat · persona", "Chat · no favorites", "Default")
+        val names = listOf(
+            "Chat",
+            "Chat · persona",
+            "Chat · no favorites",
+            "Chat · compare",
+            "Chat · compare · second",
+            "Default",
+        )
 
         assertEquals(names + names, cases.map { it.name })
         assertEquals(List(names.size) { false } + List(names.size) { true }, cases.map { it.darkTheme })
@@ -153,6 +210,12 @@ class ModelPickerUiStateTest {
         assertEquals(listOf("favorite:sonnet", "model:sonnet"), states.getValue("Chat").state.marked)
         assertEquals(listOf("persona:reviewer"), states.getValue("Chat · persona").state.marked)
         assertTrue(states.getValue("Chat · no favorites").state.favorites.isEmpty())
+        val picking = states.getValue("Chat · compare").state
+        assertTrue(picking.compareOn && picking.compared.isEmpty())
+        assertEquals("pick a second model to run beside sonnet-4.5", picking.compareHint)
+        val second = states.getValue("Chat · compare · second").state
+        assertEquals(listOf("favorite:gpt5", "model:gpt5"), second.compared)
+        assertEquals(ChatPalette.SONNET, states.getValue("Chat · compare · second").palette)
         val default = states.getValue("Default")
         assertEquals(ModelPickerVariant.Default, default.state.variant)
         assertTrue(default.state.personas.isEmpty())

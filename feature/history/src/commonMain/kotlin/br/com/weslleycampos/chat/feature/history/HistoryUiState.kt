@@ -51,8 +51,11 @@ data class HistoryGroupUi(
 }
 
 /**
- * One row, the prototype's `hRow` (837–844) without folder and extra: "▲" when [pinned], the
- * [title], a dot in [palette]'s accent, [modelShortName] and [time].
+ * One row, the prototype's `hRow` (837–844) without a folder: "▲" when [pinned], the [title], a dot
+ * in [palette]'s accent, [modelShortName], the [extra] while it compares, and [time].
+ *
+ * @property comparedWith The short name of the model the conversation's next message is compared
+ *   with ([Conversation.comparing]), or `null` when compare is off.
  */
 @Immutable
 data class HistoryRowUi(
@@ -62,7 +65,11 @@ data class HistoryRowUi(
     val modelShortName: String,
     val palette: ChatPalette,
     val time: String,
+    val comparedWith: String? = null,
 )
+
+/** Line 2's extra, the prototype's `h.extra`: "⇄ gpt-5" while the conversation compares, else none. */
+val HistoryRowUi.extra: String? get() = comparedWith?.let(::historyCompareExtra)
 
 /** What a row's swipe reveals, in the prototype's order. */
 enum class HistoryRowAction {
@@ -139,4 +146,5 @@ fun Conversation.toRowUi(now: Instant, timeZone: TimeZone): HistoryRowUi = Histo
     modelShortName = model.shortName,
     palette = model.palette,
     time = historyRowTime(updatedAt = updatedAt, now = now, timeZone = timeZone),
+    comparedWith = comparing?.shortName,
 )

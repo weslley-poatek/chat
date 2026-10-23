@@ -297,22 +297,27 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   `04-model-picker.md`), and `onHistoryClick` opens History through
   `ChatViewModel.onOpenHistory()`, which pushes `HistoryEntry` over the chat (row 5,
   `05-history.md`). A tap on a message selects it and shows its action row; the fork banner and
-  the read-aloud bar are row 6's (`06-message-actions.md`, whose UI contract lists them). It wraps the screen and the sheet in `ChatTheme(palette =
+  the read-aloud bar are row 6's (`06-message-actions.md`, whose UI contract lists them), and a
+  compare pair's cards and "continue with this →" row 7's (`07-compare-mode.md`). It wraps the screen and the sheet in `ChatTheme(palette =
   uiState.model.palette, darkTheme = ChatTheme.colors.isDark)`, over the root's default-model theme.
 - **State:** `ChatUiState(conversationId, choice: ModelChoice, messages: List<MessageUi>, recent:
   List<RecentConversationUi>, draft, replyInProgress, sending, copiedBlock: BlockKey?, toast:
-  StringResource?, favorites, personas, modelPickerOpen, selectedMessage, copiedMessage, readAloud,
+  ChatToastUi?, favorites, personas, modelPickerOpen, selectedMessage, copiedMessage, readAloud,
   forkOrigin)` with `model` and `persona` (row 4), `forkBanner` (row 6), and `showsEmptyState`,
-  `canSend`, `draftRows`, `chipLabel` and `modelPicker`. `MessageUi.User(id, time, text)` and
-  `MessageUi.Assistant(id, time, modelShortName, personaName, latency, interrupted, thinking,
-  blocks, inProgress)`, each `selectable` unless on its way (row 6); `BlockUi.Paragraph`,
+  `canSend`, `draftRows`, `chipLabel`, `composerPlaceholder` and `modelPicker`. The toast is
+  `ChatToastUi(message: StringResource, args: List<String>)` (row 7). `MessageUi.User(id, time,
+  text)`, `MessageUi.Assistant(id, time, modelShortName, personaName, latency, interrupted,
+  thinking, blocks, inProgress)` and row 7's `MessageUi.ComparePair(id, time, sides)`, each
+  `selectable` unless on its way, a pair never (row 6); `replyInProgress` covers a pair's either
+  side (row 7); `BlockUi.Paragraph`,
   `BlockUi.Code` (with `tokens`) and `BlockUi.NumberedList`, each with its `BlockKey(messageId,
   index)`.
 - **ViewModel:** `ChatViewModel(@InjectedParam entry: ChatEntry, navigator, repository, models:
-  ModelRepository, times, forks: ForkRepository, relay: ChatToastRelay)`, `Navigator by navigator`,
-  bound only to its own class, with row 6's `messageActions: MessageActions`: `onDraftChange`,
+  ModelRepository, times, forks: ForkRepository, compares: CompareRepository, relay:
+  ChatToastRelay)`, `Navigator by navigator`, bound only to its own class, with row 6's
+  `messageActions: MessageActions` and row 7's `compareActions: CompareActions`: `onDraftChange`,
   `onSend`, `onNewChat`, `onOpenRecent(id)`, `onCopyCode(key, copy)`, row 4's `onOpenModelPicker`,
-  `onDismissModelPicker`, `onPick(choice)` and `onToggleFavorite(model)`; row 5's `onOpenHistory` is an
+  `onDismissModelPicker`, `onPick(row)` and `onToggleFavorite(model)`; row 5's `onOpenHistory` is an
   extension next to the class (only a navigation, and the class is at detekt's function limit).
   Its toast and "copied" go through `TimedValue`, a value shown for a duration and then cleared;
   "copied" is one `TimedValue<CopiedLabel>` for a code block and a message alike (row 6).
@@ -321,8 +326,10 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   `MicOff`, `NewChat`, `Search`, `Send`, `Settings`; `ChatIconButtonVariant.Accent`'s disabled look.
 - **Formats:** `formatClockTime`, `formatRecentTime`, `formatLatency`, `assistantMeta(modelShortName,
   personaName, time, latency, interruptedLabel)`, `tokenize` and `ChatModel.palette` are public pure
-  functions (row 4 adds `chipLabel` and `modelMetaLine`); `ChatTimes` (Koin single) reads the device's
-  clock and time zone.
+  functions (row 4 adds `chipLabel` and `modelMetaLine`, row 7 `composerPlaceholder` and the compare
+  formats); `ChatTimes` (Koin single) reads the device's clock and time zone. The composer takes its
+  placeholder as text, `ChatComposer(…, placeholder, …)`: the `chat_composer_placeholder` string
+  resource is gone (row 7).
 
 ## Decided
 

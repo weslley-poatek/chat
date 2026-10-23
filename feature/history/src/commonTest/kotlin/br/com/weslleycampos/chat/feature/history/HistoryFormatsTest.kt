@@ -58,6 +58,12 @@ class HistoryFormatsTest {
     }
 
     @Test
+    fun aComparingRowsExtraIsTheCompareMarkAndTheSecondModelsShortName() {
+        assertEquals("⇄ gpt-5", historyCompareExtra("gpt-5"))
+        assertEquals("⇄ sonnet-4.5", historyCompareExtra(ModelCatalogue.default.shortName))
+    }
+
+    @Test
     fun everyModelHasThePaletteNamedAfterItsId() {
         for (model in ModelCatalogue.models) {
             assertEquals(model.id.uppercase(), model.palette.name)

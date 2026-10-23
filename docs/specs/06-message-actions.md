@@ -276,9 +276,10 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   `onReplyDone(messageId)`, called once for each reply that finishes streaming in the open thread
   (`finishedReply(previous, current)`). Row 10 passes its "Read replies aloud" preference as
   `autoRead` where `ChatViewModel` builds `MessageActions`; no other change is needed.
-- **Row 7 (compare pairs):** a pair message has no action row and no read aloud, as in the
-  prototype. Its `MessageUi` must answer `selectable = false`: `ChatThread` then gives it no tap
-  handler, and `MessageActions` refuses every action on it (`actionable`).
+- **Row 7 (compare pairs), built:** a pair message has no action row and no read aloud, as in the
+  prototype. `MessageUi.ComparePair` answers `selectable = false`: `ChatThread` gives it no tap
+  handler, `MessageActions` refuses every action on it (`actionable`), and `finishedReply` never
+  names it, so auto read skips it. The toast is now `TimedValue<ChatToastUi>` (spec 07).
 
 ## Decided
 

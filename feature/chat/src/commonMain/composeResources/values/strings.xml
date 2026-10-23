@@ -14,7 +14,6 @@
     <string name="chat_code_copy">copy</string>
     <string name="chat_code_copied">copied</string>
 
-    <string name="chat_composer_placeholder">message %1$s…</string>
     <string name="chat_attach">Attach</string>
     <string name="chat_voice">Voice</string>
     <string name="chat_send">Send</string>
@@ -22,6 +21,12 @@
     <string name="chat_toast_send_failed">couldn’t send, try again</string>
     <string name="chat_toast_forked">forked · new conversation</string>
     <string name="chat_toast_fork_failed">couldn’t fork, try again</string>
+    <string name="chat_toast_comparing">comparing %1$s ⇄ %2$s</string>
+    <string name="chat_toast_continuing">continuing with %1$s</string>
+    <string name="chat_toast_continue_failed">couldn’t continue, try again</string>
+
+    <string name="chat_compare_continue">continue with this →</string>
+    <string name="chat_compare_continue_description">continue with %1$s</string>
 
     <string name="chat_message_show_actions">Show actions</string>
     <string name="chat_message_hide_actions">Hide actions</string>
@@ -40,4 +45,7 @@
     <string name="model_picker_new_persona">new persona</string>
     <string name="model_picker_all_models">all models</string>
     <string name="model_picker_favorite">Favorite</string>
+    <string name="model_picker_compare">compare</string>
+    <string name="model_picker_compare_on">compare · on</string>
+    <string name="model_picker_compared">second model</string>
 </resources>

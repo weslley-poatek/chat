@@ -17,7 +17,7 @@ and §3 describe them.
 | --- | --- | --- |
 | `Model picker` sheet | `sheet:'chat'` (title "Model", compare button), `sheet:'default'` (title "Default model", no compare button); scrim, grabber | lines 476–518; `sheetOpen`, `sheetForChat`, `sheetTitle`, `closeSheet` 928 |
 | `Model picker` rows | "favorites" (models in `favs`, `MODELS` order), "personas", "+ new persona" (no handler), "all models" with "★" / "☆"; dot in the model's hue; meta; mark "●" active | lines 488–516; `mRow` 848–853; `favRows`, `personaRows`, `allRows` 931 |
-| Pick rules | persona, model, favorite toggle (compare rules are row 7) | `mRow.pick` 851–853, `mRow.fav` 850; `toggleCompare` 930 |
+| Pick rules | persona, model, favorite toggle (compare rules are row 7, spec 07) | `mRow.pick` 851–853, `mRow.fav` 850; `toggleCompare` 930 |
 | `Chat` persona parts | chip "Code reviewer · sonnet-4.5", empty-state meta "… · persona: Code reviewer", assistant meta "sonnet-4.5 · code reviewer · 14:02" | `chipLabel`, `modelMetaLine` 888; meta 813; frames §2.2 |
 | Catalogue and state | `MODELS`, `PERSONAS`; `modelId`, `personaId`, `sheet`, `favs` | lines 542–556; state 634 |
 
@@ -331,16 +331,20 @@ noted.
   default model's. `AppHost(entries, modifier)` is what both hosts call: it remembers the navigator
   from `SplashEntry`, collects that palette and calls `App(navBackStack, entryBuilders, modifier,
   palette = ChatPalette.Default)`, which has no Koin and stays previewable and testable.
-- **Row 7 (compare):** pass the compare button as `headerAction`, add the hint and a second mark
-  (`◐`) to `ModelPickerUiState` and `ModelPickerMark`, and route a pick through the compare rules
-  in `ChatViewModel.onPick`. The slot is empty now.
+- **Row 7 (compare), built:** the chat passes `ModelPickerCompareButton(on, onClick)` as
+  `headerAction` while `ModelPickerUiState.showsCompare` (the Chat variant only); the sheet shows
+  `compareHint` under the header; `ModelPickerMark.Compare` ("◐") marks `choice.comparing`.
+  `ChatViewModel.onPick(row)` applies `ModelChoice.picked(row)`, where `null` keeps the sheet open;
+  the button is `ChatViewModel.compareActions.onToggleCompare()`. See spec 07's UI contract.
 - **Row 10 (Default model):** keep an open flag in the Settings ViewModel and draw
   `ModelPickerSheet(open, state = modelPickerUiState(ModelPickerVariant.Default, favorites,
   emptyList(), ModelChoice(defaultModel)), onPick = { setDefaultModel(it.model) and close },
   onToggleFavorite = { setFavorite(it, it !in favorites) })`; the root accent follows on its own.
 - **Row 11 (Voice chip):** the same Chat variant against the voiced conversation, with the same
-  rules as `ChatViewModel.onPick` (`choose` in an open conversation, `newChat` before the first
-  send), wrapped in that conversation's `ChatTheme`.
+  rules as `ChatViewModel.onPick` (`picked(row)`, then `choose` in an open conversation or
+  `newChat` before the first send), wrapped in that conversation's `ChatTheme`. Its sheet either
+  passes the compare button too or leaves `headerAction` empty; spec 07's UI contract says what a
+  comparing conversation means for voice.
 
 ## Decided
 
@@ -420,8 +424,8 @@ noted.
 - Decided (UI): "+ new persona" is drawn, as in the frame, but does nothing: it has no handler in
   the prototype and no persona editor exists. It is in `--fg3`, not the frame's `--fg2`, so it reads
   as unavailable, and screen readers hear it as a disabled button.
-- Decided (UI): the header's compare slot, `headerAction`, is empty: the compare button, its hint
-  and "◐" are row 7, so the chat sheet's header shows the title alone for now.
+- Decided (UI): the header's compare slot, `headerAction`, holds row 7's compare button in the chat
+  sheet; the header is 44 dp tall so the button's target can take its full height (spec 07).
 - Decided (UI): the "favorites" label stays over an empty section, as in the prototype, so the
   sheet keeps its shape when every star is off.
 - Decided (UI): the star is a 44 dp tap target of its own, beside the row's, not the frame's 32 px,
@@ -434,7 +438,6 @@ noted.
 
 ## Out of scope
 
-- The compare toggle, its hint, the "◐" mark, the compare pick rules and pair replies: row 7.
 - A persona editor and a handler for "+ new persona": no frame exists.
 - The Settings "Default model" row and its sheet: row 10, on `observeDefaultModel` /
   `setDefaultModel`. Wiping personas and preferences on delete account: row 10 (the seed puts the

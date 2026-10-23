@@ -7,6 +7,7 @@ import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
 import br.com.weslleycampos.chat.data.chat.ChatRepository
+import br.com.weslleycampos.chat.data.chat.CompareRepository
 import br.com.weslleycampos.chat.data.chat.ForkRepository
 import br.com.weslleycampos.chat.data.chat.ModelRepository
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
@@ -15,6 +16,7 @@ import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
+import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_comparing
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_send_failed
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -29,7 +31,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.StringResource
 import org.koin.core.annotation.InjectedParam
 import org.koin.core.annotation.KoinViewModel
 import kotlin.time.Duration
@@ -42,12 +43,16 @@ import kotlin.time.Duration.Companion.milliseconds
  * observes them, and derives "a reply is on its way" from the last message, never from a flag of
  * its own.
  *
- * What answers is [ChatUiState.choice]: an open conversation's own model and persona, which a pick
- * changes through [ChatRepository.choose]; or, in a new chat, the default model until the user
- * picks, which only this ViewModel keeps and the first send hands to [ChatRepository.send].
+ * What answers is [ChatUiState.choice]: an open conversation's own model, persona and compare, which
+ * a pick changes through [ChatRepository.choose]; or, in a new chat, the default model alone until
+ * the user picks, which only this ViewModel keeps and the first send hands to [ChatRepository.send].
+ * While two models are compared, a send is answered by a compare pair, which streams in the data
+ * layer like a reply.
  *
  * A tap on a message, its action row, the read-aloud bar and the fork banner are [messageActions],
- * on [ForkRepository]. A toast carried over by [ChatToastRelay], a fork's, shows as this opens.
+ * on [ForkRepository]. The compare button and a compare card's "continue with this →" are
+ * [compareActions], on [CompareRepository]. A toast carried over by [ChatToastRelay], a fork's,
+ * shows as this opens.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @KoinViewModel(binds = [ChatViewModel::class])
@@ -58,6 +63,7 @@ class ChatViewModel(
     private val models: ModelRepository,
     private val times: ChatTimes,
     forks: ForkRepository,
+    compares: CompareRepository,
     relay: ChatToastRelay,
 ) : ViewModel(), Navigator by navigator {
     val uiState: StateFlow<ChatUiState>
@@ -80,11 +86,14 @@ class ChatViewModel(
     /** What a new chat starts on, and "new chat" returns to: `ModelRepository.observeDefaultModel`. */
     private var defaultModel: ChatModel = ModelCatalogue.default
 
-    /** The new chat's own pick, or `null` while it follows [defaultModel]. */
-    private var newChatChoice: ModelChoice? = null
-
-    /** Moves on every pick in an open conversation, so only the latest one is undone when refused. */
-    private var picks = 0
+    /** What answers, as the picker changes it, with a new chat's own pick while it does not follow [defaultModel]. */
+    private val choices = ChatChoices(
+        scope = viewModelScope,
+        state = uiState,
+        repository = repository,
+        generation = { generation },
+        ownChoice = { shownConversation?.choice },
+    )
     private val messageUis = MessageUiCache()
 
     /**
@@ -101,7 +110,7 @@ class ChatViewModel(
     }
 
     /** The prototype's `toastMsg`: a new toast replaces the shown one and restarts its time. */
-    private val toast = TimedValue<StringResource>(viewModelScope, ChatToastDefaults.Duration) { message ->
+    private val toast = TimedValue<ChatToastUi>(viewModelScope, ChatToastDefaults.Duration) { message ->
         uiState.update { it.copy(toast = message) }
     }
 
@@ -116,14 +125,24 @@ class ChatViewModel(
         relay = relay,
     )
 
+    /** The Model picker's compare button and a compare card's "continue with this →". */
+    val compareActions = CompareActions(
+        scope = viewModelScope,
+        state = uiState,
+        choices = choices,
+        compares = compares,
+        toast = toast,
+    )
+
     init {
-        relay.take()?.let(toast::show)
+        relay.take()?.let { toast.show(ChatToastUi(it)) }
         viewModelScope.launch {
             models.observeDefaultModel().collect { model ->
                 defaultModel = model
                 // A new chat that nothing was picked in follows the default model, wherever it is changed.
                 uiState.update {
-                    if (it.conversationId == null && newChatChoice == null) it.copy(choice = ModelChoice(model)) else it
+                    val follows = it.conversationId == null && choices.newChatChoice == null
+                    if (follows) it.copy(choice = ModelChoice(model)) else it
                 }
             }
         }
@@ -182,19 +201,19 @@ class ChatViewModel(
                     draft = if (conversationId == null && it.draft.isEmpty()) text else it.draft,
                 )
             }
-            if (conversationId == null) toast.show(FeatureChatRes.string.chat_toast_send_failed)
+            if (conversationId == null) toast.show(ChatToastUi(FeatureChatRes.string.chat_toast_send_failed))
         }
     }
 
     /**
-     * The prototype's `newChat`: back to the empty state on the default model, with no persona,
-     * keeping the draft.
+     * The prototype's `newChat`: back to the empty state on the default model, with no persona and
+     * compare off, keeping the draft.
      */
     fun onNewChat() {
         generation++
         openConversation.value = null
         shownConversation = null
-        newChatChoice = null
+        choices.reset()
         copied.clear()
         messageActions.reset()
         uiState.update {
@@ -235,32 +254,21 @@ class ChatViewModel(
     fun onDismissModelPicker() = uiState.update { it.copy(modelPickerOpen = false) }
 
     /**
-     * A row of the sheet, the prototype's `mRow.pick`: [choice] answers from now on, the accent
-     * follows at once and the sheet closes. In an open conversation it is saved with
+     * A row of the sheet, [row] being what it picks, the prototype's `mRow.pick` under
+     * [ModelChoice.picked]: a model alone, a persona, or while compare is on the second model, which
+     * the toast names, "comparing sonnet-4.5 ⇄ gpt-5". What it makes answers from now on, the accent
+     * follows at once and the sheet closes. While comparing, the first model's own row changes
+     * nothing and the sheet stays open. In an open conversation the choice is saved with
      * [ChatRepository.choose]; if that changes nothing, the chip shows the conversation's own
      * choice again. In a new chat it is kept as the new chat's choice for its first send.
      */
-    fun onPick(choice: ModelChoice) {
-        val conversationId = uiState.value.conversationId
-        uiState.update { it.copy(choice = choice, modelPickerOpen = false) }
-        if (conversationId == null) {
-            newChatChoice = choice
-            return
-        }
-        val pick = ++picks
-        val pickedFrom = generation
-        viewModelScope.launch {
-            val chosen = try {
-                repository.choose(conversationId, choice)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (ignored: Exception) {
-                false
-            }
-            // Refused: unless another pick or another conversation came since, show its own choice again.
-            val latest = pick == picks && pickedFrom == generation
-            val own = shownConversation?.choice
-            if (!chosen && latest && own != null) uiState.update { it.copy(choice = own) }
+    fun onPick(row: ModelChoice) {
+        val choice = uiState.value.choice.picked(row) ?: return
+        uiState.update { it.copy(modelPickerOpen = false) }
+        choices.apply(choice)
+        choice.comparing?.let { second ->
+            val models = listOf(choice.model.shortName, second.shortName)
+            toast.show(ChatToastUi(FeatureChatRes.string.chat_toast_comparing, models))
         }
     }
 

@@ -305,7 +305,7 @@ private fun SearchField(query: String, showsClear: Boolean, onQueryChange: (Stri
 private val PreviewNow = Instant.parse("2026-09-14T14:02:00Z")
 private val PreviewZone = TimeZone.UTC
 
-/** The prototype's `HISTORY` (557–568), without folders and extras, at its times. */
+/** The prototype's `HISTORY` (557–568), without folders or the "1 image" extra, at its times. */
 private val PreviewConversations: List<Conversation> = listOf(
     previewConversation(
         id = 1,
@@ -331,6 +331,7 @@ private val PreviewConversations: List<Conversation> = listOf(
         title = "SSE vs WebSocket for streaming chat",
         modelId = "gemini",
         updatedAt = PreviewNow - 15.hours - 31.minutes,
+        comparingWith = "gpt5",
     ),
     previewConversation(
         id = 5,
@@ -371,15 +372,23 @@ private val PreviewConversations: List<Conversation> = listOf(
     ),
 )
 
-private fun previewConversation(id: Long, title: String, modelId: String, updatedAt: Instant, pinned: Boolean = false) =
-    Conversation(
-        id = id,
-        title = title,
-        model = ModelCatalogue[modelId],
-        createdAt = updatedAt,
-        updatedAt = updatedAt,
-        pinned = pinned,
-    )
+private fun previewConversation(
+    id: Long,
+    title: String,
+    modelId: String,
+    updatedAt: Instant,
+    pinned: Boolean = false,
+    comparingWith: String? = null,
+) = Conversation(
+    id = id,
+    title = title,
+    model = ModelCatalogue[modelId],
+    createdAt = updatedAt,
+    updatedAt = updatedAt,
+    pinned = pinned,
+    compareOn = comparingWith != null,
+    compareWith = comparingWith?.let { ModelCatalogue[it] },
+)
 
 private fun previewState(
     query: String = "",

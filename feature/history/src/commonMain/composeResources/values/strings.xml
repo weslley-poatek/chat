@@ -12,6 +12,8 @@
     <string name="history_section_yesterday">yesterday</string>
     <string name="history_section_earlier">earlier</string>
 
+    <string name="history_compared_with">compared with %1$s</string>
+
     <string name="history_action_pin">pin</string>
     <string name="history_action_unpin">unpin</string>
     <string name="history_action_archive">archive</string>

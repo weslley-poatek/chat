@@ -1,8 +1,10 @@
 package br.com.weslleycampos.chat.feature.chat
 
 import androidx.compose.runtime.Immutable
+import br.com.weslleycampos.chat.core.ui.theme.ChatPalette
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
+import br.com.weslleycampos.chat.data.chat.models.CompareSide
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
@@ -19,17 +21,18 @@ import org.jetbrains.compose.resources.StringResource
  * Everything the Chat frame shows, the Model picker sheet over it included.
  *
  * @property conversationId The open conversation, or `null` for a new chat, which shows the empty state.
- * @property choice What answers the next message: the open conversation's model and persona, or the
- *   new chat's, which starts on the default model and is whatever the picker picked since. It is
- *   the chip, the empty state, the composer placeholder, the sheet's "●" and, through [model]'s
- *   palette, the accent.
+ * @property choice What answers the next message: the open conversation's model, persona and compare,
+ *   or the new chat's, which starts on the default model alone and is whatever the picker picked
+ *   since. It is the chip, the empty state, the composer placeholder, the sheet's "●", "◐" and
+ *   compare button and, through [model]'s palette, the accent: the primary model's while comparing.
  * @property messages The thread, oldest first, as the prototype's message view-model (810–832).
  * @property recent The empty state's "recent" rows, newest first.
  * @property draft The composer's text.
- * @property replyInProgress The prototype's `streaming`: the last reply is thinking or streaming.
+ * @property replyInProgress The prototype's `streaming`: the last reply, or a side of the last compare
+ *   pair, is thinking or streaming.
  * @property sending A send is on its way to the database.
  * @property copiedBlock The code block whose header reads "copied", the prototype's `copiedKey`.
- * @property toast The toast's text while it shows.
+ * @property toast The toast while it shows.
  * @property favorites The picker's "favorites", in catalogue order.
  * @property personas The picker's "personas", in their order.
  * @property modelPickerOpen The Model picker sheet shows: the prototype's `sheet:'chat'`.
@@ -50,7 +53,7 @@ data class ChatUiState(
     val replyInProgress: Boolean = false,
     val sending: Boolean = false,
     val copiedBlock: BlockKey? = null,
-    val toast: StringResource? = null,
+    val toast: ChatToastUi? = null,
     val favorites: List<ChatModel> = emptyList(),
     val personas: List<Persona> = emptyList(),
     val modelPickerOpen: Boolean = false,
@@ -75,10 +78,16 @@ val ChatUiState.canSend: Boolean get() = draft.isNotBlank() && !replyInProgress 
 /** How many lines tall the composer is at least. */
 val ChatUiState.draftRows: Int get() = draftRows(draft)
 
-/** The model chip: "Code reviewer · sonnet-4.5" with a persona, else the model's full name. */
+/**
+ * The model chip: "sonnet-4.5 ⇄ gpt-5" while comparing, "Code reviewer · sonnet-4.5" with a persona,
+ * else the model's full name.
+ */
 val ChatUiState.chipLabel: String get() = chipLabel(choice)
 
-/** The chat's Model picker sheet, marking [ChatUiState.choice]. */
+/** The composer's placeholder: "message sonnet-4.5…", or "ask sonnet-4.5 and gpt-5…" while comparing. */
+val ChatUiState.composerPlaceholder: String get() = composerPlaceholder(choice)
+
+/** The chat's Model picker sheet, marking [ChatUiState.choice] and its compare. */
 val ChatUiState.modelPicker: ModelPickerUiState
     get() = modelPickerUiState(
         variant = ModelPickerVariant.Chat,
@@ -90,7 +99,17 @@ val ChatUiState.modelPicker: ModelPickerUiState
 /** The fork banner under the top bar, after "⑂ ": "forked from “useDebounce hook” at message 2". */
 val ChatUiState.forkBanner: String? get() = forkOrigin?.let(::forkBannerText)
 
-/** Which code block a "copy" belongs to: the prototype's `msg.id + '-' + i`. */
+/**
+ * A toast: [message], formatted with [args] ("comparing %1$s ⇄ %2$s"), the prototype's `toastMsg`.
+ * A chat toast has at most two args, the models it names.
+ */
+@Immutable
+data class ChatToastUi(val message: StringResource, val args: List<String> = emptyList())
+
+/**
+ * Which code block a "copy" belongs to: the prototype's `msg.id + '-' + i`, or for a compare card
+ * its side's id, `msg.id + '-' + side + i`.
+ */
 @Immutable
 data class BlockKey(val messageId: Long, val index: Int)
 
@@ -126,13 +145,64 @@ sealed interface MessageUi {
         val blocks: List<BlockUi>,
         val inProgress: Boolean = false,
     ) : MessageUi
+
+    /**
+     * A compare reply, the prototype's `pair` (frame lines 186–206): two models' answers to one
+     * message, each in a card of the carousel. Its meta row reads "sonnet-4.5 ⇄ gpt-5 · 14:05".
+     *
+     * @property id The pair's id, its first side's: "continue with this →" names the pair by it.
+     * @property sides Always two: the conversation's model's card, then the compared model's.
+     */
+    @Immutable
+    data class ComparePair(
+        override val id: Long,
+        override val time: String,
+        val sides: List<CompareSideUi>,
+    ) : MessageUi {
+        /** A side is still thinking or streaming. */
+        val inProgress: Boolean get() = sides.any { it.inProgress }
+    }
 }
 
 /**
- * A tap selects it and shows its action row: every message but a reply thinking or streaming, as
- * the prototype's `showActions`.
+ * One card of a compare pair: a model's reply, drawn in that model's accent.
+ *
+ * @property id The side's own id, which its code blocks' [BlockKey]s carry.
+ * @property index Its place in the pair, `0` or `1`, which "continue with this →" hands on.
+ * @property modelName The card's header, the model's full name, "Claude Sonnet 4.5".
+ * @property modelShortName "sonnet-4.5": the pair's meta and "continuing with sonnet-4.5".
+ * @property palette The card's accent: its 7 dp dot and its caret.
+ * @property latency "1.9s" once the side is done, else `null`.
+ * @property interrupted It stopped before it finished: what it revealed, without a caret.
+ * @property thinking No block yet while in progress: the lone caret.
+ * @property inProgress It is thinking or streaming.
+ * @property done Every block is revealed: the card offers "continue with this →".
  */
-val MessageUi.selectable: Boolean get() = this !is MessageUi.Assistant || !inProgress
+@Immutable
+data class CompareSideUi(
+    val id: Long,
+    val index: Int,
+    val modelName: String,
+    val modelShortName: String,
+    val palette: ChatPalette,
+    val blocks: List<BlockUi>,
+    val latency: String?,
+    val interrupted: Boolean,
+    val thinking: Boolean,
+    val inProgress: Boolean,
+    val done: Boolean,
+)
+
+/**
+ * A tap selects it and shows its action row: every message but a reply thinking or streaming, as
+ * the prototype's `showActions`, and never a compare pair, which has no select handler.
+ */
+val MessageUi.selectable: Boolean
+    get() = when (this) {
+        is MessageUi.User -> true
+        is MessageUi.Assistant -> !inProgress
+        is MessageUi.ComparePair -> false
+    }
 
 /** One block of a reply, as drawn. Only the last block of a streaming reply has the caret. */
 @Immutable
@@ -169,18 +239,7 @@ data class RecentConversationUi(val id: Long, val title: String, val time: Strin
 fun Message.toUi(times: ChatTimes): MessageUi = when (this) {
     is Message.User -> MessageUi.User(id = id, time = times.messageTime(createdAt), text = text)
     is Message.Assistant -> toUi(time = times.messageTime(createdAt))
-    // Until row 7's compare cards draw both sides, a compare pair draws as its first side.
-    is Message.ComparePair -> sides.first().let { side ->
-        Message.Assistant(
-            id = id,
-            conversationId = conversationId,
-            model = side.model,
-            blocks = side.blocks,
-            status = side.status,
-            latency = side.latency,
-            createdAt = createdAt,
-        ).toUi(time = times.messageTime(createdAt))
-    }
+    is Message.ComparePair -> toUi(time = times.messageTime(createdAt))
 }
 
 /** The reply as the thread draws it, with [time] already formatted. */
@@ -201,6 +260,36 @@ fun Message.Assistant.toUi(time: String): MessageUi.Assistant {
     )
 }
 
+/** The compare pair as the thread draws it, with [time] already formatted: a card per side. */
+fun Message.ComparePair.toUi(time: String): MessageUi.ComparePair =
+    MessageUi.ComparePair(id = id, time = time, sides = sides.mapIndexed { index, side -> side.toUi(index) })
+
+/**
+ * A card: like a reply, its last paragraph streams with the caret, but the prototype's cards draw
+ * none inside code (frame line 197).
+ */
+private fun CompareSide.toUi(index: Int): CompareSideUi {
+    val streaming = status == ReplyStatus.STREAMING
+    return CompareSideUi(
+        id = id,
+        index = index,
+        modelName = model.name,
+        modelShortName = model.shortName,
+        palette = model.palette,
+        blocks = blocks.mapIndexed { blockIndex, block ->
+            block.toUi(
+                key = BlockKey(messageId = id, index = blockIndex),
+                caret = streaming && blockIndex == blocks.lastIndex && block !is Block.Code,
+            )
+        },
+        latency = latency?.takeIf { status == ReplyStatus.DONE }?.let(::formatLatency),
+        interrupted = status == ReplyStatus.INTERRUPTED,
+        thinking = status.isInProgress && blocks.isEmpty(),
+        inProgress = status.isInProgress,
+        done = status == ReplyStatus.DONE,
+    )
+}
+
 private fun Block.toUi(key: BlockKey, caret: Boolean): BlockUi = when (this) {
     is Block.Paragraph -> BlockUi.Paragraph(key = key, text = text, caret = caret)
     is Block.Code -> BlockUi.Code(key = key, language = language, text = text, tokens = tokenize(text), caret = caret)
@@ -214,13 +303,24 @@ private fun Block.toUi(key: BlockKey, caret: Boolean): BlockUi = when (this) {
 fun Conversation.toRecentUi(times: ChatTimes): RecentConversationUi =
     RecentConversationUi(id = id, title = title, time = times.recentTime(updatedAt))
 
-/** The prototype's `streaming`, derived from the data: the last message is a reply still on its way. */
-fun List<Message>.replyInProgress(): Boolean = (lastOrNull() as? Message.Assistant)?.status?.isInProgress == true
+/**
+ * The prototype's `streaming`, derived from the data: the last message is a reply still on its way,
+ * or a compare pair with a side still on its way.
+ */
+fun List<Message>.replyInProgress(): Boolean = when (val last = lastOrNull()) {
+    is Message.Assistant -> last.status.isInProgress
+    is Message.ComparePair -> last.isInProgress
+    is Message.User, null -> false
+}
 
-/** The code block with this [key], for "copy". */
+/** The code block with this [key], for "copy": a reply's, or a compare card's. */
 fun List<MessageUi>.codeBlock(key: BlockKey): BlockUi.Code? = asSequence()
-    .filterIsInstance<MessageUi.Assistant>()
-    .filter { it.id == key.messageId }
-    .flatMap { it.blocks }
+    .flatMap { message ->
+        when (message) {
+            is MessageUi.Assistant -> if (message.id == key.messageId) message.blocks else emptyList()
+            is MessageUi.ComparePair -> message.sides.filter { it.id == key.messageId }.flatMap { it.blocks }
+            is MessageUi.User -> emptyList()
+        }
+    }
     .filterIsInstance<BlockUi.Code>()
     .firstOrNull { it.key == key }

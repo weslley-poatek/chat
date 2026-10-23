@@ -52,6 +52,7 @@ class ChatViewModelPickerTest {
             models = models,
             times = testTimes(),
             forks = FakeForkRepository(repository),
+            compares = FakeCompareRepository(repository),
             relay = ChatToastRelay(),
         )
         runCurrent()
