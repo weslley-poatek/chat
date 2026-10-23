@@ -54,6 +54,8 @@ class ChatViewModelTest {
             repository = repository,
             models = models,
             times = testTimes(),
+            forks = FakeForkRepository(repository),
+            relay = ChatToastRelay(),
         )
         runCurrent()
         return viewModel

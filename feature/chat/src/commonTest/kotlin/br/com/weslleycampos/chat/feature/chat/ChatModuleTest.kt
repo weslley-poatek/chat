@@ -7,7 +7,10 @@ import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntryProvider
 import br.com.weslleycampos.chat.data.chat.ChatRepository
+import br.com.weslleycampos.chat.data.chat.ForkRepository
 import br.com.weslleycampos.chat.data.chat.ModelRepository
+import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
+import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_forked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -54,6 +57,18 @@ class ChatModuleTest {
     }
 
     @Test
+    fun koinHandsEveryChatViewModelTheOneToastRelay() {
+        val relay = koin.get<ChatToastRelay>()
+        relay.post(FeatureChatRes.string.chat_toast_forked)
+
+        val viewModel = koin.get<ChatViewModel> { parametersOf(ChatEntry(conversationId = 7)) }
+
+        assertSame(relay, koin.get<ChatToastRelay>())
+        assertEquals(FeatureChatRes.string.chat_toast_forked, viewModel.uiState.value.toast)
+        assertNull(relay.take())
+    }
+
+    @Test
     fun koinBuildsAChatViewModelForTheEntryItIsGiven() {
         val first = koin.get<ChatViewModel> { parametersOf(ChatEntry(conversationId = 7)) }
         val second = koin.get<ChatViewModel> { parametersOf(ChatEntry()) }
@@ -72,6 +87,9 @@ internal class FakeAppModule {
 
     @Single
     fun models(): ModelRepository = FakeModelRepository()
+
+    @Single
+    fun forks(): ForkRepository = FakeForkRepository()
 
     @Single
     fun navigator(): Navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(ChatEntry()) })

@@ -291,25 +291,31 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
 - **Key:** `@Serializable data class ChatEntry(val conversationId: Long? = null) : NavKey` in
   `:core:navigation`'s `entries.chat`; `null` is a new chat. `ChatEntryProvider` registers it.
 - **Screen:** `ChatScreen(uiState, onHistoryClick, onModelClick, onNewChat, onOpenRecent,
-  onDraftChange, onSend, onAttachClick, onVoiceClick, onCopyCode, modifier)`. `ChatEntryProvider`
-  wires `onAttachClick` (row 8) and `onVoiceClick` (row 11) to `{}`; `onModelClick` opens the Model
-  picker (row 4, `04-model-picker.md`), and `onHistoryClick` opens History through
+  onDraftChange, onSend, onAttachClick, onVoiceClick, onCopyCode, onDismissForkBanner,
+  messageActions: MessageActionCallbacks, modifier)`. `ChatEntryProvider` wires `onAttachClick`
+  (row 8) and `onVoiceClick` (row 11) to `{}`; `onModelClick` opens the Model picker (row 4,
+  `04-model-picker.md`), and `onHistoryClick` opens History through
   `ChatViewModel.onOpenHistory()`, which pushes `HistoryEntry` over the chat (row 5,
-  `05-history.md`). It wraps the screen and the sheet in `ChatTheme(palette =
+  `05-history.md`). A tap on a message selects it and shows its action row; the fork banner and
+  the read-aloud bar are row 6's (`06-message-actions.md`, whose UI contract lists them). It wraps the screen and the sheet in `ChatTheme(palette =
   uiState.model.palette, darkTheme = ChatTheme.colors.isDark)`, over the root's default-model theme.
 - **State:** `ChatUiState(conversationId, choice: ModelChoice, messages: List<MessageUi>, recent:
   List<RecentConversationUi>, draft, replyInProgress, sending, copiedBlock: BlockKey?, toast:
-  StringResource?, favorites, personas, modelPickerOpen)` with `model` and `persona` (row 4), and
-  `showsEmptyState`, `canSend`, `draftRows`, `chipLabel` and `modelPicker`. `MessageUi.User(id, time,
-  text)` and `MessageUi.Assistant(id, time, modelShortName, personaName, latency, interrupted,
-  thinking, blocks)`; `BlockUi.Paragraph`, `BlockUi.Code` (with `tokens`) and `BlockUi.NumberedList`,
-  each with its `BlockKey(messageId, index)`.
+  StringResource?, favorites, personas, modelPickerOpen, selectedMessage, copiedMessage, readAloud,
+  forkOrigin)` with `model` and `persona` (row 4), `forkBanner` (row 6), and `showsEmptyState`,
+  `canSend`, `draftRows`, `chipLabel` and `modelPicker`. `MessageUi.User(id, time, text)` and
+  `MessageUi.Assistant(id, time, modelShortName, personaName, latency, interrupted, thinking,
+  blocks, inProgress)`, each `selectable` unless on its way (row 6); `BlockUi.Paragraph`,
+  `BlockUi.Code` (with `tokens`) and `BlockUi.NumberedList`, each with its `BlockKey(messageId,
+  index)`.
 - **ViewModel:** `ChatViewModel(@InjectedParam entry: ChatEntry, navigator, repository, models:
-  ModelRepository, times)`, `Navigator by navigator`, bound only to its own class: `onDraftChange`,
+  ModelRepository, times, forks: ForkRepository, relay: ChatToastRelay)`, `Navigator by navigator`,
+  bound only to its own class, with row 6's `messageActions: MessageActions`: `onDraftChange`,
   `onSend`, `onNewChat`, `onOpenRecent(id)`, `onCopyCode(key, copy)`, row 4's `onOpenModelPicker`,
   `onDismissModelPicker`, `onPick(choice)` and `onToggleFavorite(model)`; row 5's `onOpenHistory` is an
   extension next to the class (only a navigation, and the class is at detekt's function limit).
-  Its toast and "copied" go through `TimedValue`, a value shown for a duration and then cleared.
+  Its toast and "copied" go through `TimedValue`, a value shown for a duration and then cleared;
+  "copied" is one `TimedValue<CopiedLabel>` for a code block and a message alike (row 6).
 - **`:core:ui`:** `ChatToast(message: String?, modifier)` (nothing while `null`) and
   `ChatToastDefaults.Duration` (1400 ms); `ChatIcons.Add`, `Back`, `Close`, `Memory`, `Menu`, `Mic`,
   `MicOff`, `NewChat`, `Search`, `Send`, `Settings`; `ChatIconButtonVariant.Accent`'s disabled look.
@@ -409,7 +415,8 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   and the keyboard with `safeDrawingPadding()`.
 - Decided (UI): until their rows, these do nothing: History (row 5), the model chip (row 4), "+"
   (row 8), a tap on the mic (row 11; hold to record is row 8), and a tap on a message (row 6, no
-  handler at all). The tips keep the prototype's copy. The local-only banner is dropped.
+  handler at all; row 6 now selects the message, `06-message-actions.md`). The tips keep the
+  prototype's copy. The local-only banner is dropped.
 - Decided (UI): the ViewModel lives in the entry's `ViewModelStore`, so the draft and the open
   conversation survive a configuration change. After process death the back stack restores the
   `ChatEntry` it was created with, usually a new chat: a conversation opened from "recent" is not

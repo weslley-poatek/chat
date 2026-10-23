@@ -1,10 +1,12 @@
 package br.com.weslleycampos.chat.feature.chat
 
 import br.com.weslleycampos.chat.data.chat.ChatRepository
+import br.com.weslleycampos.chat.data.chat.ForkRepository
 import br.com.weslleycampos.chat.data.chat.ModelRepository
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.Conversation
+import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
@@ -153,13 +155,14 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
 
     /**
      * A conversation of [model], or of [persona] on its model, with one done exchange: the user's
-     * [title], then [ReplyBlocks] written by the same.
+     * [title], then [ReplyBlocks] written by the same. With [fork], it is a fork from there.
      */
     fun seed(
         title: String,
         model: ChatModel = ModelCatalogue.default,
         persona: Persona? = null,
         updatedAt: Instant = Now,
+        fork: ForkOrigin? = null,
     ): Conversation {
         val conversation = Conversation(
             id = nextId++,
@@ -168,6 +171,7 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
             persona = persona,
             createdAt = updatedAt,
             updatedAt = updatedAt,
+            fork = fork,
         )
         conversations.update { it + conversation }
         val user = Message.User(id = nextId++, conversationId = conversation.id, text = title, createdAt = updatedAt)
@@ -184,6 +188,45 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         messages.update { it + (conversation.id to listOf(user, reply)) }
         return conversation
     }
+
+    /**
+     * Like the real fork: a new conversation, on top, with copies of the thread up to [messageId]
+     * under new ids and its origin; `null` for an unknown conversation or message, or a reply on
+     * its way up to it.
+     */
+    fun fork(conversationId: Long, messageId: Long): Long? {
+        val source = conversations.value.firstOrNull { it.id == conversationId } ?: return null
+        val thread = messages.value[conversationId].orEmpty()
+        val index = thread.indexOfFirst { it.id == messageId }
+        if (index < 0) return null
+        val kept = thread.take(index + 1)
+        if (kept.any { it is Message.Assistant && it.status.isInProgress }) return null
+        val fork = source.copy(
+            id = nextId++,
+            createdAt = Now,
+            updatedAt = Now,
+            pinned = false,
+            archived = false,
+            fork = ForkOrigin(sourceTitle = source.title, messageNumber = index + 1),
+        )
+        val copies = kept.map { message ->
+            when (message) {
+                is Message.User -> message.copy(id = nextId++, conversationId = fork.id)
+                is Message.Assistant -> message.copy(id = nextId++, conversationId = fork.id)
+            }
+        }
+        conversations.update { it + fork }
+        messages.update { it + (fork.id to copies) }
+        return fork.id
+    }
+
+    /** Like the real one: hides a fork's banner once, and says whether it changed anything. */
+    fun dismissForkBanner(conversationId: Long): Boolean =
+        rewrite(
+            id = conversationId,
+            changes = { it.fork?.bannerDismissed == false },
+            update = { it.copy(fork = it.fork?.copy(bannerDismissed = true)) },
+        )
 
     private fun play(conversationId: Long?, text: String, newChat: ModelChoice): Long? {
         if (text.isEmpty()) return null
@@ -227,6 +270,30 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
 
     private fun update(reply: Message.Assistant) = messages.update { all ->
         all + (reply.conversationId to all.getValue(reply.conversationId).map { if (it.id == reply.id) reply else it })
+    }
+}
+
+/**
+ * A [ForkRepository] on [chats]' conversations that keeps the real one's contract. [answer], when
+ * set, replaces the fork.
+ */
+internal class FakeForkRepository(private val chats: FakeChatRepository = FakeChatRepository()) : ForkRepository {
+    /** Every `fork`, in order. */
+    val forks = mutableListOf<Pair<Long, Long>>()
+
+    /** Every `dismissForkBanner`, in order. */
+    val dismissals = mutableListOf<Long>()
+    var answer: (suspend (conversationId: Long, messageId: Long) -> Long?)? = null
+
+    override suspend fun fork(conversationId: Long, messageId: Long): Long? {
+        forks += conversationId to messageId
+        answer?.let { return it(conversationId, messageId) }
+        return chats.fork(conversationId = conversationId, messageId = messageId)
+    }
+
+    override suspend fun dismissForkBanner(conversationId: Long): Boolean {
+        dismissals += conversationId
+        return chats.dismissForkBanner(conversationId)
     }
 }
 

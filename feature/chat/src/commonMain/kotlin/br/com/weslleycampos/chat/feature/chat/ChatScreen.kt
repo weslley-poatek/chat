@@ -17,6 +17,7 @@ import br.com.weslleycampos.chat.core.ui.ChatTheme
 import br.com.weslleycampos.chat.core.ui.components.ChatToast
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
+import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
@@ -24,6 +25,7 @@ import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
+import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_forked
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_send_failed
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Duration
@@ -31,9 +33,10 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 /**
- * The Chat frame (frames.md §1.2–1.7): the top bar, the thread or, for a new chat, the empty
- * state, and the composer. It sits inside the safe area and above the keyboard, which shortens the
- * thread rather than covering it. The toast floats over the thread's bottom edge.
+ * The Chat frame (frames.md §1.2–1.7): the top bar, a fork's banner, the thread or, for a new chat,
+ * the empty state, and the composer. It sits inside the safe area and above the keyboard, which
+ * shortens the thread rather than covering it. The toast floats over the thread's bottom edge. A
+ * tap on a message, its action row and the read-aloud bar call [messageActions].
  *
  * The accent is the [ChatUiState.model]'s: wrap the screen in `ChatTheme(palette = uiState.model.palette)`.
  * The Model picker sheet the chip opens is [br.com.weslleycampos.chat.feature.chat.picker.ModelPickerSheet],
@@ -51,6 +54,8 @@ fun ChatScreen(
     onAttachClick: () -> Unit,
     onVoiceClick: () -> Unit,
     onCopyCode: (BlockKey) -> Unit,
+    onDismissForkBanner: () -> Unit,
+    messageActions: MessageActionCallbacks,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -65,6 +70,7 @@ fun ChatScreen(
             onModelClick = onModelClick,
             onNewChat = onNewChat,
         )
+        uiState.forkBanner?.let { banner -> ForkBanner(text = banner, onDismiss = onDismissForkBanner) }
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -78,7 +84,15 @@ fun ChatScreen(
                     onOpenRecent = onOpenRecent,
                 )
             } else {
-                ChatThread(messages = uiState.messages, copiedBlock = uiState.copiedBlock, onCopyCode = onCopyCode)
+                ChatThread(
+                    messages = uiState.messages,
+                    copiedBlock = uiState.copiedBlock,
+                    onCopyCode = onCopyCode,
+                    selectedMessage = uiState.selectedMessage,
+                    copiedMessage = uiState.copiedMessage,
+                    readAloud = uiState.readAloud,
+                    actions = messageActions,
+                )
             }
             ChatToast(
                 message = uiState.toast?.let { stringResource(it) },
@@ -107,6 +121,11 @@ private const val PreviewReplyTime = "14:02"
 private val PreviewLatency = 800.milliseconds
 private val PreviewGemini = ModelCatalogue["gemini"]
 private val PreviewReviewer = PersonaPresets.personas.first()
+private val PreviewFork = ForkOrigin(sourceTitle = "useDebounce hook with leading edge", messageNumber = 2)
+
+/** 42 % of the bar, "0:07 / 0:17", and 66 %, "0:11 / 0:17". */
+private const val PreviewReadingTicks = 70
+private const val PreviewPausedTicks = 110
 
 private val PreviewRecent = listOf(
     RecentConversationUi(id = 1, title = "useDebounce hook with leading edge", time = "14:02"),
@@ -174,17 +193,8 @@ private fun previewThread(
     conversationId = PreviewConversationId,
     choice = choice,
     messages = messages.toList(),
-    replyInProgress = (messages.lastOrNull() as? MessageUi.Assistant)?.let { it.thinking || it.hasCaret } == true,
+    replyInProgress = (messages.lastOrNull() as? MessageUi.Assistant)?.inProgress == true,
 )
-
-private val MessageUi.Assistant.hasCaret: Boolean
-    get() = blocks.any { block ->
-        when (block) {
-            is BlockUi.Paragraph -> block.caret
-            is BlockUi.Code -> block.caret
-            is BlockUi.NumberedList -> false
-        }
-    }
 
 private const val PreviewMultiLineDraft = "Add a leading option.\nKeep it generic,\nand cancel on unmount."
 private const val PreviewQuestion = "My debounced value is always one render behind. Why?"
@@ -248,6 +258,15 @@ class ChatScreenPreviewParameterProvider : PreviewParameterProvider<ChatPreviewC
             previewReply(id = 2, status = ReplyStatus.DONE, blocks = PreviewReplyBlocks, model = PreviewGemini),
             choice = ModelChoice(PreviewGemini),
         ).copy(copiedBlock = BlockKey(messageId = 2, index = 3)),
+        "Selected · question" to done.copy(selectedMessage = 1),
+        "Selected · reply" to done.copy(selectedMessage = 2),
+        "Copied · reply" to done.copy(selectedMessage = 2, copiedMessage = 2),
+        "Reading · playing" to done.copy(readAloud = ReadAloudUi(messageId = 2, ticks = PreviewReadingTicks)),
+        "Reading · paused" to done.copy(
+            readAloud = ReadAloudUi(messageId = 2, ticks = PreviewPausedTicks, playing = false),
+        ),
+        "Fork banner" to done.copy(forkOrigin = PreviewFork),
+        "Toast · forked" to done.copy(forkOrigin = PreviewFork, toast = FeatureChatRes.string.chat_toast_forked),
     )
 
     override val values: Sequence<ChatPreviewCase> = sequence {
@@ -278,6 +297,8 @@ private fun ChatScreenPreview(
             onAttachClick = {},
             onVoiceClick = {},
             onCopyCode = {},
+            onDismissForkBanner = {},
+            messageActions = MessageActionCallbacks(),
         )
     }
 }

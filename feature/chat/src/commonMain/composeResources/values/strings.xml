@@ -20,6 +20,18 @@
     <string name="chat_send">Send</string>
 
     <string name="chat_toast_send_failed">couldn’t send, try again</string>
+    <string name="chat_toast_forked">forked · new conversation</string>
+    <string name="chat_toast_fork_failed">couldn’t fork, try again</string>
+
+    <string name="chat_message_show_actions">Show actions</string>
+    <string name="chat_message_hide_actions">Hide actions</string>
+    <string name="chat_action_fork">fork here</string>
+    <string name="chat_action_read_aloud">read aloud</string>
+    <string name="chat_action_retry">retry</string>
+    <string name="chat_read_play">Play</string>
+    <string name="chat_read_pause">Pause</string>
+    <string name="chat_read_stop">Stop reading</string>
+    <string name="chat_fork_banner_dismiss">Dismiss</string>
 
     <string name="model_picker_title_chat">Model</string>
     <string name="model_picker_title_default">Default model</string>

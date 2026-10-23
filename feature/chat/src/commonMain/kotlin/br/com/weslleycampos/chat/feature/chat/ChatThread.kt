@@ -3,6 +3,7 @@ package br.com.weslleycampos.chat.feature.chat
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,8 @@ import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.withStyle
 import br.com.weslleycampos.chat.core.ui.ChatTheme
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
+import br.com.weslleycampos.chat.feature.chat.resources.chat_message_hide_actions
+import br.com.weslleycampos.chat.feature.chat.resources.chat_message_show_actions
 import br.com.weslleycampos.chat.feature.chat.resources.chat_meta_interrupted
 import br.com.weslleycampos.chat.feature.chat.resources.chat_meta_user
 import kotlinx.coroutines.flow.drop
@@ -38,15 +41,20 @@ import org.jetbrains.compose.resources.stringResource
 private const val MessageFadeInMillis = 200
 
 /**
- * The thread (frame lines 119 and 142–184): the messages, oldest first. Whenever they change, a
- * send and every streaming tick included, or the thread gets shorter under the keyboard, it snaps
- * to its end, as the prototype's `scrollTop = scrollHeight`.
+ * The thread (frame lines 119 and 142–217): the messages, oldest first, the [selectedMessage]'s
+ * action row and the read-aloud bar under the reply [readAloud] reads. Whenever the messages
+ * change, a send and every streaming tick included, or the thread gets shorter under the keyboard,
+ * it snaps to its end, as the prototype's `scrollTop = scrollHeight`.
  */
 @Composable
 internal fun ChatThread(
     messages: List<MessageUi>,
     copiedBlock: BlockKey?,
     onCopyCode: (BlockKey) -> Unit,
+    selectedMessage: Long?,
+    copiedMessage: Long?,
+    readAloud: ReadAloudUi?,
+    actions: MessageActionCallbacks,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
 ) {
@@ -64,6 +72,10 @@ internal fun ChatThread(
                 message = message,
                 copiedBlock = copiedBlock,
                 onCopyCode = onCopyCode,
+                selected = message.id == selectedMessage,
+                copied = message.id == copiedMessage,
+                reading = readAloud?.takeIf { it.messageId == message.id },
+                actions = actions,
                 modifier = Modifier.animateItem(
                     fadeInSpec = tween(durationMillis = MessageFadeInMillis, easing = EaseOut),
                     placementSpec = null,
@@ -85,13 +97,32 @@ private suspend fun LazyListState.scrollToEnd() {
     if (hidden > 0) scrollBy(hidden.toFloat())
 }
 
+/**
+ * One message: its meta row and its bubble or blocks, which a tap selects (the prototype's
+ * `m.select`, "Show actions" to screen readers), then a reply's read-aloud bar while it is read
+ * and the action row while the message is selected.
+ */
 @Composable
 private fun ChatMessage(
     message: MessageUi,
     copiedBlock: BlockKey?,
     onCopyCode: (BlockKey) -> Unit,
+    selected: Boolean,
+    copied: Boolean,
+    reading: ReadAloudUi?,
+    actions: MessageActionCallbacks,
     modifier: Modifier = Modifier,
 ) {
+    val tap = Modifier.messageTap(
+        enabled = message.selectable,
+        label = stringResource(
+            when {
+                selected -> FeatureChatRes.string.chat_message_hide_actions
+                else -> FeatureChatRes.string.chat_message_show_actions
+            },
+        ),
+        onClick = { actions.onSelect(message.id) },
+    )
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -105,7 +136,7 @@ private fun ChatMessage(
         when (message) {
             is MessageUi.User -> {
                 MetaRow(text = stringResource(FeatureChatRes.string.chat_meta_user, message.time), assistant = false)
-                UserBubble(text = message.text)
+                UserBubble(text = message.text, modifier = tap)
             }
             is MessageUi.Assistant -> {
                 val interrupted = if (message.interrupted) {
@@ -123,11 +154,28 @@ private fun ChatMessage(
                     ),
                     assistant = true,
                 )
-                AssistantBody(message = message, copiedBlock = copiedBlock, onCopyCode = onCopyCode)
+                AssistantBody(message = message, copiedBlock = copiedBlock, onCopyCode = onCopyCode, modifier = tap)
+                if (reading != null) {
+                    ReadAloudBar(reading = reading, onPlayPause = actions.onPlayPause, onStop = actions.onStopReading)
+                }
             }
         }
+        if (selected && message.selectable) MessageActionRow(message = message, copied = copied, actions = actions)
     }
 }
+
+/** A tap that selects the message, labelled for screen readers; none on a reply on its way. */
+private fun Modifier.messageTap(enabled: Boolean, label: String, onClick: () -> Unit): Modifier =
+    if (enabled) {
+        clickable(
+            interactionSource = null,
+            indication = null,
+            onClickLabel = label,
+            onClick = onClick,
+        )
+    } else {
+        this
+    }
 
 /** The meta row: a 6 px accent circle for a reply, a 6 px square for the user, then the meta text. */
 @Composable
@@ -151,10 +199,10 @@ private fun MetaRow(text: String, assistant: Boolean) {
 }
 
 @Composable
-private fun UserBubble(text: String) {
+private fun UserBubble(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(color = ChatTheme.colors.surface.secondary, shape = ChatTheme.shapes.bubble)
             .padding(horizontal = ChatTheme.spacing.large, vertical = ChatTheme.spacing.medium),
@@ -164,8 +212,13 @@ private fun UserBubble(text: String) {
 }
 
 @Composable
-private fun AssistantBody(message: MessageUi.Assistant, copiedBlock: BlockKey?, onCopyCode: (BlockKey) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(ChatTheme.spacing.medium)) {
+private fun AssistantBody(
+    message: MessageUi.Assistant,
+    copiedBlock: BlockKey?,
+    onCopyCode: (BlockKey) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(ChatTheme.spacing.medium)) {
         for (block in message.blocks) {
             when (block) {
                 is BlockUi.Paragraph -> Paragraph(block)

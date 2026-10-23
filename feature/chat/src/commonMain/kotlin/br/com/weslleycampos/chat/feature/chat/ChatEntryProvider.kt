@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
@@ -30,9 +31,26 @@ class ChatEntryProvider : EntryProvider {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             val clipboard = LocalClipboard.current
             val scope = rememberCoroutineScope()
-            val copyToClipboard: (String) -> Unit = { text ->
-                scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) }
+            val copyToClipboard: (String) -> Unit = remember(clipboard, scope) {
+                fun(text: String) {
+                    scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) }
+                }
             }
+            val actions = viewModel.messageActions
+            val messageActions = remember(actions, copyToClipboard) {
+                MessageActionCallbacks(
+                    onSelect = actions::onSelect,
+                    onCopy = { message -> actions.onCopy(message, copyToClipboard) },
+                    onFork = actions::onFork,
+                    onReadAloud = actions::onReadAloud,
+                    onRetry = actions::onRetry,
+                    onPlayPause = actions.player::onPlayPause,
+                    onStopReading = actions.player::onStop,
+                )
+            }
+            // Leaving the chat, for History, another app or a rotation, closes the action row and
+            // pauses a read, as the prototype's `go()` clears the selection.
+            LifecycleStartEffect(actions) { onStopOrDispose { actions.onLeave() } }
             val modelPicker = remember(uiState.favorites, uiState.personas, uiState.choice) { uiState.modelPicker }
             // The chat wears the accent of what answers it over the root's, which is the default
             // model's, in the root's light or dark; a pick changes it at once.
@@ -50,6 +68,8 @@ class ChatEntryProvider : EntryProvider {
                     // Voice mode is row 11.
                     onVoiceClick = {},
                     onCopyCode = { block -> viewModel.onCopyCode(block, copyToClipboard) },
+                    onDismissForkBanner = actions::onDismissForkBanner,
+                    messageActions = messageActions,
                 )
                 // Row 7 adds the compare button to the sheet's `headerAction`.
                 ModelPickerSheet(

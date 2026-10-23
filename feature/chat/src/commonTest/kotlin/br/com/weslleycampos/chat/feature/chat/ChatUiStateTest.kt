@@ -2,6 +2,7 @@ package br.com.weslleycampos.chat.feature.chat
 
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.Conversation
+import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
@@ -10,6 +11,7 @@ import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import br.com.weslleycampos.chat.feature.chat.picker.ModelPickerVariant
 import br.com.weslleycampos.chat.feature.chat.picker.modelPickerUiState
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
+import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_forked
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_send_failed
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -163,6 +165,29 @@ class ChatUiStateTest {
     }
 
     @Test
+    fun onlyAMessageThatIsNotOnItsWayIsSelectable() {
+        val user = Message.User(id = 1, conversationId = 1, text = "Why?", createdAt = Now).toUi(testTimes())
+
+        assertTrue(user.selectable)
+        assertEquals(
+            listOf(true, true, false, false),
+            ReplyStatus.entries.map { assertIs<MessageUi.Assistant>(reply(it)).inProgress },
+        )
+        assertEquals(listOf(false, false, true, true), ReplyStatus.entries.map { reply(it).selectable })
+    }
+
+    @Test
+    fun theForkBannerShowsOnlyWithAForkOrigin() {
+        val forked = ChatUiState(
+            conversationId = 1,
+            forkOrigin = ForkOrigin(sourceTitle = "useDebounce hook", messageNumber = 2),
+        )
+
+        assertNull(ChatUiState(conversationId = 1).forkBanner)
+        assertEquals("forked from “useDebounce hook” at message 2", forked.forkBanner)
+    }
+
+    @Test
     fun aReplyIsInProgressOnlyWhileTheLastMessageIsThinkingOrStreaming() {
         val user = Message.User(id = 1, conversationId = 1, text = "Why?", createdAt = Now)
         fun assistant(status: ReplyStatus) = Message.Assistant(
@@ -247,6 +272,13 @@ class ChatUiStateTest {
             "Send disabled",
             "Toast",
             "Copied · Gemini",
+            "Selected · question",
+            "Selected · reply",
+            "Copied · reply",
+            "Reading · playing",
+            "Reading · paused",
+            "Fork banner",
+            "Toast · forked",
         )
 
         assertEquals(names + names, cases.map { it.name })
@@ -276,5 +308,20 @@ class ChatUiStateTest {
         assertEquals(Gemini, copied.model)
         val copiedBlock = assertNotNull(copied.copiedBlock)
         assertEquals(copiedBlock, copied.messages.codeBlock(copiedBlock)?.key)
+        val question = states.getValue("Selected · question")
+        assertIs<MessageUi.User>(question.messages.single { it.id == question.selectedMessage })
+        val reply = states.getValue("Selected · reply")
+        assertIs<MessageUi.Assistant>(reply.messages.single { it.id == reply.selectedMessage })
+        val copiedReply = states.getValue("Copied · reply")
+        assertEquals(copiedReply.selectedMessage, assertNotNull(copiedReply.copiedMessage))
+        val playing = assertNotNull(states.getValue("Reading · playing").readAloud)
+        val paused = assertNotNull(states.getValue("Reading · paused").readAloud)
+        assertEquals(true to false, playing.playing to paused.playing)
+        assertTrue(playing.progress in 0.1f..0.9f && paused.progress in 0.1f..0.9f)
+        assertIs<MessageUi.Assistant>(reply.messages.single { it.id == playing.messageId })
+        assertNotNull(states.getValue("Fork banner").forkBanner)
+        val forked = states.getValue("Toast · forked")
+        assertNotNull(forked.forkBanner)
+        assertEquals(FeatureChatRes.string.chat_toast_forked, forked.toast)
     }
 }

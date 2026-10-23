@@ -37,12 +37,14 @@
 > conversations and messages in Room, with canned replies streamed into them, the model picker's
 > favorites, personas and default model, History's data: the conversation list, its search,
 > pins, archives and deletes, and forks: a conversation copied up to a message, with where it came
-> from. After sign-in the app opens the chat thread: send
-> a message, watch the reply think, stream and finish, copy its code, and reopen a recent
-> conversation. The model chip opens the model picker: pick one of the eight models or a persona,
-> star favorites, and the accent follows at once. The History button opens every conversation on
-> the device, grouped pinned, today, yesterday and earlier: search it, swipe a row to pin, archive
-> or delete it, and tap one to reopen it. Voice, attachments, Memory and Settings come next.
+> from. After sign-in the app opens the chat thread: send a message, watch the reply think, stream
+> and finish, copy its code, and reopen a recent conversation. Tap a message to copy it, fork the
+> conversation there (the fork says where it came from until its banner is dismissed), play a
+> reply's read-aloud bar (visual only, nothing speaks), or put a message of yours back in the
+> composer. The model chip opens the model picker: pick one of the eight models or a persona, star
+> favorites, and the accent follows at once. The History button opens every conversation on the
+> device, grouped pinned, today, yesterday and earlier: search it, swipe a row to pin, archive or
+> delete it, and tap one to reopen it. Voice, attachments, Memory and Settings come next.
 > The voice mode screen in the banner comes from the design prototype, not from a build of the app.
 
 ## ✨ Highlights
@@ -101,7 +103,7 @@ flowchart TD
     prefs[":core:preferences<br/><i>plain + encrypted DataStore</i>"]
     ui[":core:ui<br/><i>ChatTheme · tokens · components</i>"]
     featureAuth[":feature:auth<br/><i>Splash · sign-in: Google, email</i>"]
-    featureChat[":feature:chat<br/><i>Chat thread · composer · model picker</i>"]
+    featureChat[":feature:chat<br/><i>Chat thread · composer · model picker · message actions</i>"]
     featureHistory[":feature:history<br/><i>History · search · swipe to pin, archive, delete</i>"]
     dataAuth[":data:auth<br/><i>AuthManager · Firebase Auth</i>"]
     dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · ForkRepository · canned streamed replies · history</i>"]
@@ -137,7 +139,7 @@ flowchart TD
 | [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. Both on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
 | [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency, and `choose`, which changes a conversation's model and persona. For History, the list of conversations that are not archived and its search over titles, the user's messages and model names, `setPinned`, `archive` and `delete`, and `groupHistory`, which splits the list into pinned, today, yesterday and earlier. `ModelRepository`: the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. `ForkRepository`: "fork here", a new conversation copied from another one up to a message, which records where it came from for the fork banner, and the banner's dismissal. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
 | [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen: Google, email + password sign-in, account creation and the password-reset email, as modes of one screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
-| [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. The model picker sheet: favorites, personas and every model, stars, and a pick that changes the conversation or the new chat. The accent follows the conversation's model. The History button opens History. |
+| [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. A tap on a message shows its actions: "copy", "⑂ fork here", which opens the fork under a banner saying where it came from, "read aloud", a visual player with no speech, and "retry", which puts the message back in the composer. The model picker sheet: favorites, personas and every model, stars, and a pick that changes the conversation or the new chat. The accent follows the conversation's model. The History button opens History. |
 | [`:feature:history`](feature/history) | History: every conversation on the device in "pinned", "today", "yesterday" and "earlier", newest first, regrouped when the date changes; the search over titles, the user's messages and model names; rows that swipe left to pin, archive or delete, with the "archived" and "deleted" toasts, and the same actions for screen readers; a tap that reopens the conversation in the chat. The status row says how many conversations are on this device, since nothing syncs. |
 
 <details>
@@ -380,7 +382,7 @@ chat/
 │   └── chat/                      💬 ChatRepository, ModelRepository, ForkRepository, canned streamed replies, models, personas, History's groups
 ├── feature/
 │   ├── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)
-│   ├── chat/                      💬 The chat thread: empty state, messages, code blocks, composer, model picker
+│   ├── chat/                      💬 The chat thread: empty state, messages, code blocks, composer, model picker, message actions
 │   └── history/                   🗂️ History: grouped list, search, swipe to pin, archive or delete
 ├── iosApp/                        🍎 Xcode project and SwiftUI host
 │   └── KotlinMultiplatformLinkedPackage/  📦 Generated SwiftPM package for the iOS SDKs

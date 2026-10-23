@@ -7,6 +7,7 @@ import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
 import br.com.weslleycampos.chat.data.chat.ChatRepository
+import br.com.weslleycampos.chat.data.chat.ForkRepository
 import br.com.weslleycampos.chat.data.chat.ModelRepository
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.Conversation
@@ -44,6 +45,9 @@ import kotlin.time.Duration.Companion.milliseconds
  * What answers is [ChatUiState.choice]: an open conversation's own model and persona, which a pick
  * changes through [ChatRepository.choose]; or, in a new chat, the default model until the user
  * picks, which only this ViewModel keeps and the first send hands to [ChatRepository.send].
+ *
+ * A tap on a message, its action row, the read-aloud bar and the fork banner are [messageActions],
+ * on [ForkRepository]. A toast carried over by [ChatToastRelay], a fork's, shows as this opens.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @KoinViewModel(binds = [ChatViewModel::class])
@@ -53,6 +57,8 @@ class ChatViewModel(
     private val repository: ChatRepository,
     private val models: ModelRepository,
     private val times: ChatTimes,
+    forks: ForkRepository,
+    relay: ChatToastRelay,
 ) : ViewModel(), Navigator by navigator {
     val uiState: StateFlow<ChatUiState>
         field = MutableStateFlow(ChatUiState(conversationId = entry.conversationId))
@@ -81,9 +87,17 @@ class ChatViewModel(
     private var picks = 0
     private val messageUis = MessageUiCache()
 
-    /** The prototype's `copy` timer: "copied" on the block for [CopiedDuration]. */
-    private val copied = TimedValue<BlockKey>(viewModelScope, CopiedDuration) { key ->
-        uiState.update { it.copy(copiedBlock = key) }
+    /**
+     * The prototype's `copy` timer: "copied" on a code block or a message for [CopiedDuration], one
+     * at a time, as its single `copiedKey`.
+     */
+    private val copied = TimedValue<CopiedLabel>(viewModelScope, CopiedDuration) { label ->
+        uiState.update {
+            it.copy(
+                copiedBlock = (label as? CopiedLabel.OfCode)?.key,
+                copiedMessage = (label as? CopiedLabel.OfMessage)?.messageId,
+            )
+        }
     }
 
     /** The prototype's `toastMsg`: a new toast replaces the shown one and restarts its time. */
@@ -91,7 +105,19 @@ class ChatViewModel(
         uiState.update { it.copy(toast = message) }
     }
 
+    /** A tap on a message, its action row, the read-aloud bar and the fork banner's "×". */
+    val messageActions = MessageActions(
+        scope = viewModelScope,
+        state = uiState,
+        forks = forks,
+        navigator = navigator,
+        copied = copied,
+        toast = toast,
+        relay = relay,
+    )
+
     init {
+        relay.take()?.let(toast::show)
         viewModelScope.launch {
             models.observeDefaultModel().collect { model ->
                 defaultModel = model
@@ -170,12 +196,14 @@ class ChatViewModel(
         shownConversation = null
         newChatChoice = null
         copied.clear()
+        messageActions.reset()
         uiState.update {
             it.copy(
                 conversationId = null,
                 choice = ModelChoice(defaultModel),
                 messages = emptyList(),
                 replyInProgress = false,
+                forkOrigin = null,
             )
         }
     }
@@ -187,9 +215,16 @@ class ChatViewModel(
         openConversation.value = conversationId
         shownConversation = null
         copied.clear()
+        messageActions.reset()
         val choice = recentConversations.firstOrNull { it.id == conversationId }?.choice ?: uiState.value.choice
         uiState.update {
-            it.copy(conversationId = conversationId, choice = choice, messages = emptyList(), replyInProgress = false)
+            it.copy(
+                conversationId = conversationId,
+                choice = choice,
+                messages = emptyList(),
+                replyInProgress = false,
+                forkOrigin = null,
+            )
         }
     }
 
@@ -248,18 +283,20 @@ class ChatViewModel(
 
     /**
      * "copy" on a code block: hands its text as it is now to [copy], the platform clipboard, and
-     * reads "copied" for 1200 ms. Another copy restarts that time.
+     * reads "copied" for 1200 ms. Another copy, of a block or a message, restarts that time.
      */
     fun onCopyCode(key: BlockKey, copy: (String) -> Unit) {
         val block = uiState.value.messages.codeBlock(key) ?: return
         copy(block.text)
-        copied.show(key)
+        copied.show(CopiedLabel.OfCode(key))
     }
 
     private fun show(thread: ObservedThread?) {
         val conversation = thread?.conversation
         when {
-            thread == null -> uiState.update { it.copy(messages = emptyList(), replyInProgress = false) }
+            thread == null -> {
+                uiState.update { it.copy(messages = emptyList(), replyInProgress = false, forkOrigin = null) }
+            }
             // Gone, or never there: a new chat rather than a thread that stays empty.
             conversation == null -> onNewChat()
             else -> {
@@ -271,8 +308,10 @@ class ChatViewModel(
                         choice = if (conversationChanged) conversation.choice else it.choice,
                         messages = messageUis.map(thread.messages, times),
                         replyInProgress = thread.messages.replyInProgress(),
+                        forkOrigin = conversation.fork?.takeUnless { origin -> origin.bannerDismissed },
                     )
                 }
+                messageActions.onThread(thread.messages)
             }
         }
     }

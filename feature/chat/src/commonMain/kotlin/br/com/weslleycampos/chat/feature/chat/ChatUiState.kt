@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.Conversation
+import br.com.weslleycampos.chat.data.chat.models.ForkOrigin
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
@@ -32,6 +33,12 @@ import org.jetbrains.compose.resources.StringResource
  * @property favorites The picker's "favorites", in catalogue order.
  * @property personas The picker's "personas", in their order.
  * @property modelPickerOpen The Model picker sheet shows: the prototype's `sheet:'chat'`.
+ * @property selectedMessage The message whose action row shows, the prototype's `selectedMsg`.
+ * @property copiedMessage The message whose "copy" reads "copied", the prototype's `copiedKey` for a
+ *   message; at most one of it and [copiedBlock] is set.
+ * @property readAloud The read-aloud bar, under the reply it reads, or `null`.
+ * @property forkOrigin Where the open conversation was forked from while its fork banner shows, the
+ *   prototype's `forkFrom`; `null` for a conversation that is no fork or whose banner was dismissed.
  */
 @Immutable
 data class ChatUiState(
@@ -47,6 +54,10 @@ data class ChatUiState(
     val favorites: List<ChatModel> = emptyList(),
     val personas: List<Persona> = emptyList(),
     val modelPickerOpen: Boolean = false,
+    val selectedMessage: Long? = null,
+    val copiedMessage: Long? = null,
+    val readAloud: ReadAloudUi? = null,
+    val forkOrigin: ForkOrigin? = null,
 ) {
     /** The model that answers: [choice]'s, the persona's own while one answers. */
     val model: ChatModel get() = choice.model
@@ -76,6 +87,9 @@ val ChatUiState.modelPicker: ModelPickerUiState
         active = choice,
     )
 
+/** The fork banner under the top bar, after "⑂ ": "forked from “useDebounce hook” at message 2". */
+val ChatUiState.forkBanner: String? get() = forkOrigin?.let(::forkBannerText)
+
 /** Which code block a "copy" belongs to: the prototype's `msg.id + '-' + i`. */
 @Immutable
 data class BlockKey(val messageId: Long, val index: Int)
@@ -98,6 +112,7 @@ sealed interface MessageUi {
      * @property latency "0.8s" once the reply is done, else `null`.
      * @property interrupted It stopped before it finished; it shows what it revealed, without a caret.
      * @property thinking No block yet while in progress: the lone blinking caret.
+     * @property inProgress It is thinking or streaming, so it cannot be selected yet.
      */
     @Immutable
     data class Assistant(
@@ -109,8 +124,15 @@ sealed interface MessageUi {
         val interrupted: Boolean,
         val thinking: Boolean,
         val blocks: List<BlockUi>,
+        val inProgress: Boolean = false,
     ) : MessageUi
 }
+
+/**
+ * A tap selects it and shows its action row: every message but a reply thinking or streaming, as
+ * the prototype's `showActions`.
+ */
+val MessageUi.selectable: Boolean get() = this !is MessageUi.Assistant || !inProgress
 
 /** One block of a reply, as drawn. Only the last block of a streaming reply has the caret. */
 @Immutable
@@ -163,6 +185,7 @@ fun Message.Assistant.toUi(time: String): MessageUi.Assistant {
         blocks = blocks.mapIndexed { index, block ->
             block.toUi(key = BlockKey(messageId = id, index = index), caret = streaming && index == blocks.lastIndex)
         },
+        inProgress = status.isInProgress,
     )
 }
 
