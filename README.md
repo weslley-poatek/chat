@@ -39,7 +39,9 @@
 > pins, archives and deletes. After sign-in the app opens the chat thread: send
 > a message, watch the reply think, stream and finish, copy its code, and reopen a recent
 > conversation. The model chip opens the model picker: pick one of the eight models or a persona,
-> star favorites, and the accent follows at once. History, voice and attachments come next.
+> star favorites, and the accent follows at once. The History button opens every conversation on
+> the device, grouped pinned, today, yesterday and earlier: search it, swipe a row to pin, archive
+> or delete it, and tap one to reopen it. Voice, attachments, Memory and Settings come next.
 > The voice mode screen in the banner comes from the design prototype, not from a build of the app.
 
 ## ✨ Highlights
@@ -99,6 +101,7 @@ flowchart TD
     ui[":core:ui<br/><i>ChatTheme · tokens · components</i>"]
     featureAuth[":feature:auth<br/><i>Splash · sign-in: Google, email</i>"]
     featureChat[":feature:chat<br/><i>Chat thread · composer · model picker</i>"]
+    featureHistory[":feature:history<br/><i>History · search · swipe to pin, archive, delete</i>"]
     dataAuth[":data:auth<br/><i>AuthManager · Firebase Auth</i>"]
     dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · canned streamed replies · history</i>"]
 
@@ -111,10 +114,12 @@ flowchart TD
     app -- "implementation" --> ui
     app -- "implementation" --> featureAuth
     app -- "implementation" --> featureChat
+    app -- "implementation" --> featureHistory
     app -- "implementation" --> dataAuth
     app -- "implementation" --> dataChat
     featureAuth -- "implementation" --> dataAuth
     featureChat -- "implementation" --> dataChat
+    featureHistory -- "implementation" --> dataChat
     dataChat -- "implementation" --> db
     dataChat -- "implementation" --> prefs
 ```
@@ -131,7 +136,8 @@ flowchart TD
 | [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. Both on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
 | [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency, and `choose`, which changes a conversation's model and persona. For History, the list of conversations that are not archived and its search over titles, the user's messages and model names, `setPinned`, `archive` and `delete`, and `groupHistory`, which splits the list into pinned, today, yesterday and earlier. `ModelRepository`: the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
 | [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen: Google, email + password sign-in, account creation and the password-reset email, as modes of one screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
-| [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. The model picker sheet: favorites, personas and every model, stars, and a pick that changes the conversation or the new chat. The accent follows the conversation's model. |
+| [`:feature:chat`](feature/chat) | The chat thread, the first screen after sign-in: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", the composer and new chat. The model picker sheet: favorites, personas and every model, stars, and a pick that changes the conversation or the new chat. The accent follows the conversation's model. The History button opens History. |
+| [`:feature:history`](feature/history) | History: every conversation on the device in "pinned", "today", "yesterday" and "earlier", newest first, regrouped when the date changes; the search over titles, the user's messages and model names; rows that swipe left to pin, archive or delete, with the "archived" and "deleted" toasts, and the same actions for screen readers; a tap that reopens the conversation in the chat. The status row says how many conversations are on this device, since nothing syncs. |
 
 <details>
 <summary><b>How startup works on each platform</b></summary>
@@ -263,6 +269,8 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 | Chat data tests on the iOS simulator | `./gradlew :data:chat:iosSimulatorArm64Test` |
 | Chat screen tests on the Android host | `./gradlew :feature:chat:testAndroidHostTest` |
 | Chat screen tests on the iOS simulator | `./gradlew :feature:chat:iosSimulatorArm64Test` |
+| History screen tests on the Android host | `./gradlew :feature:history:testAndroidHostTest` |
+| History screen tests on the iOS simulator | `./gradlew :feature:history:iosSimulatorArm64Test` |
 | Static analysis for every module | `./gradlew detekt` |
 
 > [!WARNING]
@@ -274,14 +282,14 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 All shared configuration lives in the [`build-logic`](build-logic/convention/src/main/kotlin) included
 build. Each module picks the conventions it needs:
 
-| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:database` | `:core:navigation` | `:core:preferences` | `:core:ui` | `:data:auth` | `:data:chat` | `:feature:auth` | `:feature:chat` |
-| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | | | | | | | |
-| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | | ✅ | | ✅ | | | ✅ | ✅ |
-| `chat.room` | KSP and the Room Gradle plugin with schemas in `schemas/`, Room runtime and bundled SQLite driver, the Room compiler per target, and the driver and schema path its tests need | | | ✅ | | | | | | | |
-| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:database` | `:core:navigation` | `:core:preferences` | `:core:ui` | `:data:auth` | `:data:chat` | `:feature:auth` | `:feature:chat` | `:feature:history` |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | | | | | | | | |
+| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | | ✅ | | ✅ | | | ✅ | ✅ | ✅ |
+| `chat.room` | KSP and the Room Gradle plugin with schemas in `schemas/`, Room runtime and bundled SQLite driver, the Room compiler per target, and the driver and schema path its tests need | | | ✅ | | | | | | | | |
+| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 `:androidApp` also applies the `com.google.gms.google-services` plugin, which turns `google-services.json`
 into resources such as the `default_web_client_id` the Google account picker asks for.
@@ -371,7 +379,8 @@ chat/
 │   └── chat/                      💬 ChatRepository, ModelRepository, canned streamed replies, models, personas, History's groups
 ├── feature/
 │   ├── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)
-│   └── chat/                      💬 The chat thread: empty state, messages, code blocks, composer, model picker
+│   ├── chat/                      💬 The chat thread: empty state, messages, code blocks, composer, model picker
+│   └── history/                   🗂️ History: grouped list, search, swipe to pin, archive or delete
 ├── iosApp/                        🍎 Xcode project and SwiftUI host
 │   └── KotlinMultiplatformLinkedPackage/  📦 Generated SwiftPM package for the iOS SDKs
 ├── build-logic/

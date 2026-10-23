@@ -292,10 +292,11 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   `:core:navigation`'s `entries.chat`; `null` is a new chat. `ChatEntryProvider` registers it.
 - **Screen:** `ChatScreen(uiState, onHistoryClick, onModelClick, onNewChat, onOpenRecent,
   onDraftChange, onSend, onAttachClick, onVoiceClick, onCopyCode, modifier)`. `ChatEntryProvider`
-  wires `onHistoryClick` (row 5), `onAttachClick` (row 8) and `onVoiceClick` (row 11) to `{}`;
-  `onModelClick` opens the Model picker (row 4, `04-model-picker.md`). It wraps the screen and the
-  sheet in `ChatTheme(palette = uiState.model.palette, darkTheme = ChatTheme.colors.isDark)`, over
-  the root's default-model theme.
+  wires `onAttachClick` (row 8) and `onVoiceClick` (row 11) to `{}`; `onModelClick` opens the Model
+  picker (row 4, `04-model-picker.md`), and `onHistoryClick` opens History through
+  `ChatViewModel.onOpenHistory()`, which pushes `HistoryEntry` over the chat (row 5,
+  `05-history.md`). It wraps the screen and the sheet in `ChatTheme(palette =
+  uiState.model.palette, darkTheme = ChatTheme.colors.isDark)`, over the root's default-model theme.
 - **State:** `ChatUiState(conversationId, choice: ModelChoice, messages: List<MessageUi>, recent:
   List<RecentConversationUi>, draft, replyInProgress, sending, copiedBlock: BlockKey?, toast:
   StringResource?, favorites, personas, modelPickerOpen)` with `model` and `persona` (row 4), and
@@ -305,9 +306,10 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   each with its `BlockKey(messageId, index)`.
 - **ViewModel:** `ChatViewModel(@InjectedParam entry: ChatEntry, navigator, repository, models:
   ModelRepository, times)`, `Navigator by navigator`, bound only to its own class: `onDraftChange`,
-  `onSend`, `onNewChat`, `onOpenRecent(id)`, `onCopyCode(key, copy)`, and row 4's
-  `onOpenModelPicker`, `onDismissModelPicker`, `onPick(choice)`, `onToggleFavorite(model)`. Its
-  toast and "copied" go through `TimedValue`, a value shown for a duration and then cleared.
+  `onSend`, `onNewChat`, `onOpenRecent(id)`, `onCopyCode(key, copy)`, row 4's `onOpenModelPicker`,
+  `onDismissModelPicker`, `onPick(choice)` and `onToggleFavorite(model)`; row 5's `onOpenHistory` is an
+  extension next to the class (only a navigation, and the class is at detekt's function limit).
+  Its toast and "copied" go through `TimedValue`, a value shown for a duration and then cleared.
 - **`:core:ui`:** `ChatToast(message: String?, modifier)` (nothing while `null`) and
   `ChatToastDefaults.Duration` (1400 ms); `ChatIcons.Add`, `Back`, `Close`, `Memory`, `Menu`, `Mic`,
   `MicOff`, `NewChat`, `Search`, `Send`, `Settings`; `ChatIconButtonVariant.Accent`'s disabled look.

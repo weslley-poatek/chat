@@ -4,6 +4,7 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
+import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
@@ -320,6 +321,22 @@ class ChatViewModelTest {
         assertTrue(state.showsEmptyState)
         assertEquals(ModelCatalogue.default, state.model)
         assertTrue(state.messages.isEmpty())
+    }
+
+    // History
+
+    @Test
+    fun theHistoryButtonOpensHistoryOverTheChatWhichStaysUnderneath() = runTest {
+        val repository = FakeChatRepository(backgroundScope)
+        val conversation = repository.seed("useDebounce hook")
+        val viewModel = chatViewModel(repository, ChatEntry(conversation.id))
+
+        viewModel.onOpenHistory()
+        // A second tap before History shows opens it once.
+        viewModel.onOpenHistory()
+
+        assertEquals(listOf(ChatEntry(conversation.id), HistoryEntry), viewModel.navigator.navBackStack.toList())
+        assertEquals<Long?>(conversation.id, viewModel.state.conversationId)
     }
 
     // Copy

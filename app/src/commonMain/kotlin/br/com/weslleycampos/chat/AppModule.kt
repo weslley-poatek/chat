@@ -8,6 +8,7 @@ import br.com.weslleycampos.chat.data.auth.DataAuthModule
 import br.com.weslleycampos.chat.data.chat.DataChatModule
 import br.com.weslleycampos.chat.feature.auth.AuthModule
 import br.com.weslleycampos.chat.feature.chat.ChatModule
+import br.com.weslleycampos.chat.feature.history.HistoryModule
 import org.koin.core.annotation.ComponentScan
 import org.koin.core.annotation.Configuration
 import org.koin.core.annotation.Module
@@ -28,6 +29,7 @@ import org.koin.core.annotation.Module
         DataChatModule::class,
         AuthModule::class,
         ChatModule::class,
+        HistoryModule::class,
     ]
 )
 @ComponentScan

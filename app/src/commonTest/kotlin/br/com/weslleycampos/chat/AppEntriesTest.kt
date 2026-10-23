@@ -4,11 +4,13 @@ import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SignInEntry
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SplashEntry
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
+import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntriesAggregator
 import br.com.weslleycampos.chat.core.navigation.utils.providesSaveStateConfiguration
 import br.com.weslleycampos.chat.feature.auth.signin.SignInEntryProvider
 import br.com.weslleycampos.chat.feature.auth.splash.SplashEntryProvider
 import br.com.weslleycampos.chat.feature.chat.ChatEntryProvider
+import br.com.weslleycampos.chat.feature.history.HistoryEntryProvider
 import kotlinx.serialization.PolymorphicSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -21,14 +23,16 @@ import kotlin.test.assertEquals
  */
 class AppEntriesTest {
     private val configuration = providesSaveStateConfiguration(
-        EntriesAggregator(listOf(SplashEntryProvider(), SignInEntryProvider(), ChatEntryProvider())),
+        EntriesAggregator(
+            listOf(SplashEntryProvider(), SignInEntryProvider(), ChatEntryProvider(), HistoryEntryProvider()),
+        ),
     )
     private val json = Json { serializersModule = configuration.serializersModule }
     private val serializer = ListSerializer(PolymorphicSerializer(NavKey::class))
 
     @Test
     fun theSavedBackStackRestoresEveryScreenTheAppShows() {
-        val backStack = listOf(SplashEntry, SignInEntry, ChatEntry(), ChatEntry(conversationId = 42))
+        val backStack = listOf(SplashEntry, SignInEntry, ChatEntry(), ChatEntry(conversationId = 42), HistoryEntry)
 
         assertEquals(backStack, json.decodeFromString(serializer, json.encodeToString(serializer, backStack)))
     }

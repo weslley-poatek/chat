@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.weslleycampos.chat.core.navigation.Navigator
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
+import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
 import br.com.weslleycampos.chat.data.chat.ChatRepository
 import br.com.weslleycampos.chat.data.chat.ModelRepository
@@ -281,6 +282,13 @@ class ChatViewModel(
         val CopiedDuration: Duration = 1200.milliseconds
     }
 }
+
+/**
+ * The History button, the prototype's `goHistory`: History opens over the chat, which stays as it is
+ * underneath for History's back. Only a navigation, so it extends the ViewModel's [Navigator] rather
+ * than adding to its members.
+ */
+fun ChatViewModel.onOpenHistory() = navigate(HistoryEntry)
 
 private data class ObservedThread(val id: Long, val conversation: Conversation?, val messages: List<Message>)
 

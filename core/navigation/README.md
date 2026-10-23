@@ -14,6 +14,7 @@ their screens through `EntryProvider`s, and `rememberNavigator` saves and restor
 | `SplashEntry` | `core.navigation.entries.auth` | The start key: the session gate replaces it with `SignInEntry` or `ChatEntry()` |
 | `SignInEntry` | `core.navigation.entries.auth` | Sign-in: Google, or email + password with account creation and password reset as modes of the same screen |
 | `ChatEntry` | `core.navigation.entries.chat` | The chat thread, the first screen after sign-in: `ChatEntry()` is a new chat, `ChatEntry(conversationId)` opens a saved conversation |
+| `HistoryEntry` | `core.navigation.entries.history` | History, pushed over the chat by its History button: back returns to that chat, and a row replaces it with `ChatEntry(conversationId)` |
 
 ## Usage
 

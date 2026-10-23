@@ -39,6 +39,7 @@ include(":data:auth")
 include(":data:chat")
 include(":feature:auth")
 include(":feature:chat")
+include(":feature:history")
 
 check(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {
     """

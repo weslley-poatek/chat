@@ -39,8 +39,7 @@ class ChatEntryProvider : EntryProvider {
             ChatTheme(palette = uiState.model.palette, darkTheme = ChatTheme.colors.isDark) {
                 ChatScreen(
                     uiState = uiState,
-                    // History is row 5.
-                    onHistoryClick = {},
+                    onHistoryClick = viewModel::onOpenHistory,
                     onModelClick = viewModel::onOpenModelPicker,
                     onNewChat = viewModel::onNewChat,
                     onOpenRecent = viewModel::onOpenRecent,
