@@ -22,7 +22,7 @@ class SplashViewModel(
 ) : ViewModel(), Navigator by navigator {
     init {
         viewModelScope.launch {
-            val entry = if (authManager.currentUser.first() == null) SignInEntry else VoiceEntry()
+            val entry = if (authManager.currentUser.first() == null) SignInEntry() else VoiceEntry()
             navigate(entry) { popUpTo<SplashEntry> { inclusive = true } }
         }
     }

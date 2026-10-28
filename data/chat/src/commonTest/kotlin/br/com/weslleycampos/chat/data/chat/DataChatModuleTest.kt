@@ -82,6 +82,20 @@ class DataChatModuleTest {
     }
 
     @Test
+    fun koinProvidesOneLocalChatDataEraserOnTheConversationDaoAndThePlainPreferences() {
+        val koin = koinApplication {
+            module<FakeDatabaseModule>()
+            module<DataChatModule>()
+        }.koin
+        try {
+            assertIs<LocalChatDataEraser>(koin.get<ChatDataEraser>())
+            assertSame(koin.get<ChatDataEraser>(), koin.get<ChatDataEraser>())
+        } finally {
+            koin.close()
+        }
+    }
+
+    @Test
     fun koinProvidesOneLocalModelRepositoryOnThePersonaDaoAndThePlainPreferences() {
         val koin = koinApplication {
             module<FakeDatabaseModule>()

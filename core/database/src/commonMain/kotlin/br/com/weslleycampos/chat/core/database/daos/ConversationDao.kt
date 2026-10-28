@@ -61,4 +61,12 @@ interface ConversationDao {
      */
     @Query("DELETE FROM conversations WHERE id = :id")
     suspend fun delete(id: Long): Int
+
+    /**
+     * Deletes every conversation, archived ones included, and with them every message through their
+     * foreign key's cascade, as deleting the account does. Personas stay. Returns how many
+     * conversations it deleted.
+     */
+    @Query("DELETE FROM conversations")
+    suspend fun deleteAll(): Int
 }

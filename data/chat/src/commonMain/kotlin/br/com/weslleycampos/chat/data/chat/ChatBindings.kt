@@ -102,3 +102,10 @@ internal fun modelRepository(
     preferences = preferences,
     scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 )
+
+/** The app's one [ChatDataEraser], on the conversations table and the plain DataStore. */
+@Single
+internal fun chatDataEraser(
+    conversationDao: ConversationDao,
+    @UnencryptedPreferences preferences: DataStore<Preferences>,
+): ChatDataEraser = LocalChatDataEraser(conversationDao = conversationDao, preferences = preferences)

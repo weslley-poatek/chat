@@ -13,6 +13,7 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.annotation.Single
+import org.koin.core.parameter.parametersOf
 
 @Single
 class SignInEntryProvider : EntryProvider {
@@ -21,8 +22,8 @@ class SignInEntryProvider : EntryProvider {
     }
 
     override fun entryBuilder(): EntryProviderScope<NavKey>.() -> Unit = {
-        entry<SignInEntry> {
-            val viewModel = koinViewModel<SignInViewModel>()
+        entry<SignInEntry> { key ->
+            val viewModel = koinViewModel<SignInViewModel> { parametersOf(key) }
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             val launchGoogleSignIn = rememberGoogleSignInLauncher(
                 onToken = viewModel::signInWithGoogle,

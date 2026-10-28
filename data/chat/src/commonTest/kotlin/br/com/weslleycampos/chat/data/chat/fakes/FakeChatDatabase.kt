@@ -150,6 +150,17 @@ internal class FakeChatDatabase(
             return 1
         }
 
+        /** Deletes every conversation and, like the foreign key's cascade, every message. */
+        override suspend fun deleteAll(): Int {
+            val count = conversationRows.value.size
+            if (count == 0) return 0
+            write()
+            deletes += conversationRows.value.map { it.id }
+            messageRows.value = emptyList()
+            conversationRows.value = emptyList()
+            return count
+        }
+
         private fun rewrite(
             id: Long,
             changes: (ConversationEntity) -> Boolean,

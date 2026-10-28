@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
+import br.com.weslleycampos.chat.core.navigation.entries.settings.SettingsEntry
 import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatVoicePhase
 import br.com.weslleycampos.chat.core.ui.theme.ChatPalette
@@ -36,7 +37,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private val Sonnet = ModelCatalogue.default
 
-/** Voice's session on `VoiceViewModel`: the model chip and its sheet, mute, "end", "Aa" and History. */
+/** Voice's session on `VoiceViewModel`: the model chip and its sheet, mute, "end", "Aa", History and Settings. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceViewModelSessionTest {
     private val started = StartedViewModels()
@@ -291,7 +292,7 @@ class VoiceViewModelSessionTest {
         assertEquals(emptyList(), voices.transcripts)
     }
 
-    // "Aa" and History
+    // "Aa", History and Settings
 
     @Test
     fun textStopsThePhasesAndOpensTheSessionAsTextOverVoice() = started.runTest {
@@ -346,5 +347,27 @@ class VoiceViewModelSessionTest {
         assertEquals(listOf<NavKey>(VoiceEntry()), navigator.navBackStack.toList())
         // Voice is the root: back from it leaves the app.
         assertFalse(navigator.navigateUp())
+    }
+
+    @Test
+    fun settingsStopsThePhasesAndOpensOverVoiceWhichBackReturnsTo() = started.runTest {
+        val voices = FakeVoiceRepository()
+        val navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(VoiceEntry()) })
+        val viewModel = voiceViewModel(voices = voices, navigator = navigator)
+        advance(3000.milliseconds)
+
+        viewModel.onOpenSettings()
+        assertEquals(listOf(VoiceEntry(), SettingsEntry), navigator.navBackStack.toList())
+        advance(60_000.milliseconds)
+        assertEquals(emptyList(), voices.transcripts)
+
+        // Settings' back is `navigateUp()`: Voice again, which listens again once resumed.
+        assertTrue(navigator.navigateUp())
+        assertEquals(listOf<NavKey>(VoiceEntry()), navigator.navBackStack.toList())
+        viewModel.onStart()
+        runCurrent()
+        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+        advance(6500.milliseconds)
+        assertEquals(listOf<Pair<Long?, ModelChoice?>>(null to null), voices.transcripts)
     }
 }

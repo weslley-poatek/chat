@@ -6,9 +6,11 @@ import br.com.weslleycampos.chat.core.preferences.PreferencesModule
 import br.com.weslleycampos.chat.core.ui.CoreUiModule
 import br.com.weslleycampos.chat.data.auth.DataAuthModule
 import br.com.weslleycampos.chat.data.chat.DataChatModule
+import br.com.weslleycampos.chat.data.settings.DataSettingsModule
 import br.com.weslleycampos.chat.feature.auth.AuthModule
 import br.com.weslleycampos.chat.feature.chat.ChatModule
 import br.com.weslleycampos.chat.feature.history.HistoryModule
+import br.com.weslleycampos.chat.feature.settings.SettingsModule
 import br.com.weslleycampos.chat.feature.voice.VoiceModule
 import org.koin.core.annotation.ComponentScan
 import org.koin.core.annotation.Configuration
@@ -28,9 +30,11 @@ import org.koin.core.annotation.Module
         CoreUiModule::class,
         DataAuthModule::class,
         DataChatModule::class,
+        DataSettingsModule::class,
         AuthModule::class,
         ChatModule::class,
         HistoryModule::class,
+        SettingsModule::class,
         VoiceModule::class,
     ]
 )

@@ -1,0 +1,28 @@
+<resources>
+    <string name="settings_title">Settings</string>
+    <string name="settings_back">Back</string>
+
+    <string name="settings_account">account</string>
+    <string name="settings_sign_in_methods">Sign-in methods</string>
+    <string name="settings_sign_out">Sign out</string>
+    <string name="settings_delete_account">Delete account</string>
+    <string name="settings_delete_confirm">tap again to confirm</string>
+    <string name="settings_deleting">deleting…</string>
+
+    <string name="settings_api_keys">api keys</string>
+    <string name="settings_api_keys_note">encrypted on device · never sent in plain text</string>
+    <string name="settings_key_not_set">not set</string>
+    <string name="settings_key_add">add</string>
+    <string name="settings_key_edit">edit</string>
+    <string name="settings_key_save">save</string>
+    <string name="settings_key_remove">remove</string>
+    <string name="settings_key_input_description">%1$s API key</string>
+
+    <string name="settings_toast_key_stored">key encrypted and stored</string>
+    <string name="settings_toast_key_store_failed">couldn’t store the key, try again</string>
+    <string name="settings_toast_key_remove_failed">couldn’t remove the key, try again</string>
+    <string name="settings_toast_delete_recent_login">sign in again, then delete</string>
+    <string name="settings_toast_delete_network">no connection, nothing deleted</string>
+    <string name="settings_toast_delete_too_many_requests">too many attempts, try again later</string>
+    <string name="settings_toast_delete_failed">couldn’t delete, try again</string>
+</resources>

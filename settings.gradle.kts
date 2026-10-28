@@ -37,9 +37,11 @@ include(":core:preferences")
 include(":core:ui")
 include(":data:auth")
 include(":data:chat")
+include(":data:settings")
 include(":feature:auth")
 include(":feature:chat")
 include(":feature:history")
+include(":feature:settings")
 include(":feature:voice")
 
 check(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {

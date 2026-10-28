@@ -1,8 +1,9 @@
 package br.com.weslleycampos.chat.data.auth
 
 /**
- * Why Firebase Auth refused a call on [AuthManager] or [EmailAuthManager]. Each case is one message
- * the sign-in screen can show; anything it has no message for is [Unknown].
+ * Why Firebase Auth refused a call on [AuthManager], [EmailAuthManager] or [AccountManager]. Each
+ * case is one message the sign-in or Settings screen can show; anything they have no message for is
+ * [Unknown].
  */
 sealed class AuthException(message: String?, cause: Throwable?) : Exception(message, cause) {
     /** The email is not an address Firebase accepts. */
@@ -25,6 +26,15 @@ sealed class AuthException(message: String?, cause: Throwable?) : Exception(mess
 
     /** Firebase blocked this device for a while after too many attempts. */
     class TooManyRequests(message: String?, cause: Throwable?) : AuthException(message, cause)
+
+    /**
+     * Deleting the account needs a recent sign-in, and this one is too old, or its session has
+     * expired. Signing out, signing in again and retrying gets past it. Nothing was deleted.
+     */
+    class RequiresRecentLogin(message: String?, cause: Throwable?) : AuthException(message, cause)
+
+    /** A call on the signed-in user, such as deleting the account, while nobody is signed in. */
+    class NotSignedIn(message: String?, cause: Throwable?) : AuthException(message, cause)
 
     class NetworkError(message: String?, cause: Throwable?) : AuthException(message, cause)
 

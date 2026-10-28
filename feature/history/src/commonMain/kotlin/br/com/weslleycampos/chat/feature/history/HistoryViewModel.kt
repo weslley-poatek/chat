@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import br.com.weslleycampos.chat.core.navigation.Navigator
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
+import br.com.weslleycampos.chat.core.navigation.entries.settings.SettingsEntry
 import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
 import br.com.weslleycampos.chat.data.chat.ChatRepository
@@ -36,7 +37,8 @@ import kotlin.time.Duration
  * whenever the local date does, since nothing in the database changes at midnight.
  *
  * Navigation: History opens over Voice, and back returns there as it was. A row opens its
- * conversation as text over History, so back from the thread comes here and then to Voice.
+ * conversation as text over History, so back from the thread comes here and then to Voice, and the
+ * Settings button opens Settings over History the same way.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @KoinViewModel(binds = [HistoryViewModel::class])
@@ -163,6 +165,12 @@ class HistoryViewModel(
             )
         }
     }
+}
+
+/** The Settings button: an open row closes, and Settings opens over History, whose back returns here. */
+fun HistoryViewModel.onOpenSettings() {
+    onCloseRow()
+    navigate(SettingsEntry)
 }
 
 /**

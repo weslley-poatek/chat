@@ -104,6 +104,10 @@ Recovery clears **all preferences in the encrypted store**. The application shou
 interpret a missing token as a signed-out session; the module does not perform login
 or navigation. The unencrypted store is unaffected by encrypted-store recovery.
 
+`:data:settings` keeps the provider API keys typed in Settings in the encrypted store, one
+`provider_key_<id>` string each. They cannot be replaced by signing in again: after a
+recovery every provider reads as not set, and the user types the keys again.
+
 The unencrypted DataStore installs the same handler: a corrupt `chat.preferences_pb`
 is replaced with empty preferences, so ordinary settings fall back to their defaults
 instead of every read failing.

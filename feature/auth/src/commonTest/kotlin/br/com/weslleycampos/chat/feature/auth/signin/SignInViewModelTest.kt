@@ -47,10 +47,16 @@ class SignInViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private fun signInViewModel(
-        navigator: NavigatorImpl = navigator(SignInEntry),
+        navigator: NavigatorImpl = navigator(SignInEntry()),
         authManager: FakeAuthManager = FakeAuthManager(),
         emailAuthManager: FakeEmailAuthManager = FakeEmailAuthManager(),
-    ) = SignInViewModel(navigator = navigator, authManager = authManager, emailAuthManager = emailAuthManager)
+        entry: SignInEntry = navigator.navBackStack.last() as SignInEntry,
+    ) = SignInViewModel(
+        entry = entry,
+        navigator = navigator,
+        authManager = authManager,
+        emailAuthManager = emailAuthManager,
+    )
 
     private fun SignInViewModel.fill(email: String = Email, password: String = Password) {
         onEmailChange(email)
@@ -62,6 +68,20 @@ class SignInViewModelTest {
     @Test
     fun startsOnSignInWithAnEmptyForm() {
         assertEquals(SignInUiState(), signInViewModel().uiState.value)
+    }
+
+    @Test
+    fun aSignUpEntryStartsOnCreateAccountWhoseBackLinkReturnsToSignIn() {
+        val navigator = navigator(SignInEntry(signUp = true))
+        val viewModel = signInViewModel(navigator = navigator)
+
+        assertEquals(SignInUiState(mode = AuthMode.SignUp), viewModel.uiState.value)
+        assertTrue(viewModel.uiState.value.showsBackToSignIn)
+
+        viewModel.onModeChange(AuthMode.SignIn)
+
+        assertEquals(SignInUiState(), viewModel.uiState.value)
+        assertEquals(listOf(SignInEntry(signUp = true)), navigator.stack)
     }
 
     @Test
@@ -186,7 +206,7 @@ class SignInViewModelTest {
 
     @Test
     fun aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithVoice() {
-        val navigator = navigator(SignInEntry)
+        val navigator = navigator(SignInEntry())
         val emailAuthManager = FakeEmailAuthManager()
         val viewModel = signInViewModel(navigator = navigator, emailAuthManager = emailAuthManager)
         viewModel.fill(email = " $Email ", password = " $Password ")
@@ -199,7 +219,7 @@ class SignInViewModelTest {
 
     @Test
     fun aValidSignUpCreatesTheAccountAndReplacesSignInWithVoice() {
-        val navigator = navigator(SignInEntry)
+        val navigator = navigator(SignInEntry())
         val emailAuthManager = FakeEmailAuthManager()
         val viewModel = signInViewModel(navigator = navigator, emailAuthManager = emailAuthManager)
         viewModel.onModeChange(AuthMode.SignUp)
@@ -214,7 +234,7 @@ class SignInViewModelTest {
 
     @Test
     fun aValidResetSendsTheLinkWithoutAPasswordAndShowsTheSentConfirmation() {
-        val navigator = navigator(SignInEntry)
+        val navigator = navigator(SignInEntry())
         val emailAuthManager = FakeEmailAuthManager()
         val viewModel = signInViewModel(navigator = navigator, emailAuthManager = emailAuthManager)
         viewModel.onModeChange(AuthMode.Forgot)
@@ -224,7 +244,7 @@ class SignInViewModelTest {
 
         assertEquals(listOf(Email), emailAuthManager.passwordResets)
         assertEquals(SignInUiState(mode = AuthMode.Forgot, email = Email, forgotSent = true), viewModel.uiState.value)
-        assertEquals(listOf(SignInEntry), navigator.stack)
+        assertEquals(listOf(SignInEntry()), navigator.stack)
     }
 
     // Busy
@@ -232,7 +252,7 @@ class SignInViewModelTest {
     @Test
     fun theFormIsBusyUntilFirebaseAnswersAndIgnoresAllButTypingMeanwhile() {
         val pending = CompletableDeferred<Unit>()
-        val navigator = navigator(SignInEntry)
+        val navigator = navigator(SignInEntry())
         val authManager = FakeAuthManager()
         val emailAuthManager = FakeEmailAuthManager().apply { answer = { pending.await() } }
         val viewModel = signInViewModel(
@@ -257,7 +277,7 @@ class SignInViewModelTest {
         assertEquals(1, emailAuthManager.calls)
         assertFalse(pickerOpened)
         assertEquals(emptyList(), authManager.googleSignIns)
-        assertEquals(listOf(SignInEntry), navigator.stack)
+        assertEquals(listOf(SignInEntry()), navigator.stack)
 
         pending.complete(Unit)
 
@@ -325,7 +345,7 @@ class SignInViewModelTest {
             )
         }
         for ((mode, failure, message) in expectedMessages) {
-            val navigator = navigator(SignInEntry)
+            val navigator = navigator(SignInEntry())
             val viewModel = signInViewModel(navigator = navigator, emailAuthManager = FakeEmailAuthManager(failure))
             viewModel.onModeChange(mode)
             viewModel.fill()
@@ -337,13 +357,13 @@ class SignInViewModelTest {
                 viewModel.uiState.value,
                 "$mode, ${failure::class.simpleName}",
             )
-            assertEquals(listOf(SignInEntry), navigator.stack)
+            assertEquals(listOf(SignInEntry()), navigator.stack)
         }
     }
 
     @Test
     fun aFailedSignInCanBeTriedAgain() {
-        val navigator = navigator(SignInEntry)
+        val navigator = navigator(SignInEntry())
         val emailAuthManager = FakeEmailAuthManager(failure = AuthException.NetworkError("offline", null))
         val viewModel = signInViewModel(navigator = navigator, emailAuthManager = emailAuthManager)
         viewModel.fill()
@@ -371,7 +391,7 @@ class SignInViewModelTest {
     @Test
     fun aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithVoice() {
         val pending = CompletableDeferred<Unit>()
-        val navigator = navigator(SignInEntry)
+        val navigator = navigator(SignInEntry())
         val authManager = FakeAuthManager().apply { authenticate = { pending.await() } }
         val viewModel = signInViewModel(navigator = navigator, authManager = authManager)
 
@@ -379,7 +399,7 @@ class SignInViewModelTest {
 
         assertEquals(SignInUiState(busy = AuthBusy.Google), viewModel.uiState.value)
         assertEquals(listOf<Pair<String, String?>>("id-token" to "access-token"), authManager.googleSignIns)
-        assertEquals(listOf(SignInEntry), navigator.stack)
+        assertEquals(listOf(SignInEntry()), navigator.stack)
 
         pending.complete(Unit)
 
@@ -395,14 +415,14 @@ class SignInViewModelTest {
             AuthException.Unknown("boom", null) to FeatureAuthRes.string.sign_in_error_google,
         )
         for ((failure, message) in expectedMessages) {
-            val navigator = navigator(SignInEntry)
+            val navigator = navigator(SignInEntry())
             val viewModel = signInViewModel(navigator = navigator, authManager = FakeAuthManager(failure = failure))
             viewModel.fill()
 
             viewModel.signInWithGoogle("id-token", null)
 
             assertEquals(SignInUiState(email = Email, password = Password, error = message), viewModel.uiState.value)
-            assertEquals(listOf(SignInEntry), navigator.stack)
+            assertEquals(listOf(SignInEntry()), navigator.stack)
         }
     }
 

@@ -6,6 +6,7 @@ import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
+import br.com.weslleycampos.chat.core.navigation.entries.settings.SettingsEntry
 import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.data.chat.models.HistorySection
 import br.com.weslleycampos.chat.feature.history.resources.FeatureHistoryRes
@@ -418,6 +419,24 @@ class HistoryViewModelTest {
 
         assertEquals(listOf<NavKey>(VoiceEntry()), newSession.stack)
         assertEquals(listOf<NavKey>(VoiceEntry(conversationId = 7)), inAConversation.stack)
+    }
+
+    @Test
+    fun settingsOpensOverHistoryClosingAnOpenRowAndItsBackReturnsHereThenToVoice() = historyTest {
+        val repository = FakeChatRepository()
+        val postgres = repository.seed("Postgres index")
+        val viewModel = historyViewModel(repository, backStack = listOf(VoiceEntry(conversationId = 7), HistoryEntry))
+        viewModel.onSwipeSettle(postgres.id, open = true)
+
+        viewModel.onOpenSettings()
+
+        assertNull(viewModel.state.openRow)
+        assertEquals(listOf(VoiceEntry(conversationId = 7), HistoryEntry, SettingsEntry), viewModel.stack)
+        // Settings' back, then History's.
+        assertTrue(viewModel.navigateUp())
+        assertEquals(listOf(VoiceEntry(conversationId = 7), HistoryEntry), viewModel.stack)
+        viewModel.onBack()
+        assertEquals(listOf<NavKey>(VoiceEntry(conversationId = 7)), viewModel.stack)
     }
 
     @Test

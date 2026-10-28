@@ -25,22 +25,27 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
+import org.koin.core.annotation.InjectedParam
 import org.koin.core.annotation.KoinViewModel
 
 /**
  * The Auth frame's logic: the prototype's `authSubmit`, `oauth` and mode links, on Firebase.
+ *
+ * It opens on sign in, or on account creation when the [entry] asks for it, as after deleting the
+ * account (the prototype's `authMode:'signup'`); the mode links switch from there as usual.
  *
  * While [SignInUiState.busy] is set, a second submit, the Google button and the mode links are
  * ignored, so each answer lands in the mode that asked for it. Typing and show/hide stay live.
  */
 @KoinViewModel(binds = [SignInViewModel::class])
 class SignInViewModel(
+    @InjectedParam entry: SignInEntry,
     val navigator: Navigator,
     private val authManager: AuthManager,
     private val emailAuthManager: EmailAuthManager,
 ) : ViewModel(), Navigator by navigator {
     val uiState: StateFlow<SignInUiState>
-        field = MutableStateFlow(SignInUiState())
+        field = MutableStateFlow(SignInUiState(mode = if (entry.signUp) AuthMode.SignUp else AuthMode.SignIn))
 
     fun onEmailChange(email: String) = uiState.update { it.copy(email = email, error = null) }
 

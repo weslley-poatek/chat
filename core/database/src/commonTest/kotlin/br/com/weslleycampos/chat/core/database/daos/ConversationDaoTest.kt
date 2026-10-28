@@ -1,5 +1,6 @@
 package br.com.weslleycampos.chat.core.database.daos
 
+import br.com.weslleycampos.chat.core.database.entities.PersonaEntity
 import br.com.weslleycampos.chat.core.database.inMemoryChatDatabase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -15,6 +16,7 @@ class ConversationDaoTest {
     private val dao = database.conversationDao()
     private val history = database.historyDao()
     private val messages = database.messageDao()
+    private val personas = database.personaDao()
 
     @AfterTest
     fun closeDatabase() {
@@ -176,5 +178,28 @@ class ConversationDaoTest {
         assertTrue(messages.observeByConversation(id).first().isEmpty())
         assertEquals(listOf(kept), history.observeAll().first().map { it.id })
         assertEquals(1, messages.observeByConversation(kept).first().size)
+    }
+
+    @Test
+    fun deletingEveryConversationDeletesAllOfThemAndEveryMessageButKeepsThePersonas() = runTest {
+        val persona = PersonaEntity(id = "terse", name = "Terse", modelId = "gpt5", prompt = "Short.", position = 0)
+        personas.insertIfAbsent(listOf(persona))
+        val first = dao.insert(conversation(title = "first"))
+        val pinned = dao.insert(conversation(title = "pinned", pinned = true))
+        val archived = dao.insert(conversation(title = "archived", archived = true))
+        messages.insert(userMessage(first))
+        messages.insert(reply(first))
+        messages.insert(userMessage(archived))
+
+        assertEquals(3, dao.deleteAll())
+        assertEquals(0, dao.deleteAll())
+
+        for (id in listOf(first, pinned, archived)) {
+            assertNull(dao.get(id))
+            assertTrue(messages.observeByConversation(id).first().isEmpty())
+        }
+        assertTrue(history.observeAll().first().isEmpty())
+        assertEquals(0, history.observeCount().first())
+        assertEquals(listOf(persona), personas.observeAll().first())
     }
 }

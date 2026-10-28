@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import br.com.weslleycampos.chat.core.navigation.Navigator
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
+import br.com.weslleycampos.chat.core.navigation.entries.settings.SettingsEntry
 import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatVoicePhase
 import br.com.weslleycampos.chat.data.chat.ModelRepository
@@ -190,6 +191,14 @@ class VoiceViewModel(
 fun VoiceViewModel.onOpenHistory() {
     onStop()
     navigate(HistoryEntry)
+}
+
+/**
+ * The Settings button: the timers stop and Settings opens over Voice, whose back returns here.
+ */
+fun VoiceViewModel.onOpenSettings() {
+    onStop()
+    navigate(SettingsEntry)
 }
 
 /**

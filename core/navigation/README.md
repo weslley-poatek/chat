@@ -11,11 +11,12 @@ their screens through `EntryProvider`s, and `rememberNavigator` saves and restor
 | `EntryProvider` | `core.navigation.utils` | A feature's `entry<Key> { ... }` builder and the serializers of its keys |
 | `EntriesAggregator` | `core.navigation.utils` | Every `EntryProvider` in the graph, as Koin collects them |
 | `rememberNavigator` | `core.navigation.utils` | The navigator, saved across configuration changes and process death |
-| `SplashEntry` | `core.navigation.entries.auth` | The start key: the session gate replaces it with `SignInEntry` or `VoiceEntry()` |
-| `SignInEntry` | `core.navigation.entries.auth` | Sign-in: Google, or email + password with account creation and password reset as modes of the same screen |
+| `SplashEntry` | `core.navigation.entries.auth` | The start key: the session gate replaces it with `SignInEntry()` or `VoiceEntry()` |
+| `SignInEntry` | `core.navigation.entries.auth` | Sign-in: Google, or email + password with account creation and password reset as modes of the same screen. `SignInEntry()` opens on sign in, `SignInEntry(signUp = true)` on account creation, as after deleting the account |
 | `VoiceEntry` | `core.navigation.entries.voice` | Voice mode, the home screen and the root of the back stack after sign-in, so back from it leaves the app: `VoiceEntry()` is a new session, `VoiceEntry(conversationId)` goes on with a conversation in voice. The thread's mic replaces Voice and everything over it with `VoiceEntry(conversationId)` |
 | `ChatEntry` | `core.navigation.entries.chat` | The chat thread, a conversation as text: Voice's "Aa" pushes `ChatEntry(conversationId)` over Voice, `ChatEntry()` being a new chat, and History's rows push it over History; back returns to that screen; "⑂ fork here" replaces it with `ChatEntry(forkId)` |
 | `HistoryEntry` | `core.navigation.entries.history` | History, pushed by Voice's History button: back returns to Voice, and a row pushes `ChatEntry(conversationId)` over History |
+| `SettingsEntry` | `core.navigation.entries.settings` | Settings, pushed by the Settings buttons of Voice and History: back returns there. Signing out replaces the whole stack with `SignInEntry()`, and deleting the account with `SignInEntry(signUp = true)` |
 
 ## Usage
 

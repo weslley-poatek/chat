@@ -8,11 +8,14 @@ import platform.Foundation.NSError
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeEmailAlreadyInUse
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeInvalidCredential
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeInvalidEmail
+import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeInvalidUserToken
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeNetworkError
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeOperationNotAllowed
+import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeRequiresRecentLogin
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeTooManyRequests
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeUserDisabled
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeUserNotFound
+import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeUserTokenExpired
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeWeakPassword
 import swiftPMImport.Chat.data.data.auth.FIRAuthErrorCodeWrongPassword
 import kotlin.test.Test
@@ -38,5 +41,18 @@ class NSErrorAuthExceptionMappingTest {
         assertIs<AuthException.EmailAlreadyInUse>(authError(FIRAuthErrorCodeEmailAlreadyInUse).toAuthException())
         assertIs<AuthException.WeakPassword>(authError(FIRAuthErrorCodeWeakPassword).toAuthException())
         assertIs<AuthException.TooManyRequests>(authError(FIRAuthErrorCodeTooManyRequests).toAuthException())
+    }
+
+    @Test
+    fun mapsAFreshSignInThatDeletingTheAccountNeedsToRequiresRecentLogin() {
+        val freshSignInNeeded = listOf(
+            FIRAuthErrorCodeRequiresRecentLogin,
+            FIRAuthErrorCodeUserTokenExpired,
+            FIRAuthErrorCodeInvalidUserToken,
+        )
+        for (code in freshSignInNeeded) {
+            assertIs<AuthException.RequiresRecentLogin>(authError(code).toAuthException())
+        }
+        assertIs<AuthException.UserNotFound>(authError(FIRAuthErrorCodeUserNotFound).toAuthException())
     }
 }

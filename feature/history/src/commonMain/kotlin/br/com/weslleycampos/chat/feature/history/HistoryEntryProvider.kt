@@ -25,8 +25,7 @@ class HistoryEntryProvider : EntryProvider {
             HistoryScreen(
                 uiState = uiState,
                 onBack = viewModel::onBack,
-                // Settings is row 10.
-                onSettingsClick = {},
+                onSettingsClick = viewModel::onOpenSettings,
                 onQueryChange = viewModel::onQueryChange,
                 onClearQuery = viewModel::onClearQuery,
                 onRowClick = viewModel::onRowClick,

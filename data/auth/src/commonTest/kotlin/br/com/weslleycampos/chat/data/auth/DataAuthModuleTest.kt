@@ -18,4 +18,15 @@ class DataAuthModuleTest {
             koin.close()
         }
     }
+
+    @Test
+    fun koinProvidesOneAccountManagerNextToTheAuthManager() {
+        val koin = koinApplication { module<DataAuthModule>() }.koin
+        try {
+            assertSame(koin.get<AccountManager>(), koin.get<AccountManager>())
+            assertNotNull(koin.getOrNull<AuthManager>())
+        } finally {
+            koin.close()
+        }
+    }
 }

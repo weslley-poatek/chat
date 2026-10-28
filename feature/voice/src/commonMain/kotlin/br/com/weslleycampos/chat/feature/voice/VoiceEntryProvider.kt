@@ -42,8 +42,7 @@ class VoiceEntryProvider : EntryProvider {
                     uiState = uiState,
                     onHistoryClick = viewModel::onOpenHistory,
                     onModelClick = picker::onOpen,
-                    // Settings is row 10.
-                    onSettingsClick = {},
+                    onSettingsClick = viewModel::onOpenSettings,
                     onSphereTap = viewModel::onSphereTap,
                     onToggleMute = viewModel::onToggleMute,
                     onEnd = viewModel::onEnd,

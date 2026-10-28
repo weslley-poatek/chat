@@ -40,6 +40,15 @@ class AwaitAuthTaskTest {
     }
 
     @Test
+    fun rethrowsAnAuthExceptionThrownWhileStartingAsItIs() = runTest {
+        val notSignedIn = AuthException.NotSignedIn("nobody", null)
+
+        val thrown = assertFailsWith<AuthException.NotSignedIn> { awaitAuthTask<Unit> { throw notSignedIn } }
+
+        assertSame(notSignedIn, thrown)
+    }
+
+    @Test
     fun letsCancellationThroughUntouched() = runTest {
         val cancellation = CancellationException("cancelled")
 

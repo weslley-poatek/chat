@@ -18,7 +18,7 @@ favorite models and the default model, are preferences in `:core:preferences` in
 | `MessageEntity` | `core.database.entities` | Version 2, `messages`: a user message or a reply, its blocks, status and latency; version 3 adds the reply's `personaId`, version 6 the `pairSide` of a compare pair's reply (`PAIR_FIRST_SIDE`, `PAIR_SECOND_SIDE`) |
 | `PersonaEntity` | `core.database.entities` | Version 3, `personas`: a persona's name, model, prompt and place in the picker |
 | `StoredBlock` | `core.database.entities` | One reply block in the `blocks` column: paragraph, code or numbered list |
-| `ConversationDao`, `MessageDao`, `PersonaDao` | `core.database.daos` | The queries on those three tables; `MessageDao.countUserMessages` and `MessageDao.last` are voice mode's, which picks its next exchange by the first and answers a transcript only while it is the second |
+| `ConversationDao`, `MessageDao`, `PersonaDao` | `core.database.daos` | The queries on those three tables; `MessageDao.countUserMessages` and `MessageDao.last` are voice mode's, which picks its next exchange by the first and answers a transcript only while it is the second; `ConversationDao.deleteAll` is deleting the account's, which deletes every conversation and, through the cascade, every message, and keeps the personas |
 | `HistoryDao` | `core.database.daos` | Version 4: History's lists of `conversations`, every one that is not archived, its search and its count |
 | `ForkDao` | `core.database.daos` | Version 5: a fork's queries: a thread up to one of its messages, the insert of its copies, and the fork banner's dismissal |
 | `CompareDao` | `core.database.daos` | Version 6: compare mode's queries: a conversation's compare choice, and a compare pair's two sides from its first |
@@ -71,9 +71,10 @@ class ConversationStarter(
 }
 ```
 
-`:data:chat`'s `RoomChatRepository` and `LocalModelRepository` are the real consumers. The persona
-presets are seeded by `LocalModelRepository` with `PersonaDao.insertIfAbsent`, not by the
-database: a migration only changes the schema, so fresh and upgraded installs take the same step.
+`:data:chat`'s `RoomChatRepository`, `LocalModelRepository` and `LocalChatDataEraser` are the real
+consumers. The persona presets are seeded by `LocalModelRepository` with
+`PersonaDao.insertIfAbsent`, not by the database: a migration only changes the schema, so fresh and
+upgraded installs take the same step.
 
 ## Adding a table
 
@@ -252,9 +253,10 @@ Run from the repository root:
   (common) cover every query: observing by id, "recent" order and limit without archived
   conversations, History's order and count, its search (titles and user messages, ASCII case, no
   replies, the given models, the compared model only while compare is on, escaped `%`, `_` and
-  `\`), pinning, archiving and deleting with whether each changed anything, setting the model and
-  persona, setting the compare, a fork's origin, a thread up to one message, its copies under new
-  ids in their order, dismissing the fork banner with whether it changed anything, message order,
+  `\`), pinning, archiving and deleting with whether each changed anything, deleting every
+  conversation and message at once while keeping the personas, setting the model and persona,
+  setting the compare, a fork's origin, a thread up to one message, its copies under new ids in
+  their order, dismissing the fork banner with whether it changed anything, message order,
   the blocks JSON, a reply's persona and pair side, a compare pair's two sides, reply progress one
   reply or several at once and whether the replies are still there, reply counts with a pair
   counted once, user message counts, a thread's last message whatever its timestamp, unfinished

@@ -44,6 +44,6 @@ class SplashViewModelTest {
 
         SplashViewModel(navigator, FakeAuthManager())
 
-        assertEquals(listOf(SignInEntry), navigator.stack)
+        assertEquals(listOf(SignInEntry()), navigator.stack)
     }
 }
