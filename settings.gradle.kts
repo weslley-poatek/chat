@@ -40,6 +40,7 @@ include(":data:chat")
 include(":feature:auth")
 include(":feature:chat")
 include(":feature:history")
+include(":feature:voice")
 
 check(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {
     """

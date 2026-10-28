@@ -2,6 +2,7 @@ package br.com.weslleycampos.chat.core.database.daos
 
 import androidx.room3.useReaderConnection
 import androidx.room3.useWriterConnection
+import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
 import br.com.weslleycampos.chat.core.database.entities.PAIR_FIRST_SIDE
 import br.com.weslleycampos.chat.core.database.entities.PAIR_SECOND_SIDE
@@ -15,6 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MessageDaoTest {
@@ -155,6 +157,42 @@ class MessageDaoTest {
 
         assertEquals(2, dao.countReplies(conversationId))
         assertEquals(1, dao.countReplies(other))
+    }
+
+    @Test
+    fun userMessagesAreCountedPerConversationAndRepliesAreNot() = runTest {
+        val conversationId = conversations.insert(conversation())
+        val other = conversations.insert(conversation())
+        val empty = conversations.insert(conversation())
+        dao.insert(userMessage(conversationId))
+        dao.insert(reply(conversationId))
+        dao.insert(userMessage(conversationId))
+        dao.insert(pairSide(conversationId, PAIR_FIRST_SIDE))
+        dao.insert(pairSide(conversationId, PAIR_SECOND_SIDE))
+        dao.insert(userMessage(conversationId))
+        dao.insert(userMessage(other))
+
+        assertEquals(3, dao.countUserMessages(conversationId))
+        assertEquals(1, dao.countUserMessages(other))
+        assertEquals(0, dao.countUserMessages(empty))
+        assertEquals(0, dao.countUserMessages(42))
+    }
+
+    @Test
+    fun theLastMessageIsTheOneWrittenLastWhateverItsTimestamp() = runTest {
+        val conversationId = conversations.insert(conversation())
+        val other = conversations.insert(conversation())
+        val empty = conversations.insert(conversation())
+        dao.insert(userMessage(conversationId, text = "first", createdAt = 30))
+        dao.insert(reply(conversationId, createdAt = 30))
+        val last = dao.insert(userMessage(conversationId, text = "last", createdAt = 10))
+        dao.insert(reply(other, createdAt = 40))
+
+        val expected = userMessage(conversationId, text = "last", createdAt = 10).copy(id = last)
+        assertEquals(expected, dao.last(conversationId))
+        assertEquals(MessageRole.ASSISTANT, dao.last(other)?.role)
+        assertNull(dao.last(empty))
+        assertNull(dao.last(42))
     }
 
     @Test

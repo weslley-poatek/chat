@@ -12,5 +12,10 @@ kotlin {
             // EntryProviderScope to every module that reads them.
             api(libs.navigation3.ui)
         }
+        commonTest.dependencies {
+            // `VoiceEntryTest` saves `VoiceEntry` through the back stack's JSON.
+            implementation(project.dependencies.platform(libs.kotlinx.serialization.bom))
+            implementation(libs.kotlinx.serialization.json)
+        }
     }
 }

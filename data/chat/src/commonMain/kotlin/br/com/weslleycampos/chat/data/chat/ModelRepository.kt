@@ -36,12 +36,15 @@ interface ModelRepository {
     fun observePersonas(): Flow<List<Persona>>
 
     /**
-     * The model a new chat starts on, and the accent of every screen that shows no conversation:
-     * [ModelCatalogue.default] until [setDefaultModel] picks another.
+     * The model a new chat and a new voice session start on, and the accent of every screen that
+     * shows no conversation: [ModelCatalogue.default] until [setDefaultModel] picks another.
      */
     fun observeDefaultModel(): Flow<ChatModel>
 
-    /** Makes [model] the default for new chats. Does nothing for a model the catalogue does not have. */
+    /**
+     * Makes [model] the default for new chats and new voice sessions, as a pick on the Voice screen
+     * does ([VoiceRepository.choose]). Does nothing for a model the catalogue does not have.
+     */
     suspend fun setDefaultModel(model: ChatModel)
 
     companion object {

@@ -5,13 +5,16 @@ import androidx.lifecycle.viewModelScope
 import br.com.weslleycampos.chat.core.navigation.Navigator
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SignInEntry
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SplashEntry
-import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
+import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.data.auth.AuthManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.core.annotation.KoinViewModel
 
-/** The session gate: replaces Splash with a new chat when Firebase restores a user, and with SignIn otherwise. */
+/**
+ * The session gate: replaces Splash with Voice, the home screen, when Firebase restores a user, and
+ * with SignIn otherwise. Either becomes the root of the back stack, so back from it leaves the app.
+ */
 @KoinViewModel(binds = [SplashViewModel::class])
 class SplashViewModel(
     val navigator: Navigator,
@@ -19,7 +22,7 @@ class SplashViewModel(
 ) : ViewModel(), Navigator by navigator {
     init {
         viewModelScope.launch {
-            val entry = if (authManager.currentUser.first() == null) SignInEntry else ChatEntry()
+            val entry = if (authManager.currentUser.first() == null) SignInEntry else VoiceEntry()
             navigate(entry) { popUpTo<SplashEntry> { inclusive = true } }
         }
     }

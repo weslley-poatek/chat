@@ -18,7 +18,7 @@ favorite models and the default model, are preferences in `:core:preferences` in
 | `MessageEntity` | `core.database.entities` | Version 2, `messages`: a user message or a reply, its blocks, status and latency; version 3 adds the reply's `personaId`, version 6 the `pairSide` of a compare pair's reply (`PAIR_FIRST_SIDE`, `PAIR_SECOND_SIDE`) |
 | `PersonaEntity` | `core.database.entities` | Version 3, `personas`: a persona's name, model, prompt and place in the picker |
 | `StoredBlock` | `core.database.entities` | One reply block in the `blocks` column: paragraph, code or numbered list |
-| `ConversationDao`, `MessageDao`, `PersonaDao` | `core.database.daos` | The queries on those three tables |
+| `ConversationDao`, `MessageDao`, `PersonaDao` | `core.database.daos` | The queries on those three tables; `MessageDao.countUserMessages` and `MessageDao.last` are voice mode's, which picks its next exchange by the first and answers a transcript only while it is the second |
 | `HistoryDao` | `core.database.daos` | Version 4: History's lists of `conversations`, every one that is not archived, its search and its count |
 | `ForkDao` | `core.database.daos` | Version 5: a fork's queries: a thread up to one of its messages, the insert of its copies, and the fork banner's dismissal |
 | `CompareDao` | `core.database.daos` | Version 6: compare mode's queries: a conversation's compare choice, and a compare pair's two sides from its first |
@@ -257,8 +257,8 @@ Run from the repository root:
   ids in their order, dismissing the fork banner with whether it changed anything, message order,
   the blocks JSON, a reply's persona and pair side, a compare pair's two sides, reply progress one
   reply or several at once and whether the replies are still there, reply counts with a pair
-  counted once, unfinished (either side of a pair included) and interrupted replies, the foreign
-  key and its cascade delete.
+  counted once, user message counts, a thread's last message whatever its timestamp, unfinished
+  (either side of a pair included) and interrupted replies, the foreign key and its cascade delete.
 - `LikePatternsTest` (common) covers the wildcards and escapes of `containsPattern`.
 - `PersonaDaoTest` (common) covers the position order and inserting personas again without
   touching the rows already there.

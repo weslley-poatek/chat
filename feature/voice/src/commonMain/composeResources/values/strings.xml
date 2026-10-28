@@ -1,0 +1,19 @@
+<resources>
+    <string name="voice_history">History</string>
+    <string name="voice_settings">Settings</string>
+    <string name="voice_model">Model: %1$s</string>
+    <string name="voice_skip">Skip to the next phase</string>
+
+    <string name="voice_phase_listening">listening</string>
+    <string name="voice_phase_thinking">thinking</string>
+    <string name="voice_phase_speaking">speaking</string>
+
+    <string name="voice_mute">mute</string>
+    <string name="voice_unmute">unmute</string>
+    <string name="voice_end">end</string>
+    <string name="voice_text">text</string>
+
+    <string name="voice_mute_description">Mute</string>
+    <string name="voice_end_description">End</string>
+    <string name="voice_text_description">Switch to text</string>
+</resources>

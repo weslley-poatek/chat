@@ -30,6 +30,10 @@ import kotlinx.coroutines.flow.Flow
  * Compare mode is part of the [ModelChoice]: while a conversation compares its model with a second
  * one ([Conversation.comparing]), [send] answers with a [Message.ComparePair], and
  * [CompareRepository.continueWith] goes on with one side's model.
+ *
+ * Voice mode ([VoiceRepository]) saves each exchange as the user's message and a reply that is
+ * done at once, so a voice conversation is listed, searched, opened and sent in here like a typed
+ * one, and a typed one can go on in voice mode.
  */
 interface ChatRepository {
     /**

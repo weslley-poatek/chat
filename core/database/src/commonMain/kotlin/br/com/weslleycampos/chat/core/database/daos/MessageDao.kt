@@ -43,6 +43,21 @@ interface MessageDao {
     )
     suspend fun countReplies(conversationId: Long): Int
 
+    /**
+     * The conversation's user messages: how many exchanges voice mode has had in it, typed ones
+     * included, which picks its next canned exchange.
+     */
+    @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId AND role = 'user'")
+    suspend fun countUserMessages(conversationId: Long): Int
+
+    /**
+     * The conversation's last message, the one written last whatever its timestamp, or `null` when
+     * it has none or there is no such conversation. Voice mode answers a transcript only while it is
+     * the last message.
+     */
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY id DESC LIMIT 1")
+    suspend fun last(conversationId: Long): MessageEntity?
+
     /** Whether a reply in the conversation is still thinking or streaming. */
     @Query(
         "SELECT EXISTS(SELECT 1 FROM messages WHERE conversationId = :conversationId " +

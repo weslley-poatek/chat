@@ -276,6 +276,13 @@ internal class FakeChatDatabase(
             it.conversationId == conversationId && it.role == MessageRole.ASSISTANT && it.pairSide != PAIR_SECOND_SIDE
         }
 
+        override suspend fun countUserMessages(conversationId: Long): Int = messageRows.value.count {
+            it.conversationId == conversationId && it.role == MessageRole.USER
+        }
+
+        override suspend fun last(conversationId: Long): MessageEntity? =
+            messageRows.value.filter { it.conversationId == conversationId }.maxByOrNull { it.id }
+
         override suspend fun hasUnfinishedReply(conversationId: Long): Boolean =
             messageRows.value.any { it.conversationId == conversationId && it.status in unfinished }
 
@@ -298,4 +305,7 @@ internal class FakeChatDatabase(
     }
 
     fun message(id: Long): MessageEntity = messageRows.value.single { it.id == id }
+
+    /** Every message still thinking or streaming, in any conversation. */
+    fun unfinishedMessages(): List<MessageEntity> = messageRows.value.filter { it.status in unfinished }
 }

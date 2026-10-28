@@ -74,7 +74,7 @@ has `@Preview`s for every variant and state in light and dark.
 | `ChatSwitch` | — | On/off settings; the track takes the palette's accent when checked |
 | `ChatSegmentedControl`, `ChatSegment` | — | Single choice among a few short options, such as theme or speech rate |
 | `ChatBottomSheet` | — | Modal sheets such as the model picker, with the prototype's handle and top border |
-| `ChatVoiceSphere` | `Listening`, `Thinking`, `Speaking` | The voice mode particle sphere, tinted with the palette's accent |
+| `ChatVoiceSphere` | `Listening`, `Thinking`, `Speaking`, and `muted` | The voice mode particle sphere and its glow, tinted with the palette's accent; `muted` stills the listening sphere only, as the prototype's mute does |
 | `ChatToast` | — | A one-line notice in inverted colours that fades in; pass `null` to hide it. The screen's state clears it after `ChatToastDefaults.Duration`, 1400 ms |
 
 ## Fonts and icons

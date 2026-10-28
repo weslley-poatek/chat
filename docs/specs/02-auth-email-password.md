@@ -142,10 +142,11 @@ simulator.
 - [x] Given an error, when the email or the password is edited, then the error clears —
   `SignInViewModelTest.typingInEitherFieldClearsTheError`
 - [x] Given a valid `signin`, when the CTA is tapped, then `EmailAuthManager.signIn` gets the email and
-  password as typed, and on return a new chat replaces SignIn on the back stack, as after Google —
-  `SignInViewModelTest.aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithANewChat`
-- [x] Given a valid `signup`, when the CTA is tapped, then `createAccount` is called and on return a new
-  chat replaces SignIn — `SignInViewModelTest.aValidSignUpCreatesTheAccountAndReplacesSignInWithANewChat`
+  password as typed, and on return the home screen replaces SignIn on the back stack, as after
+  Google (a new chat until row 8, Voice since) —
+  `SignInViewModelTest.aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithVoice`
+- [x] Given a valid `signup`, when the CTA is tapped, then `createAccount` is called and on return the
+  home screen (Voice since row 8) replaces SignIn — `SignInViewModelTest.aValidSignUpCreatesTheAccountAndReplacesSignInWithVoice`
 - [x] Given a valid email in `forgot`, when "Send reset link" is tapped, then `sendPasswordReset` gets
   it, no password is needed, and on return `forgotSent` shows while SignIn stays —
   `SignInViewModelTest.aValidResetSendsTheLinkWithoutAPasswordAndShowsTheSentConfirmation`
@@ -166,8 +167,8 @@ simulator.
   `SignInViewModelTest.theGoogleButtonOpensThePickerWhileNothingIsBusy`,
   `SignInViewModelTest.aTokenThatArrivesWhileSigningInIsIgnored`
 - [x] Given a Google token, then `authBusy` is `google` ("authorizing…") and the earlier error is gone
-  until Firebase answers, and on success a new chat replaces SignIn —
-  `SignInViewModelTest.aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithANewChat`,
+  until Firebase answers, and on success the home screen (Voice since row 8) replaces SignIn —
+  `SignInViewModelTest.aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithVoice`,
   `SignInViewModelTest.aGoogleTokenClearsTheEarlierError`
 - [x] Given a Google failure, then a network failure shows "no connection, check it and try again", a
   rejected credential "Google couldn’t confirm your account, try again" and anything else, the

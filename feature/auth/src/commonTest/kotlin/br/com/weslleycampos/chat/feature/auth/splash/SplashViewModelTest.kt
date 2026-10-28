@@ -2,7 +2,7 @@ package br.com.weslleycampos.chat.feature.auth.splash
 
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SignInEntry
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SplashEntry
-import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
+import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.feature.auth.FakeAuthManager
 import br.com.weslleycampos.chat.feature.auth.navigator
 import br.com.weslleycampos.chat.feature.auth.stack
@@ -16,6 +16,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SplashViewModelTest {
@@ -26,12 +27,15 @@ class SplashViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun aRestoredUserReplacesSplashWithANewChat() {
+    fun aRestoredUserReplacesSplashWithVoiceTheRootThatBackLeavesTheAppFrom() {
         val navigator = navigator(SplashEntry)
 
         SplashViewModel(navigator, FakeAuthManager(user = user()))
 
-        assertEquals(listOf(ChatEntry()), navigator.stack)
+        assertEquals(listOf(VoiceEntry()), navigator.stack)
+        // Voice is the root: there is nothing to go back to, so system back leaves the app.
+        assertFalse(navigator.navigateUp())
+        assertEquals(listOf(VoiceEntry()), navigator.stack)
     }
 
     @Test

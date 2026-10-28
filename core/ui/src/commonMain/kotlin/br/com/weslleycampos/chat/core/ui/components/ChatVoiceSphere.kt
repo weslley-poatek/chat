@@ -56,6 +56,9 @@ private const val GlowAlpha = 0.12f
 private const val SpeakingGlowAlpha = 0.22f
 private const val GlowAnimationMillis = 600
 
+// The amplitude while thinking, or listening muted.
+private const val QuietAmplitude = 0.05f
+
 enum class ChatVoicePhase {
     Listening,
     Thinking,
@@ -65,16 +68,20 @@ enum class ChatVoicePhase {
 /**
  * The voice mode particle field: 1,000 points on a sphere, tinted with the palette's accent. They swell with
  * the voice while [ChatVoicePhase.Listening], orbit as a tilted ring while [ChatVoicePhase.Thinking], and pulse
- * outwards while [ChatVoicePhase.Speaking]. The amplitude is simulated, as in the prototype.
+ * outwards while [ChatVoicePhase.Speaking]. The amplitude is simulated, as in the prototype. While [muted] the
+ * listening sphere barely moves, as the prototype's mute lowers only the listening amplitude; speaking is
+ * unchanged.
  */
 @Composable
 fun ChatVoiceSphere(
     modifier: Modifier = Modifier,
     phase: ChatVoicePhase = ChatVoicePhase.Listening,
+    muted: Boolean = false,
 ) {
     val colors = ChatTheme.colors
     val particles = remember { ChatVoiceParticles() }
     val currentPhase by rememberUpdatedState(phase)
+    val currentlyMuted by rememberUpdatedState(muted)
     val glowAlpha by animateFloatAsState(
         targetValue = if (phase == ChatVoicePhase.Speaking) SpeakingGlowAlpha else GlowAlpha,
         animationSpec = tween(durationMillis = GlowAnimationMillis),
@@ -85,7 +92,7 @@ fun ChatVoiceSphere(
         while (true) {
             withFrameNanos { now ->
                 val dt = ((now - last) / NanosPerSecond).coerceAtMost(MaxFrameSeconds)
-                particles.step(dt = dt, phase = currentPhase)
+                particles.step(dt = dt, phase = currentPhase, muted = currentlyMuted)
                 last = now
             }
         }
@@ -203,15 +210,18 @@ internal class ChatVoiceParticles(
 
     fun mix(phase: ChatVoicePhase): Float = mix[phase.ordinal]
 
-    fun step(dt: Float, phase: ChatVoicePhase) {
+    /** Moves the field on by [dt] seconds towards [phase]; [muted] stills the voice while listening. */
+    fun step(dt: Float, phase: ChatVoicePhase, muted: Boolean = false) {
         val mixRate = min(1f, dt * 4)
         for (entry in ChatVoicePhase.entries) {
             val target = if (entry == phase) 1f else 0f
             mix[entry.ordinal] += (target - mix[entry.ordinal]) * mixRate
         }
         val t = time + dt
-        val talk = if (phase == ChatVoicePhase.Thinking) {
-            0.05f
+        // The prototype's `amp` target: the voice while listening unmuted or speaking, else a near-still 0.05.
+        val quiet = phase == ChatVoicePhase.Thinking || (phase == ChatVoicePhase.Listening && muted)
+        val talk = if (quiet) {
+            QuietAmplitude
         } else {
             max(0f, 0.35f + 0.4f * sin(t * 3.1f) + 0.25f * sin(t * 7.3f + 1) + 0.2f * sin(t * 13.7f))
         }
@@ -250,8 +260,9 @@ internal class ChatVoiceParticles(
 data class ChatVoiceSpherePreviewCase(
     val phase: ChatVoicePhase,
     val darkTheme: Boolean,
+    val muted: Boolean = false,
 ) {
-    val name: String get() = "$phase · ${if (darkTheme) "Dark" else "Light"}"
+    val name: String get() = "$phase${if (muted) " · muted" else ""} · ${if (darkTheme) "Dark" else "Light"}"
 }
 
 class ChatVoiceSpherePreviewParameterProvider : PreviewParameterProvider<ChatVoiceSpherePreviewCase> {
@@ -260,6 +271,7 @@ class ChatVoiceSpherePreviewParameterProvider : PreviewParameterProvider<ChatVoi
             for (phase in ChatVoicePhase.entries) {
                 yield(ChatVoiceSpherePreviewCase(phase = phase, darkTheme = dark))
             }
+            yield(ChatVoiceSpherePreviewCase(phase = ChatVoicePhase.Listening, darkTheme = dark, muted = true))
         }
     }
 
@@ -278,7 +290,7 @@ private fun ChatVoiceSpherePreview(
                 verticalArrangement = Arrangement.spacedBy(ChatTheme.spacing.small),
             ) {
                 Text(text = case.name, style = ChatTheme.typography.labelSmall, color = ChatTheme.colors.text.tertiary)
-                ChatVoiceSphere(modifier = Modifier.size(288.dp), phase = case.phase)
+                ChatVoiceSphere(modifier = Modifier.size(288.dp), phase = case.phase, muted = case.muted)
             }
         }
     }

@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.weslleycampos.chat.core.navigation.Navigator
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SignInEntry
-import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
+import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.data.auth.AuthException
 import br.com.weslleycampos.chat.data.auth.AuthManager
 import br.com.weslleycampos.chat.data.auth.EmailAuthManager
@@ -68,11 +68,11 @@ class SignInViewModel(
                 when (state.mode) {
                     AuthMode.SignIn -> {
                         emailAuthManager.signIn(state.email, state.password)
-                        navigateToChat()
+                        navigateHome()
                     }
                     AuthMode.SignUp -> {
                         emailAuthManager.createAccount(state.email, state.password)
-                        navigateToChat()
+                        navigateHome()
                     }
                     AuthMode.Forgot -> {
                         emailAuthManager.sendPasswordReset(state.email)
@@ -100,7 +100,7 @@ class SignInViewModel(
         viewModelScope.launch {
             try {
                 authManager.signInWithGoogle(idToken, accessToken)
-                navigateToChat()
+                navigateHome()
             } catch (e: CancellationException) {
                 uiState.update { it.copy(busy = null) }
                 throw e
@@ -115,8 +115,11 @@ class SignInViewModel(
         uiState.update { it.copy(busy = null, error = error.googleSignInMessage()) }
     }
 
-    /** Signed in: a new chat replaces SignIn, as the prototype's `finishAuth` lands on an empty Chat. */
-    private fun navigateToChat() = navigate(ChatEntry()) { popUpTo<SignInEntry> { inclusive = true } }
+    /**
+     * Signed in: Voice, the home screen, replaces SignIn as the root of the back stack, where the
+     * prototype's `finishAuth` lands on an empty Chat (the user made Voice the home screen).
+     */
+    private fun navigateHome() = navigate(VoiceEntry()) { popUpTo<SignInEntry> { inclusive = true } }
 }
 
 /** With email enumeration protection off, only a reset reports a missing account as such. */

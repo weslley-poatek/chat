@@ -68,6 +68,20 @@ class DataChatModuleTest {
     }
 
     @Test
+    fun koinProvidesOneRoomVoiceRepositoryOnTheChatAndModelRepositories() {
+        val koin = koinApplication {
+            module<FakeDatabaseModule>()
+            module<DataChatModule>()
+        }.koin
+        try {
+            assertIs<RoomVoiceRepository>(koin.get<VoiceRepository>())
+            assertSame(koin.get<VoiceRepository>(), koin.get<VoiceRepository>())
+        } finally {
+            koin.close()
+        }
+    }
+
+    @Test
     fun koinProvidesOneLocalModelRepositoryOnThePersonaDaoAndThePlainPreferences() {
         val koin = koinApplication {
             module<FakeDatabaseModule>()

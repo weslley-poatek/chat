@@ -5,12 +5,14 @@ import br.com.weslleycampos.chat.core.navigation.entries.auth.SignInEntry
 import br.com.weslleycampos.chat.core.navigation.entries.auth.SplashEntry
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
+import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntriesAggregator
 import br.com.weslleycampos.chat.core.navigation.utils.providesSaveStateConfiguration
 import br.com.weslleycampos.chat.feature.auth.signin.SignInEntryProvider
 import br.com.weslleycampos.chat.feature.auth.splash.SplashEntryProvider
 import br.com.weslleycampos.chat.feature.chat.ChatEntryProvider
 import br.com.weslleycampos.chat.feature.history.HistoryEntryProvider
+import br.com.weslleycampos.chat.feature.voice.VoiceEntryProvider
 import kotlinx.serialization.PolymorphicSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -24,7 +26,13 @@ import kotlin.test.assertEquals
 class AppEntriesTest {
     private val configuration = providesSaveStateConfiguration(
         EntriesAggregator(
-            listOf(SplashEntryProvider(), SignInEntryProvider(), ChatEntryProvider(), HistoryEntryProvider()),
+            listOf(
+                SplashEntryProvider(),
+                SignInEntryProvider(),
+                VoiceEntryProvider(),
+                ChatEntryProvider(),
+                HistoryEntryProvider(),
+            ),
         ),
     )
     private val json = Json { serializersModule = configuration.serializersModule }
@@ -32,7 +40,15 @@ class AppEntriesTest {
 
     @Test
     fun theSavedBackStackRestoresEveryScreenTheAppShows() {
-        val backStack = listOf(SplashEntry, SignInEntry, ChatEntry(), ChatEntry(conversationId = 42), HistoryEntry)
+        val backStack = listOf(
+            SplashEntry,
+            SignInEntry,
+            VoiceEntry(),
+            VoiceEntry(conversationId = 7),
+            ChatEntry(),
+            ChatEntry(conversationId = 42),
+            HistoryEntry,
+        )
 
         assertEquals(backStack, json.decodeFromString(serializer, json.encodeToString(serializer, backStack)))
     }

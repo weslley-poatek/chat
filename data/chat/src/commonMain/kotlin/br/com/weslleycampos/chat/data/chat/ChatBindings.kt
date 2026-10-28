@@ -70,6 +70,26 @@ internal fun compareRepository(
 )
 
 /**
+ * The app's one [VoiceRepository]: voice sessions read through the [ChatRepository] and pick through
+ * it and the [ModelRepository], and save their turns on the system clock.
+ */
+@Single
+internal fun voiceRepository(
+    chats: ChatRepository,
+    models: ModelRepository,
+    conversationDao: ConversationDao,
+    messageDao: MessageDao,
+    transactions: TransactionRunner,
+): VoiceRepository = RoomVoiceRepository(
+    chats = chats,
+    models = models,
+    conversationDao = conversationDao,
+    messageDao = messageDao,
+    transactions = transactions,
+    clock = Clock.System,
+)
+
+/**
  * The app's one [ModelRepository]: personas in Room, favorites and the default model in the plain
  * DataStore. The presets are seeded in a scope as long-lived as the process.
  */

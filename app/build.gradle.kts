@@ -17,6 +17,7 @@ kotlin {
             implementation(projects.feature.auth)
             implementation(projects.feature.chat)
             implementation(projects.feature.history)
+            implementation(projects.feature.voice)
         }
         commonTest.dependencies {
             // `AppViewModelTest` runs the root accent on virtual time.

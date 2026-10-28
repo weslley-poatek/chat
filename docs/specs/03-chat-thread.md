@@ -134,11 +134,12 @@ in the previews and on a device: there is no `runComposeUiTest`, see Decided.
 
 Navigation and app
 
-- [x] After sign-in, or with a signed-in user at launch, a new chat replaces the auth screen —
-  `SignInViewModelTest.aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithANewChat`,
-  `SignInViewModelTest.aValidSignUpCreatesTheAccountAndReplacesSignInWithANewChat`,
-  `SignInViewModelTest.aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithANewChat`,
-  `SplashViewModelTest.aRestoredUserReplacesSplashWithANewChat`
+- [x] After sign-in, or with a signed-in user at launch, a new chat replaces the auth screen
+  (superseded by row 8: Voice replaces it now, and "Aa" opens the chat over Voice; spec 08) —
+  `SignInViewModelTest.aValidSignInSignsInWithWhatWasTypedAndReplacesSignInWithVoice`,
+  `SignInViewModelTest.aValidSignUpCreatesTheAccountAndReplacesSignInWithVoice`,
+  `SignInViewModelTest.aGoogleTokenShowsAuthorizingUntilFirebaseAnswersThenReplacesSignInWithVoice`,
+  `SplashViewModelTest.aRestoredUserReplacesSplashWithVoiceTheRootThatBackLeavesTheAppFrom`
 - [x] `ChatEntry()` and `ChatEntry(42)` survive the back stack's save, next to every key the app
   registers — `ChatEntryProviderTest.aSavedBackStackRestoresANewChatAndAnOpenConversation`,
   `AppEntriesTest.theSavedBackStackRestoresEveryScreenTheAppShows`

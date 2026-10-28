@@ -50,15 +50,39 @@ class ChatVoiceSphereTest {
     }
 
     @Test
-    fun providerCoversEveryPhaseInBothModes() {
+    fun muteStillsTheListeningSphereButNotTheSpeakingOne() {
+        val muted = ChatVoiceParticles()
+        val heard = ChatVoiceParticles()
+        val spoken = ChatVoiceParticles()
+        var mutedLoudest = 0f
+        var heardLoudest = 0f
+        var spokenLoudest = 0f
+        // 3 s of frames: the amplitude settles in the first second, then the voice swings for two.
+        repeat(180) { frame ->
+            muted.step(dt = 1 / 60f, phase = ChatVoicePhase.Listening, muted = true)
+            heard.step(dt = 1 / 60f, phase = ChatVoicePhase.Listening)
+            spoken.step(dt = 1 / 60f, phase = ChatVoicePhase.Speaking, muted = true)
+            if (frame >= 60) {
+                mutedLoudest = maxOf(mutedLoudest, muted.amplitude)
+                heardLoudest = maxOf(heardLoudest, heard.amplitude)
+                spokenLoudest = maxOf(spokenLoudest, spoken.amplitude)
+            }
+        }
+
+        assertEquals(0.05f, mutedLoudest, absoluteTolerance = 1e-3f)
+        assertTrue(heardLoudest > 0.5f, "the unmuted voice peaks at $heardLoudest")
+        assertTrue(spokenLoudest > 0.5f, "the muted speaking voice peaks at $spokenLoudest")
+    }
+
+    @Test
+    fun providerCoversEveryPhaseAndMutedListeningInBothModes() {
         val cases = ChatVoiceSpherePreviewParameterProvider().values.toList()
-        assertEquals(6, cases.size)
-        assertEquals(6, cases.distinct().size)
+        assertEquals(8, cases.size)
+        assertEquals(8, cases.distinct().size)
         for (dark in listOf(false, true)) {
-            assertEquals(
-                ChatVoicePhase.entries.toSet(),
-                cases.filter { it.darkTheme == dark }.map { it.phase }.toSet(),
-            )
+            val inMode = cases.filter { it.darkTheme == dark }
+            assertEquals(ChatVoicePhase.entries.toSet(), inMode.map { it.phase }.toSet())
+            assertEquals(listOf(ChatVoicePhase.Listening), inMode.filter { it.muted }.map { it.phase })
         }
     }
 }
