@@ -4,7 +4,6 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
-import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
@@ -227,17 +226,17 @@ class ChatViewModelTest {
         assertNull(viewModel.state.toast)
     }
 
-    // New chat and opening a conversation
+    // A conversation gone and opening a conversation
 
     @Test
-    fun newChatGoesBackToTheEmptyStateOnTheDefaultModelAndKeepsTheDraft() = runTest {
+    fun aConversationGoneWhileOpenGoesBackToANewChatOnTheDefaultModelKeepingTheDraft() = runTest {
         val repository = FakeChatRepository(backgroundScope)
         val conversation = repository.seed("Postgres index", model = Gemini)
         val viewModel = chatViewModel(repository, ChatEntry(conversation.id))
         viewModel.onCopyCode(BlockKey(viewModel.reply.id, ReplyCodeIndex)) {}
         viewModel.onDraftChange("half a thought")
 
-        viewModel.onNewChat()
+        repository.delete(conversation.id)
         runCurrent()
 
         assertEquals(
@@ -253,19 +252,23 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun aSendThatAnswersAfterNewChatLeavesTheNewChatEmpty() = runTest {
+    fun aSendThatAnswersAfterARecentRowWasOpenedLeavesThatConversationOpen() = runTest {
         val answer = CompletableDeferred<Long?>()
         val repository = FakeChatRepository(backgroundScope).apply { this.answer = { _, _ -> answer.await() } }
+        val recent = repository.seed("Postgres index")
         val viewModel = chatViewModel(repository)
         viewModel.send(Question)
         runCurrent()
 
-        viewModel.onNewChat()
+        viewModel.onOpenRecent(recent.id)
         answer.complete(repository.seed(Question).id)
         runCurrent()
 
-        assertNull(viewModel.state.conversationId)
-        assertTrue(viewModel.state.messages.isEmpty())
+        assertEquals<Long?>(recent.id, viewModel.state.conversationId)
+        assertEquals(
+            listOf("Postgres index"),
+            viewModel.state.messages.filterIsInstance<MessageUi.User>().map { it.text },
+        )
         assertNull(viewModel.state.toast)
     }
 
@@ -324,22 +327,6 @@ class ChatViewModelTest {
         assertTrue(state.showsEmptyState)
         assertEquals(ModelCatalogue.default, state.model)
         assertTrue(state.messages.isEmpty())
-    }
-
-    // History
-
-    @Test
-    fun theHistoryButtonOpensHistoryOverTheChatWhichStaysUnderneath() = runTest {
-        val repository = FakeChatRepository(backgroundScope)
-        val conversation = repository.seed("useDebounce hook")
-        val viewModel = chatViewModel(repository, ChatEntry(conversation.id))
-
-        viewModel.onOpenHistory()
-        // A second tap before History shows opens it once.
-        viewModel.onOpenHistory()
-
-        assertEquals(listOf(ChatEntry(conversation.id), HistoryEntry), viewModel.navigator.navBackStack.toList())
-        assertEquals<Long?>(conversation.id, viewModel.state.conversationId)
     }
 
     // Copy

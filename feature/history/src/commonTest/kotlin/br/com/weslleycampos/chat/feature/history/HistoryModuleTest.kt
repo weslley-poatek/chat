@@ -4,8 +4,8 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.Navigator
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
-import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
+import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntryProvider
 import br.com.weslleycampos.chat.data.chat.ChatRepository
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +64,6 @@ internal class FakeAppModule {
 
     @Single
     fun navigator(): Navigator = NavigatorImpl(
-        NavBackStack<NavKey>().apply { addAll(listOf(ChatEntry(), HistoryEntry)) },
+        NavBackStack<NavKey>().apply { addAll(listOf(VoiceEntry(), HistoryEntry)) },
     )
 }

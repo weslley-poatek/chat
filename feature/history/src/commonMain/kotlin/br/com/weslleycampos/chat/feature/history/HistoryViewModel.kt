@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import br.com.weslleycampos.chat.core.navigation.Navigator
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
+import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
 import br.com.weslleycampos.chat.data.chat.ChatRepository
 import br.com.weslleycampos.chat.data.chat.models.Conversation
@@ -34,8 +35,8 @@ import kotlin.time.Duration
  * [ChatRepository.observeHistory] for the trimmed query, grouped again whenever it changes and
  * whenever the local date does, since nothing in the database changes at midnight.
  *
- * Navigation: back returns to the chat underneath, as it was; a row replaces that chat with its own
- * conversation, so History never piles up on the back stack.
+ * Navigation: History opens over Voice, and back returns there as it was. A row opens its
+ * conversation as text over History, so back from the thread comes here and then to Voice.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @KoinViewModel(binds = [HistoryViewModel::class])
@@ -80,25 +81,25 @@ class HistoryViewModel(
     fun onClearQuery() = onQueryChange("")
 
     /**
-     * The back chevron, as system back and the iOS edge swipe: the chat underneath, unchanged. If
-     * History were ever the only screen, a new chat replaces it instead of leaving nothing.
+     * The back chevron, as system back and the iOS edge swipe: Voice underneath, unchanged. If
+     * History were ever the only screen, a new voice session replaces it instead of leaving nothing.
      */
     fun onBack() {
-        if (!navigateUp()) navigate(ChatEntry()) { popUpTo<HistoryEntry> { inclusive = true } }
+        if (!navigateUp()) navigate(VoiceEntry()) { popUpTo<HistoryEntry> { inclusive = true } }
     }
 
     /**
      * A tap on a row, the prototype's `open`: with a row open it only closes that row (a tap on
      * the open row closes it, and one on another row does not navigate away under the actions).
-     * Otherwise the conversation opens in place of the chat underneath: back from it then leaves
-     * the app, as from any chat, rather than coming back here.
+     * Otherwise the conversation opens as text over History, whatever is underneath, popping
+     * nothing: back from it returns here, then to Voice.
      */
     fun onRowClick(conversationId: Long) {
         if (uiState.value.openRow != null) {
             onCloseRow()
             return
         }
-        navigate(ChatEntry(conversationId)) { popUpTo<ChatEntry> { inclusive = true } }
+        navigate(ChatEntry(conversationId))
     }
 
     /** A drag starts on a row: any other open row closes, so one row at most is open. */

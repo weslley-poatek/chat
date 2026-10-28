@@ -191,9 +191,12 @@ Sending, new chat and the toast
   `ChatToastTest.theToastInvertsTheScreenColorsInEveryPalette`,
   `ChatToastTest.providerCoversHiddenShortAndLongToastsInBothModes`
 - [x] New chat returns to the empty state on the default model, keeps the draft and clears
-  "copied"; a send that answers after it does not pull the old thread back —
-  `ChatViewModelTest.newChatGoesBackToTheEmptyStateOnTheDefaultModelAndKeepsTheDraft`,
-  `ChatViewModelTest.aSendThatAnswersAfterNewChatLeavesTheNewChatEmpty`
+  "copied"; a send that answers after it does not pull the old thread back (superseded by row 9:
+  there is no new-chat control, since new sessions start on Voice; the same reset follows an open
+  conversation that is gone, and a send that answers after a "recent" row was opened leaves that
+  row's conversation open; spec 09) —
+  `ChatViewModelTest.aConversationGoneWhileOpenGoesBackToANewChatOnTheDefaultModelKeepingTheDraft`,
+  `ChatViewModelTest.aSendThatAnswersAfterARecentRowWasOpenedLeavesThatConversationOpen`
 - [x] The composer is one line per line of the draft, from one to six —
   `ChatFormatsTest.theComposerIsOneLinePerLineOfTheDraftFromOneToSix`,
   `ChatUiStateTest.theComposerIsAsTallAsTheDraftsLines`
@@ -293,7 +296,8 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   `:core:navigation`'s `entries.chat`; `null` is a new chat. `ChatEntryProvider` registers it.
 - **Screen:** `ChatScreen(uiState, onHistoryClick, onModelClick, onNewChat, onOpenRecent,
   onDraftChange, onSend, onAttachClick, onVoiceClick, onCopyCode, onDismissForkBanner,
-  messageActions: MessageActionCallbacks, modifier)`. `ChatEntryProvider` wires `onAttachClick`
+  messageActions: MessageActionCallbacks, modifier)` (row 9: `onHistoryClick` became `onBack`, and
+  `onNewChat` and `onAttachClick` are gone with their controls; `onVoiceClick` opens Voice; spec 09). `ChatEntryProvider` wires `onAttachClick`
   (row 8) and `onVoiceClick` (row 11) to `{}`; `onModelClick` opens the Model picker (row 4,
   `04-model-picker.md`), and `onHistoryClick` opens History through
   `ChatViewModel.onOpenHistory()`, which pushes `HistoryEntry` over the chat (row 5,
@@ -320,11 +324,14 @@ What later rows extend, in `:feature:chat` (`br.com.weslleycampos.chat.feature.c
   `onSend`, `onNewChat`, `onOpenRecent(id)`, `onCopyCode(key, copy)`, row 4's `onOpenModelPicker`,
   `onDismissModelPicker`, `onPick(row)` and `onToggleFavorite(model)`; row 5's `onOpenHistory` is an
   extension next to the class (only a navigation, and the class is at detekt's function limit).
+  (Row 9: `onNewChat` is private, `startNewChat`, for a conversation that is gone, and the
+  extensions are `onBack()` and `onOpenVoice()`; spec 09.)
   Its toast and "copied" go through `TimedValue`, a value shown for a duration and then cleared;
   "copied" is one `TimedValue<CopiedLabel>` for a code block and a message alike (row 6).
 - **`:core:ui`:** `ChatToast(message: String?, modifier)` (nothing while `null`) and
   `ChatToastDefaults.Duration` (1400 ms); `ChatIcons.Add`, `Back`, `Close`, `Memory`, `Menu`, `Mic`,
-  `MicOff`, `NewChat`, `Search`, `Send`, `Settings`; `ChatIconButtonVariant.Accent`'s disabled look.
+  `MicOff`, `NewChat`, `Search`, `Send`, `Settings` (row 9 removed `Add`, `Memory` and `NewChat`,
+  which nothing draws any more; spec 09); `ChatIconButtonVariant.Accent`'s disabled look.
 - **Formats:** `formatClockTime`, `formatRecentTime`, `formatLatency`, `assistantMeta(modelShortName,
   personaName, time, latency, interruptedLabel)`, `tokenize` and `ChatModel.palette` are public pure
   functions (row 4 adds `chipLabel` and `modelMetaLine`, row 7 `composerPlaceholder` and the compare

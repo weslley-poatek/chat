@@ -299,7 +299,7 @@ class ChatViewModelMessageActionsTest {
     }
 
     @Test
-    fun newChatHasNoForkBanner() = runTest {
+    fun aForkGoneWhileOpenLeavesANewChatWithNoForkBanner() = runTest {
         val repository = FakeChatRepository(backgroundScope)
         val fork = repository.seed(
             Title,
@@ -307,9 +307,10 @@ class ChatViewModelMessageActionsTest {
         )
         val viewModel = chatViewModel(repository, ChatEntry(fork.id))
 
-        viewModel.onNewChat()
+        repository.delete(fork.id)
         runCurrent()
 
+        assertTrue(viewModel.state.showsEmptyState)
         assertNull(viewModel.state.forkBanner)
     }
 
@@ -389,7 +390,7 @@ class ChatViewModelMessageActionsTest {
     }
 
     @Test
-    fun readingStopsOnItsCrossOnNewChatOnAnotherConversationAndWhenTheConversationIsGone() = runTest {
+    fun readingStopsOnItsCrossOnAnotherConversationAndWhenTheConversationIsGone() = runTest {
         val repository = FakeChatRepository(backgroundScope)
         val conversation = repository.seed(Title)
         val viewModel = chatViewModel(repository, ChatEntry(conversation.id))
@@ -401,18 +402,13 @@ class ChatViewModelMessageActionsTest {
         assertNull(viewModel.state.readAloud)
 
         viewModel.actions.onReadAloud(reply)
+        viewModel.actions.onSelect(viewModel.question.id)
         repository.delete(conversation.id)
         runCurrent()
         assertTrue(viewModel.state.showsEmptyState)
-        assertNull(viewModel.state.readAloud)
-
-        val again = chatViewModel(repository, ChatEntry(repository.seed(Title).id))
-        again.actions.onReadAloud(again.reply.id)
-        again.actions.onSelect(again.question.id)
-        again.onNewChat()
         advance(1.seconds)
-        assertNull(again.state.readAloud)
-        assertNull(again.state.selectedMessage)
+        assertNull(viewModel.state.readAloud)
+        assertNull(viewModel.state.selectedMessage)
 
         val other = repository.seed("Postgres index")
         val recent = chatViewModel(repository, ChatEntry(repository.seed(Title).id))

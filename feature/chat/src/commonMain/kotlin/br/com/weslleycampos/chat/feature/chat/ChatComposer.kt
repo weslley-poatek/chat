@@ -38,7 +38,6 @@ import br.com.weslleycampos.chat.core.ui.components.ChatIconButton
 import br.com.weslleycampos.chat.core.ui.components.ChatIconButtonVariant
 import br.com.weslleycampos.chat.core.ui.icons.ChatIcons
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
-import br.com.weslleycampos.chat.feature.chat.resources.chat_attach
 import br.com.weslleycampos.chat.feature.chat.resources.chat_send
 import br.com.weslleycampos.chat.feature.chat.resources.chat_voice
 import org.jetbrains.compose.resources.painterResource
@@ -56,10 +55,12 @@ private val DraftVerticalPadding = 11.dp
 private const val SelectionAlpha = 0.4f
 
 /**
- * The composer (frame lines 220–249): "+", the draft, the mic and Send, over a hairline. The draft
- * grows a line per line of text up to six, then scrolls; ⌘ / Ctrl + Enter sends from a hardware
- * keyboard. Send takes the accent only while [canSend]. [placeholder] shows while the draft is
- * empty: "message sonnet-4.5…", or "ask sonnet-4.5 and gpt-5…" while comparing.
+ * The composer (frame lines 220–249, without "+": attachments are not built): the draft, the mic
+ * and Send, over a hairline. The draft grows a line per line of text up to six, then scrolls; ⌘ /
+ * Ctrl + Enter sends from a hardware keyboard. A tap on the mic opens voice mode ([onVoiceClick]);
+ * holding it to record is not built. Send takes the accent only while [canSend]. [placeholder]
+ * shows while the draft is empty: "message sonnet-4.5…", or "ask sonnet-4.5 and gpt-5…" while
+ * comparing.
  */
 @Composable
 internal fun ChatComposer(
@@ -69,7 +70,6 @@ internal fun ChatComposer(
     canSend: Boolean,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
-    onAttachClick: () -> Unit,
     onVoiceClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -87,12 +87,6 @@ internal fun ChatComposer(
         horizontalArrangement = Arrangement.spacedBy(ChatTheme.spacing.xxSmall),
         verticalAlignment = Alignment.Bottom,
     ) {
-        ChatIconButton(
-            onClick = onAttachClick,
-            contentDescription = stringResource(FeatureChatRes.string.chat_attach),
-        ) {
-            Icon(painter = painterResource(ChatIcons.Add), contentDescription = null)
-        }
         DraftField(
             draft = draft,
             draftRows = draftRows,

@@ -213,8 +213,10 @@ The chat while comparing
   `CompareFormatsTest.theComposerAsksBothModelsWhileComparingElseMessagesTheOne`
 - [x] In a new chat, compare is kept for its first send, which a pair answers —
   `ChatViewModelCompareTest.inANewChatCompareIsKeptForItsFirstSendWhichAPairAnswers`
-- [x] "new chat" turns compare off, from an open conversation or a new chat —
-  `ChatViewModelCompareTest.newChatTurnsCompareOffWhetherItWasPickedInANewChatOrOpen`
+- [x] "new chat" turns compare off, from an open conversation or a new chat (superseded by row 9:
+  there is no new-chat control; a comparing conversation that is gone while open leaves a new chat
+  with compare off; spec 09) —
+  `ChatViewModelCompareTest.aComparingConversationGoneWhileOpenGoesBackToANewChatWithCompareOff`
 - [x] A comparing conversation opens comparing, from its entry or from "recent" —
   `ChatViewModelCompareTest.aComparingConversationOpensComparingFromItsEntryOrRecent`
 

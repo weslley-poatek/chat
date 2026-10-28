@@ -194,20 +194,16 @@ class ChatViewModelPickerTest {
     }
 
     @Test
-    fun newChatGoesBackToTheDefaultModelDroppingAPersona() = runTest {
+    fun aConversationGoneWhileOpenGoesBackToTheDefaultModelDroppingItsPersona() = runTest {
         val repository = FakeChatRepository(backgroundScope)
         val conversation = repository.seed("Review this diff", persona = Reviewer)
         val models = FakeModelRepository(defaultModel = Gemini)
         val viewModel = chatViewModel(repository, ChatEntry(conversation.id), models)
         assertEquals(ModelChoice(Reviewer), viewModel.state.choice)
 
-        viewModel.onNewChat()
-        assertEquals(ModelChoice(Gemini), viewModel.state.choice)
-
-        // A pick made in a new chat goes too.
-        viewModel.onPick(ModelChoice(Terse))
-        viewModel.onNewChat()
+        repository.delete(conversation.id)
         runCurrent()
+
         assertEquals(ModelChoice(Gemini), viewModel.state.choice)
         assertEquals("Gemini 2.5 Pro", viewModel.state.chipLabel)
     }

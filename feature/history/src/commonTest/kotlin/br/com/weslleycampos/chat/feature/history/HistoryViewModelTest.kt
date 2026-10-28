@@ -6,6 +6,7 @@ import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
 import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
+import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.data.chat.models.HistorySection
 import br.com.weslleycampos.chat.feature.history.resources.FeatureHistoryRes
 import br.com.weslleycampos.chat.feature.history.resources.history_action_pin
@@ -63,7 +64,7 @@ class HistoryViewModelTest {
     private fun TestScope.historyViewModel(
         repository: FakeChatRepository = FakeChatRepository(),
         clock: FixedClock = FixedClock(),
-        backStack: List<NavKey> = listOf(ChatEntry(conversationId = 7), HistoryEntry),
+        backStack: List<NavKey> = listOf(VoiceEntry(), HistoryEntry),
         read: Boolean = true,
     ): HistoryViewModel {
         val viewModel = HistoryViewModel(
@@ -348,17 +349,41 @@ class HistoryViewModelTest {
     // Navigation
 
     @Test
-    fun aTapOnARowOpensItsConversationInPlaceOfTheChatUnderneath() = historyTest {
+    fun aTapOnARowOpensItsConversationAsTextOverHistoryWhoseBackReturnsHereThenToVoice() = historyTest {
         val repository = FakeChatRepository()
         val postgres = repository.seed("Postgres index")
-        val fromAConversation = historyViewModel(repository)
-        val fromANewChat = historyViewModel(repository, backStack = listOf(ChatEntry(), HistoryEntry))
+        val viewModel = historyViewModel(repository)
 
-        fromAConversation.onRowClick(postgres.id)
-        fromANewChat.onRowClick(postgres.id)
+        viewModel.onRowClick(postgres.id)
+        // A second tap before the thread shows opens it once.
+        viewModel.onRowClick(postgres.id)
+        assertEquals(listOf(VoiceEntry(), HistoryEntry, ChatEntry(conversationId = postgres.id)), viewModel.stack)
 
-        assertEquals(listOf<NavKey>(ChatEntry(conversationId = postgres.id)), fromAConversation.stack)
-        assertEquals(listOf<NavKey>(ChatEntry(conversationId = postgres.id)), fromANewChat.stack)
+        // The thread's back, then History's.
+        assertTrue(viewModel.navigateUp())
+        assertEquals(listOf(VoiceEntry(), HistoryEntry), viewModel.stack)
+        viewModel.onBack()
+        assertEquals(listOf<NavKey>(VoiceEntry()), viewModel.stack)
+    }
+
+    @Test
+    fun aTapOnARowPopsNothingWhateverIsUnderHistory() = historyTest {
+        val repository = FakeChatRepository()
+        val postgres = repository.seed("Postgres index")
+        val underneath: List<List<NavKey>> = listOf(
+            listOf(VoiceEntry(conversationId = 7)),
+            listOf(VoiceEntry(), ChatEntry()),
+            listOf(VoiceEntry(), ChatEntry(conversationId = 7)),
+            emptyList(),
+        )
+
+        for (below in underneath) {
+            val viewModel = historyViewModel(repository, backStack = below + HistoryEntry)
+
+            viewModel.onRowClick(postgres.id)
+
+            assertEquals(below + HistoryEntry + ChatEntry(conversationId = postgres.id), viewModel.stack)
+        }
     }
 
     @Test
@@ -380,20 +405,29 @@ class HistoryViewModelTest {
         assertEquals(before, viewModel.stack)
 
         viewModel.onRowClick(debounce.id)
-        assertEquals(listOf<NavKey>(ChatEntry(conversationId = debounce.id)), viewModel.stack)
+        assertEquals(listOf(VoiceEntry(), HistoryEntry, ChatEntry(conversationId = debounce.id)), viewModel.stack)
     }
 
     @Test
-    fun backReturnsToTheChatUnderneathAsItWas() = historyTest {
-        val viewModel = historyViewModel(backStack = listOf(ChatEntry(conversationId = 7), HistoryEntry))
+    fun backReturnsToVoiceUnderneathAsItWas() = historyTest {
+        val newSession = historyViewModel(backStack = listOf(VoiceEntry(), HistoryEntry))
+        val inAConversation = historyViewModel(backStack = listOf(VoiceEntry(conversationId = 7), HistoryEntry))
+
+        newSession.onBack()
+        inAConversation.onBack()
+
+        assertEquals(listOf<NavKey>(VoiceEntry()), newSession.stack)
+        assertEquals(listOf<NavKey>(VoiceEntry(conversationId = 7)), inAConversation.stack)
+    }
+
+    @Test
+    fun historyAloneGivesWayToANewVoiceSessionOnBack() = historyTest {
         val alone = historyViewModel(backStack = listOf(HistoryEntry))
 
-        viewModel.onBack()
         alone.onBack()
 
-        assertEquals(listOf<NavKey>(ChatEntry(conversationId = 7)), viewModel.stack)
-        // Never a dead end: History alone gives way to a new chat.
-        assertEquals(listOf<NavKey>(ChatEntry()), alone.stack)
+        // Never a dead end: Voice, the home screen, replaces History.
+        assertEquals(listOf<NavKey>(VoiceEntry()), alone.stack)
     }
 
     @Test

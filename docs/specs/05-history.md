@@ -148,11 +148,20 @@ are pure functions or ViewModel state, tested below.
 Navigation
 
 - [x] Chat's History button opens History over the chat, which stays underneath; a second tap opens
-  it once — `ChatViewModelTest.theHistoryButtonOpensHistoryOverTheChatWhichStaysUnderneath`
+  it once (superseded by row 8, then row 9: Voice's History button opens History over Voice, and the
+  chat has a back chevron in the History button's place; specs 08 and 09) —
+  `VoiceViewModelSessionTest.historyStopsThePhasesAndOpensOverVoiceWhichBackReturnsTo`,
+  `ChatViewModelNavigationTest.backReturnsToTheScreenUnderneathHistoryOrVoiceAsItWas`
 - [x] Back (the chevron, system back, the iOS edge swipe) returns to the chat underneath as it was;
-  History alone gives way to a new chat — `HistoryViewModelTest.backReturnsToTheChatUnderneathAsItWas`
+  History alone gives way to a new chat (superseded by row 9: back returns to Voice underneath, and
+  History alone gives way to a new voice session, `VoiceEntry()`; spec 09) —
+  `HistoryViewModelTest.backReturnsToVoiceUnderneathAsItWas`,
+  `HistoryViewModelTest.historyAloneGivesWayToANewVoiceSessionOnBack`
 - [x] A tap on a row opens its conversation in place of the chat underneath, from a conversation or
-  a new chat — `HistoryViewModelTest.aTapOnARowOpensItsConversationInPlaceOfTheChatUnderneath`
+  a new chat (superseded by row 9: it opens the conversation as text over History, popping nothing,
+  so back returns to History, then Voice; spec 09) —
+  `HistoryViewModelTest.aTapOnARowOpensItsConversationAsTextOverHistoryWhoseBackReturnsHereThenToVoice`,
+  `HistoryViewModelTest.aTapOnARowPopsNothingWhateverIsUnderHistory`
 - [x] `HistoryEntry` survives the back stack's save, next to every key the app registers —
   `HistoryEntryProviderTest.aSavedBackStackRestoresHistory`,
   `AppEntriesTest.theSavedBackStackRestoresEveryScreenTheAppShows`
@@ -330,13 +339,16 @@ noted.
   (the extension `ChatViewModel.onOpenHistory()`) pushes it: `[ChatEntry(x)]` → `[ChatEntry(x), HistoryEntry]`.
   Back (`HistoryViewModel.onBack()`, the chevron, system back, the iOS edge swipe) pops it; a row
   (`onRowClick(id)`) calls `navigate(ChatEntry(id)) { popUpTo<ChatEntry> { inclusive = true } }`, so
-  the stack becomes `[ChatEntry(id)]`.
+  the stack becomes `[ChatEntry(id)]`. (Row 9: Voice's History button pushes it, `[VoiceEntry(x),
+  HistoryEntry]`; back's fallback is `VoiceEntry()`, and a row calls `navigate(ChatEntry(id))`, so
+  the stack becomes `[VoiceEntry(x), HistoryEntry, ChatEntry(id)]`; spec 09.)
 - **Screen:** `HistoryScreen(uiState, onBack, onMemoryClick, onSettingsClick, onQueryChange,
   onClearQuery, onRowClick, onSwipeStart, onSwipeSettle, onRowAction, modifier)`.
   `HistoryEntryProvider` wires `onMemoryClick` (row 9) and `onSettingsClick` (row 10) to `{}`: the
   icons are drawn as the frame has them and do nothing yet. Rows 9 and 10 navigate from there to
   their own keys, and their back chevrons return here with `navigateUp()` (frames §4: Memory and
-  Settings → History).
+  Settings → History). (Row 9: Memory is not built, so `onMemoryClick`, its icon and its label are
+  gone; `onSettingsClick` is still `{}` for row 10; spec 09.)
 - **State:** `HistoryUiState(query, groups: List<HistoryGroupUi>, loaded, conversationCount: Int?,
   openRow: Long?, toast: StringResource?)` with `status`, `showsClearQuery`, `noMatchesFor`,
   `showsEmptyState`, `showsFooterHint` and `row(id)`. `HistoryGroupUi(section, rows)` with `label`;
@@ -428,16 +440,20 @@ noted.
   like Chat's meta lines.
 - Decided (UI): Memory and Settings are drawn in the bar as the frame has them, with their
   accessibility labels, and do nothing until rows 9 and 10 (`HistoryEntryProvider` passes `{}`).
+  (Superseded by row 9: Memory is dropped and gone from the bar; spec 09.)
 - Decided (UI): Chat's History button pushes `HistoryEntry` over the chat, and back from History is
   `navigateUp()`, so the chat underneath is still there as it was, draft and open conversation
   included (frames §4: "current conversation unchanged"). If History is ever alone on the stack, back
-  replaces it with a new chat rather than leaving nothing.
+  replaces it with a new chat rather than leaving nothing. (Superseded by rows 8 and 9: Voice's
+  History button pushes it, back returns to Voice, and History alone gives way to `VoiceEntry()`;
+  spec 09.)
 - Decided (UI): a row replaces the chat under History with `ChatEntry(id)`: `[ChatEntry(x),
   HistoryEntry]` becomes `[ChatEntry(id)]`. Chat stays the root of the signed-in app, back from the
   opened conversation leaves the app as from any chat, and History never piles up (the prototype's
   `go()` has no back stack either). The opened conversation gets a fresh chat entry, so a draft left
   in the chat underneath is not carried over (with an equal key, `ChatEntry(id)` again, Navigation 3
-  may keep that entry's state; checked on a device).
+  may keep that entry's state; checked on a device). (Superseded by row 9: Voice is the root, and a
+  row pushes `ChatEntry(id)` over History, so back returns to History; spec 09.)
 - Decided (UI): the swipe is `Modifier.draggable` with the offset in a float state and the settle
   animated inside `DraggableState.drag`, so a new drag stops a settling row where it is. It follows
   `swipeMove` / `swipeEnd`: clamped between 0 and −192, opening past −96 by position alone (no fling
@@ -489,6 +505,7 @@ noted.
 - Sync and its status: nothing syncs (orchestrator).
 - Searching replies: canned, see Decided.
 - Memory and Settings, which History's bar opens: rows 9 and 10 (the icons are drawn and inert).
+  (Row 9: Memory is dropped by the user and its icon removed; Settings stays inert for row 10.)
   Exporting and wiping history: row 10.
 - The row's dragging state as a preview: it is a moment between closed and open, checked on a
   device.

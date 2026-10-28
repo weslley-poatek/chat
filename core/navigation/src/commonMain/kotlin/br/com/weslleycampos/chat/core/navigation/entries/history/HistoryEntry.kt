@@ -5,8 +5,8 @@ import kotlinx.serialization.Serializable
 
 /**
  * History: every conversation kept on this device, grouped by day, with search and the row actions
- * pin, archive and delete. Voice's and Chat's History buttons push it over their screen, and its
- * back returns there. A row opens `ChatEntry(conversationId)`, in place of a chat underneath.
+ * pin, archive and delete. Voice's History button pushes it over Voice, and its back returns there.
+ * A row pushes `ChatEntry(conversationId)` over History, so back from the thread returns here.
  */
 @Serializable
 data object HistoryEntry : NavKey

@@ -39,7 +39,8 @@ import kotlin.time.Instant
  * the empty state, and the composer. It sits inside the safe area and above the keyboard, which
  * shortens the thread rather than covering it. The toast floats over the thread's bottom edge. A
  * tap on a message, its action row, the read-aloud bar and a compare card's "continue with this →"
- * call [messageActions].
+ * call [messageActions]. It is how a conversation reads as text, over History or Voice: [onBack]
+ * returns there, and the composer's mic, [onVoiceClick], goes on in voice.
  *
  * The accent is the [ChatUiState.model]'s, the primary model's while comparing: wrap the screen in
  * `ChatTheme(palette = uiState.model.palette)`. Each compare card wears its own model's.
@@ -49,13 +50,11 @@ import kotlin.time.Instant
 @Composable
 fun ChatScreen(
     uiState: ChatUiState,
-    onHistoryClick: () -> Unit,
+    onBack: () -> Unit,
     onModelClick: () -> Unit,
-    onNewChat: () -> Unit,
     onOpenRecent: (Long) -> Unit,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
-    onAttachClick: () -> Unit,
     onVoiceClick: () -> Unit,
     onCopyCode: (BlockKey) -> Unit,
     onDismissForkBanner: () -> Unit,
@@ -68,12 +67,7 @@ fun ChatScreen(
             .background(color = ChatTheme.colors.surface.primary)
             .safeDrawingPadding(),
     ) {
-        ChatTopBar(
-            chipLabel = uiState.chipLabel,
-            onHistoryClick = onHistoryClick,
-            onModelClick = onModelClick,
-            onNewChat = onNewChat,
-        )
+        ChatTopBar(chipLabel = uiState.chipLabel, onBack = onBack, onModelClick = onModelClick)
         uiState.forkBanner?.let { banner -> ForkBanner(text = banner, onDismiss = onDismissForkBanner) }
         Box(
             modifier = Modifier
@@ -113,7 +107,6 @@ fun ChatScreen(
             canSend = uiState.canSend,
             onDraftChange = onDraftChange,
             onSend = onSend,
-            onAttachClick = onAttachClick,
             onVoiceClick = onVoiceClick,
         )
     }
@@ -375,13 +368,11 @@ private fun ChatScreenPreview(
     ChatTheme(palette = case.uiState.model.palette, darkTheme = case.darkTheme) {
         ChatScreen(
             uiState = case.uiState,
-            onHistoryClick = {},
+            onBack = {},
             onModelClick = {},
-            onNewChat = {},
             onOpenRecent = {},
             onDraftChange = {},
             onSend = {},
-            onAttachClick = {},
             onVoiceClick = {},
             onCopyCode = {},
             onDismissForkBanner = {},

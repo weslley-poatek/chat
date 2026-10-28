@@ -172,8 +172,9 @@ Picks
   `ChatViewModelPickerTest.aPickInANewChatIsKeptAsItsChoiceClosesTheSheetAndWritesNothing`,
   `ChatViewModelPickerTest.theFirstSendOfANewChatCarriesItsChoice`,
   `ChatViewModelPickerTest.aFirstSendWithNothingPickedCarriesTheDefaultModel`
-- [x] "new chat" goes back to the default model, dropping a persona —
-  `ChatViewModelPickerTest.newChatGoesBackToTheDefaultModelDroppingAPersona`
+- [x] "new chat" goes back to the default model, dropping a persona (superseded by row 9: there is
+  no new-chat control; the same reset follows an open conversation that is gone; spec 09) —
+  `ChatViewModelPickerTest.aConversationGoneWhileOpenGoesBackToTheDefaultModelDroppingItsPersona`
 - [x] A pick in an open conversation is passed to `choose` and the chip and accent follow at once; a
   persona answers on its model and a model pick drops it —
   `ChatViewModelPickerTest.aPickInAnOpenConversationChoosesItAndTheAccentFollowsAtOnce`,

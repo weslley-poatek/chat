@@ -13,7 +13,7 @@ import org.koin.core.annotation.KoinViewModel
 
 /**
  * The root's accent: the palette of the default model, the one a new chat starts on. Every screen
- * that shows no conversation (Splash, sign-in and History now; Memory and Settings later) wears it,
+ * that shows no conversation (Splash, sign-in and History now; Settings later) wears it,
  * and changes with it at once; the chat wears its own model's over it. [ChatPalette.Default] until
  * the default model is read.
  */

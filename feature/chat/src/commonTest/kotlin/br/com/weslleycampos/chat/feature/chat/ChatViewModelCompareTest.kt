@@ -265,23 +265,17 @@ class ChatViewModelCompareTest {
     }
 
     @Test
-    fun newChatTurnsCompareOffWhetherItWasPickedInANewChatOrOpen() = runTest {
+    fun aComparingConversationGoneWhileOpenGoesBackToANewChatWithCompareOff() = runTest {
         val repository = FakeChatRepository(backgroundScope)
-        val viewModel = chatViewModel(repository, ChatEntry(repository.seed(Question, comparing = Gpt5).id))
+        val compared = repository.seed(Question, comparing = Gpt5)
+        val viewModel = chatViewModel(repository, ChatEntry(compared.id))
 
-        viewModel.onNewChat()
+        repository.delete(compared.id)
         runCurrent()
 
         assertEquals(ModelChoice(sonnet), viewModel.state.choice)
         assertEquals("Claude Sonnet 4.5", viewModel.state.chipLabel)
         assertEquals("message sonnet-4.5…", viewModel.state.composerPlaceholder)
-
-        viewModel.compareActions.onToggleCompare()
-        viewModel.onPick(ModelChoice(Gemini))
-        viewModel.onNewChat()
-        runCurrent()
-
-        assertEquals(ModelChoice(sonnet), viewModel.state.choice)
         viewModel.send(Question)
         runCurrent()
         assertEquals(ModelChoice(sonnet), repository.newChatChoices.last())

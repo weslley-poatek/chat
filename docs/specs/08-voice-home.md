@@ -378,7 +378,8 @@ the sheet and `ChatModel.palette`); nothing depends on it but `:app`.
   asks for. The thread's mic (`onVoiceClick = {}` in `ChatEntryProvider`) becomes
   `navigate(VoiceEntry(conversationId)) { popUpTo<VoiceEntry> { inclusive = true } }` (or a plain
   pop back to Voice when Voice is underneath on the same conversation); `VoiceEntry(id)` goes on with
-  that conversation in voice. Chat's History button and new-chat icon are row 9's to remove.
+  that conversation in voice. Chat's History button and new-chat icon are row 9's to remove. (Done
+  in row 9, with a plain push for the row tap instead of the `popUpTo`; spec 09.)
 - **State:** `VoiceUiState(conversationId, choice: ModelChoice, phase: ChatVoicePhase, words: Int,
   exchange: VoiceExchange?, muted, favorites, personas, modelPickerOpen)` with `model`, `chipLabel`
   (the short name), `caption: VoiceCaption(shown, rest)`, `phaseLabel`, `muteLabel` and

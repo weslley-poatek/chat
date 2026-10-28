@@ -1,10 +1,9 @@
 <resources>
-    <string name="chat_history">History</string>
-    <string name="chat_new_chat">New chat</string>
+    <string name="chat_back">Back</string>
 
     <string name="chat_empty_title">new chat</string>
-    <string name="chat_tip_type">*type* or paste code · drop files</string>
-    <string name="chat_tip_mic">*hold mic* to talk · *tap* for voice mode</string>
+    <string name="chat_tip_type">*type* or paste code</string>
+    <string name="chat_tip_mic">*tap mic* for voice mode</string>
     <string name="chat_tip_model">*tap model* to switch or compare two</string>
     <string name="chat_tip_message">*tap a message* to copy, fork, read aloud</string>
     <string name="chat_recent">recent</string>
@@ -14,7 +13,6 @@
     <string name="chat_code_copy">copy</string>
     <string name="chat_code_copied">copied</string>
 
-    <string name="chat_attach">Attach</string>
     <string name="chat_voice">Voice</string>
     <string name="chat_send">Send</string>
 

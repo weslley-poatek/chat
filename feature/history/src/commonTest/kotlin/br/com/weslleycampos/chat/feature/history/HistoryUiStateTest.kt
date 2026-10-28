@@ -5,6 +5,7 @@ import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.HistorySection
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.feature.history.resources.FeatureHistoryRes
+import br.com.weslleycampos.chat.feature.history.resources.allStringResources
 import br.com.weslleycampos.chat.feature.history.resources.history_action_archive
 import br.com.weslleycampos.chat.feature.history.resources.history_action_delete
 import br.com.weslleycampos.chat.feature.history.resources.history_action_pin
@@ -209,6 +210,16 @@ class HistoryUiStateTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun theBarOffersBackAndSettingsAndNoMemory() {
+        val labels = FeatureHistoryRes.allStringResources.keys
+
+        assertTrue("history_back" in labels)
+        assertTrue("history_settings" in labels)
+        // Memory is not built: the module has no label a Memory control could be announced by.
+        assertEquals(emptyList(), labels.filter { "memory" in it })
     }
 
     @Test

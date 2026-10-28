@@ -146,7 +146,9 @@ Fork
   `MessageFormatsTest.theForkBannerNamesTheSourceAndTheMessageNumberOrUntitled`,
   `ChatUiStateTest.theForkBannerShowsOnlyWithAForkOrigin`,
   `ChatViewModelMessageActionsTest.theForkBannerSaysWhereTheForkCameFromUntilItsCrossHidesItForGood`
-- [x] A new chat has no banner — `ChatViewModelMessageActionsTest.newChatHasNoForkBanner`
+- [x] A new chat has no banner (superseded by row 9: there is no new-chat control; a fork that is
+  gone while open leaves a new chat with no banner; spec 09) —
+  `ChatViewModelMessageActionsTest.aForkGoneWhileOpenLeavesANewChatWithNoForkBanner`
 
 Read aloud
 
@@ -163,8 +165,8 @@ Read aloud
 - [x] One reply is read at a time, and a user message has no "read aloud" —
   `ChatViewModelMessageActionsTest.onlyOneReplyIsReadAtATime`
 - [x] The bar's "×", "new chat", another conversation and the conversation's deletion stop the read
-  and clear the selection —
-  `ChatViewModelMessageActionsTest.readingStopsOnItsCrossOnNewChatOnAnotherConversationAndWhenTheConversationIsGone`
+  and clear the selection (superseded by row 9: "new chat" is gone; the others still do; spec 09) —
+  `ChatViewModelMessageActionsTest.readingStopsOnItsCrossOnAnotherConversationAndWhenTheConversationIsGone`
 
 Retry
 

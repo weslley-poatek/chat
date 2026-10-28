@@ -51,7 +51,7 @@ class ChatEntryProvider : EntryProvider {
                     onContinueWith = compare::onContinueWith,
                 )
             }
-            // Leaving the chat, for History, another app or a rotation, closes the action row and
+            // Leaving the chat, for Voice, another app or a rotation, closes the action row and
             // pauses a read, as the prototype's `go()` clears the selection.
             LifecycleStartEffect(actions) { onStopOrDispose { actions.onLeave() } }
             val modelPicker = remember(uiState.favorites, uiState.personas, uiState.choice) { uiState.modelPicker }
@@ -60,16 +60,12 @@ class ChatEntryProvider : EntryProvider {
             ChatTheme(palette = uiState.model.palette, darkTheme = ChatTheme.colors.isDark) {
                 ChatScreen(
                     uiState = uiState,
-                    onHistoryClick = viewModel::onOpenHistory,
+                    onBack = viewModel::onBack,
                     onModelClick = viewModel::onOpenModelPicker,
-                    onNewChat = viewModel::onNewChat,
                     onOpenRecent = viewModel::onOpenRecent,
                     onDraftChange = viewModel::onDraftChange,
                     onSend = viewModel::onSend,
-                    // The attach sheet is row 8.
-                    onAttachClick = {},
-                    // Voice mode is row 11.
-                    onVoiceClick = {},
+                    onVoiceClick = viewModel::onOpenVoice,
                     onCopyCode = { block -> viewModel.onCopyCode(block, copyToClipboard) },
                     onDismissForkBanner = actions::onDismissForkBanner,
                     messageActions = messageActions,

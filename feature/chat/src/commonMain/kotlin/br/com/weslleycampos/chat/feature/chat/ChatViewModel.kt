@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import br.com.weslleycampos.chat.core.navigation.Navigator
 import br.com.weslleycampos.chat.core.navigation.entries.chat.ChatEntry
-import br.com.weslleycampos.chat.core.navigation.entries.history.HistoryEntry
+import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
 import br.com.weslleycampos.chat.data.chat.ChatRepository
 import br.com.weslleycampos.chat.data.chat.CompareRepository
@@ -37,8 +37,8 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * The Chat frame's logic: the prototype's `send`, `newChat`, `loadSeed` for a "recent" row and
- * `copyText` for code blocks, on [ChatRepository], and the Model picker's `openModelSheet`,
+ * The Chat frame's logic: the prototype's `send`, `loadSeed` for a "recent" row and `copyText` for
+ * code blocks, on [ChatRepository], and the Model picker's `openModelSheet`,
  * `mRow.pick` and `mRow.fav` on [ModelRepository]. Replies stream in the data layer; this only
  * observes them, and derives "a reply is on its way" from the last message, never from a flag of
  * its own.
@@ -53,6 +53,9 @@ import kotlin.time.Duration.Companion.milliseconds
  * on [ForkRepository]. The compare button and a compare card's "continue with this →" are
  * [compareActions], on [CompareRepository]. A toast carried over by [ChatToastRelay], a fork's,
  * shows as this opens.
+ *
+ * The thread is how a conversation reads as text, over History or Voice: [onBack] returns there and
+ * the mic, [onOpenVoice], goes on in voice. There is no "new chat": new sessions start on Voice.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @KoinViewModel(binds = [ChatViewModel::class])
@@ -72,7 +75,7 @@ class ChatViewModel(
     /** The conversation the thread observes; `null` while it is a new chat. */
     private val openConversation = MutableStateFlow(entry.conversationId)
 
-    /** Moves on "new chat" and on opening a conversation, so an older send cannot pull the thread back. */
+    /** Moves on opening a conversation and on a new chat, so an older send cannot pull the thread back. */
     private var generation = 0
 
     private var recentConversations: List<Conversation> = emptyList()
@@ -83,7 +86,7 @@ class ChatViewModel(
      */
     private var shownConversation: Conversation? = null
 
-    /** What a new chat starts on, and "new chat" returns to: `ModelRepository.observeDefaultModel`. */
+    /** What a new chat starts on, and a gone conversation returns to: `ModelRepository.observeDefaultModel`. */
     private var defaultModel: ChatModel = ModelCatalogue.default
 
     /** What answers, as the picker changes it, with a new chat's own pick while it does not follow [defaultModel]. */
@@ -206,10 +209,10 @@ class ChatViewModel(
     }
 
     /**
-     * The prototype's `newChat`: back to the empty state on the default model, with no persona and
-     * compare off, keeping the draft.
+     * The prototype's `newChat`, now only for an open conversation that is gone: back to the empty
+     * state on the default model, with no persona and compare off, keeping the draft.
      */
-    fun onNewChat() {
+    private fun startNewChat() {
         generation++
         openConversation.value = null
         shownConversation = null
@@ -306,7 +309,7 @@ class ChatViewModel(
                 uiState.update { it.copy(messages = emptyList(), replyInProgress = false, forkOrigin = null) }
             }
             // Gone, or never there: a new chat rather than a thread that stays empty.
-            conversation == null -> onNewChat()
+            conversation == null -> startNewChat()
             else -> {
                 val conversationChanged = conversation != shownConversation
                 shownConversation = conversation
@@ -331,11 +334,25 @@ class ChatViewModel(
 }
 
 /**
- * The History button, the prototype's `goHistory`: History opens over the chat, which stays as it is
- * underneath for History's back. Only a navigation, so it extends the ViewModel's [Navigator] rather
- * than adding to its members.
+ * The back chevron, in the History button's place: the screen underneath as it was, History or
+ * Voice. If the chat were ever the only screen, a new voice session replaces it instead of leaving
+ * nothing. Only a navigation, so it extends the ViewModel's [Navigator] rather than adding to its
+ * members.
  */
-fun ChatViewModel.onOpenHistory() = navigate(HistoryEntry)
+fun ChatViewModel.onBack() {
+    if (!navigateUp()) navigate(VoiceEntry()) { popUpTo<ChatEntry> { inclusive = true } }
+}
+
+/**
+ * A tap on the composer's mic, the prototype's `micUp` before its hold fires (holding to record is
+ * not built): voice mode goes on with this conversation, `VoiceEntry(conversationId)`, in place of
+ * Voice and everything over it, so Voice stays the root of the back stack. When the Voice underneath
+ * is already on this conversation, the stack ends on that same key, which is a plain return to it.
+ * A new chat with nothing sent yet opens a new session, `VoiceEntry()`.
+ */
+fun ChatViewModel.onOpenVoice() {
+    navigate(VoiceEntry(uiState.value.conversationId)) { popUpTo<VoiceEntry> { inclusive = true } }
+}
 
 private data class ObservedThread(val id: Long, val conversation: Conversation?, val messages: List<Message>)
 

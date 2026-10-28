@@ -53,7 +53,6 @@ import br.com.weslleycampos.chat.feature.history.resources.FeatureHistoryRes
 import br.com.weslleycampos.chat.feature.history.resources.history_back
 import br.com.weslleycampos.chat.feature.history.resources.history_empty
 import br.com.weslleycampos.chat.feature.history.resources.history_footer
-import br.com.weslleycampos.chat.feature.history.resources.history_memory
 import br.com.weslleycampos.chat.feature.history.resources.history_no_matches
 import br.com.weslleycampos.chat.feature.history.resources.history_search_clear
 import br.com.weslleycampos.chat.feature.history.resources.history_search_placeholder
@@ -93,7 +92,6 @@ private const val ClearMark = "×"
 fun HistoryScreen(
     uiState: HistoryUiState,
     onBack: () -> Unit,
-    onMemoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onQueryChange: (String) -> Unit,
     onClearQuery: () -> Unit,
@@ -111,7 +109,7 @@ fun HistoryScreen(
             .background(color = ChatTheme.colors.surface.primary)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
     ) {
-        HistoryTopBar(onBack = onBack, onMemoryClick = onMemoryClick, onSettingsClick = onSettingsClick)
+        HistoryTopBar(onBack = onBack, onSettingsClick = onSettingsClick)
         StatusRow(text = uiState.status)
         SearchField(
             query = uiState.query,
@@ -169,9 +167,12 @@ fun HistoryScreen(
     }
 }
 
-/** Back, the title, Memory and Settings (frame lines 256–261), with no hairline under it. */
+/**
+ * Back, the title and Settings (frame lines 256–261, without Memory, which is not built), with no
+ * hairline under it.
+ */
 @Composable
-private fun HistoryTopBar(onBack: () -> Unit, onMemoryClick: () -> Unit, onSettingsClick: () -> Unit) {
+private fun HistoryTopBar(onBack: () -> Unit, onSettingsClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -191,12 +192,6 @@ private fun HistoryTopBar(onBack: () -> Unit, onMemoryClick: () -> Unit, onSetti
             style = ChatTheme.typography.headlineLarge,
             color = ChatTheme.colors.text.primary,
         )
-        ChatIconButton(
-            onClick = onMemoryClick,
-            contentDescription = stringResource(FeatureHistoryRes.string.history_memory),
-        ) {
-            Icon(painter = painterResource(ChatIcons.Memory), contentDescription = null)
-        }
         ChatIconButton(
             onClick = onSettingsClick,
             contentDescription = stringResource(FeatureHistoryRes.string.history_settings),
@@ -447,7 +442,6 @@ private fun HistoryScreenPreview(
         HistoryScreen(
             uiState = case.uiState,
             onBack = {},
-            onMemoryClick = {},
             onSettingsClick = {},
             onQueryChange = {},
             onClearQuery = {},

@@ -7,9 +7,11 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,8 +29,7 @@ import br.com.weslleycampos.chat.core.ui.ChatTheme
 import br.com.weslleycampos.chat.core.ui.components.ChatIconButton
 import br.com.weslleycampos.chat.core.ui.icons.ChatIcons
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
-import br.com.weslleycampos.chat.feature.chat.resources.chat_history
-import br.com.weslleycampos.chat.feature.chat.resources.chat_new_chat
+import br.com.weslleycampos.chat.feature.chat.resources.chat_back
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -41,13 +42,16 @@ private val ChipDotSize = 7.dp
 /** The chip's `▾`. */
 private const val Dropdown = "▾"
 
-/** History, the model chip and New chat, over a hairline (frame lines 107–115). */
+/**
+ * Back, the model chip and a 44 px spacer, over a hairline (frame lines 107–115). The thread is read
+ * from History or Voice, so the back chevron takes the History button's place, and new sessions
+ * start on Voice, so the spacer takes New chat's and keeps the chip as wide as the frame's.
+ */
 @Composable
 internal fun ChatTopBar(
     chipLabel: String,
-    onHistoryClick: () -> Unit,
+    onBack: () -> Unit,
     onModelClick: () -> Unit,
-    onNewChat: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -59,16 +63,11 @@ internal fun ChatTopBar(
         horizontalArrangement = Arrangement.spacedBy(ChatTheme.spacing.xSmall),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ChatIconButton(
-            onClick = onHistoryClick,
-            contentDescription = stringResource(FeatureChatRes.string.chat_history),
-        ) {
-            Icon(painter = painterResource(ChatIcons.Menu), contentDescription = null)
+        ChatIconButton(onClick = onBack, contentDescription = stringResource(FeatureChatRes.string.chat_back)) {
+            Icon(painter = painterResource(ChatIcons.Back), contentDescription = null)
         }
         ModelChip(label = chipLabel, onClick = onModelClick, modifier = Modifier.weight(1f))
-        ChatIconButton(onClick = onNewChat, contentDescription = stringResource(FeatureChatRes.string.chat_new_chat)) {
-            Icon(painter = painterResource(ChatIcons.NewChat), contentDescription = null)
-        }
+        Spacer(modifier = Modifier.width(ChatTheme.sizes.xxLarge))
     }
 }
 
