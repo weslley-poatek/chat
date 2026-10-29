@@ -31,43 +31,6 @@
 
 <br>
 
-> [!NOTE]
-> **Status: foundation.** The build system, dependency injection, secure storage, the local database
-> and sign-in with Google or an email and password are in place, and so is the chat data layer:
-> conversations and messages in Room, with real replies from Fuelix's gateway, through JetBrains Koog,
-> streamed into them, the model picker's models, favorites, personas and default model, History's data: the conversation list, its search, pins,
-> archives and deletes, forks: a conversation copied up to a message, with where it came from,
-> compare mode: two models answering side by side, streaming at once, and going on with one of them,
-> voice mode's sessions: each exchange, what you said and the model's spoken reply, saved as a
-> conversation, so it shows in History and reads as text, and Settings' data: the user's own API key for Fuelix, the one
-> provider, stored encrypted and only read back masked, and the account's sign-in methods, sign-out and deletion,
-> which also wipes everything the device keeps. After sign-in the app opens on voice mode: the
-> sphere listens through the microphone with the device's speech recognition, showing your words as
-> you speak, thinks while the model answers, and says the reply aloud with the device's voice, all in
-> the language picked in Settings, Brazilian Portuguese, American English or both, each thing
-> you say heard and answered in its own; a tap
-> ends listening or speaking, mute turns the microphone off, "end" starts a new session, and every
-> exchange is saved as a conversation. Its model chip opens the model picker:
-> pick any model your Fuelix key can use, listed by vendor, or a persona, star favorites, and the
-> accent, the vendor's colour, follows at once. "Aa" opens the session as text in the chat thread,
-> where you can send a message, watch the model's reply think, stream and finish, copy its code, and reopen
-> a recent conversation. Tap a message to copy it, fork the conversation there (the fork says where
-> it came from until its banner is dismissed), play a reply's read-aloud bar (visual only, nothing
-> speaks), or put a message of yours back in the composer. Turn compare on in the thread's picker
-> and pick a second model: each message is then answered by both, in two cards side by side that you
-> swipe between, and "continue with this →" goes on with one of them. Voice's History button opens
-> every conversation on the device, grouped pinned, today, yesterday and earlier: search it, swipe a
-> row to pin, archive or delete it, and tap one to read it as text in the chat thread, whose back
-> chevron returns to History and whose mic goes on with the conversation in voice. The Settings
-> button of Voice and History opens Settings: who is signed in and how, sign out, and delete account,
-> which a second tap within 3 seconds confirms and which wipes the device after Firebase deletes the
-> account; and the "api keys" group, where you type your own key for Fuelix, the one provider,
-> whose gateway serves every model, stored encrypted and only shown masked. Replies need it: until
-> it is set, or when Fuelix cannot answer, a toast says why and the reply reads "interrupted". The
-> "voice" group picks voice mode's language, "pt-BR", "en-US" or "both", for talking about code in
-> English and the rest in Portuguese; the device's until one is picked.
-> The voice mode screen in the banner comes from the design prototype, not from a build of the app.
-
 ## ✨ Highlights
 
 <table>
