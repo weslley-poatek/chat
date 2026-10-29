@@ -14,6 +14,7 @@ kotlin {
             implementation(projects.core.ui)
             implementation(projects.data.auth)
             implementation(projects.data.chat)
+            implementation(projects.data.fuelix)
             implementation(projects.data.settings)
             implementation(projects.feature.auth)
             implementation(projects.feature.chat)

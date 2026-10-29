@@ -33,7 +33,9 @@ import org.jetbrains.compose.resources.StringResource
  * @property sending A send is on its way to the database.
  * @property copiedBlock The code block whose header reads "copied", the prototype's `copiedKey`.
  * @property toast The toast while it shows.
- * @property favorites The picker's "favorites", in catalogue order.
+ * @property models The picker's models, by vendor: every one the Fuelix key can use, or the
+ *   catalogue's until Fuelix has listed them.
+ * @property favorites The picker's "favorites", in the order of [models].
  * @property personas The picker's "personas", in their order.
  * @property modelPickerOpen The Model picker sheet shows: the prototype's `sheet:'chat'`.
  * @property selectedMessage The message whose action row shows, the prototype's `selectedMsg`.
@@ -54,6 +56,7 @@ data class ChatUiState(
     val sending: Boolean = false,
     val copiedBlock: BlockKey? = null,
     val toast: ChatToastUi? = null,
+    val models: List<ChatModel> = ModelCatalogue.models,
     val favorites: List<ChatModel> = emptyList(),
     val personas: List<Persona> = emptyList(),
     val modelPickerOpen: Boolean = false,
@@ -91,6 +94,7 @@ val ChatUiState.composerPlaceholder: String get() = composerPlaceholder(choice)
 val ChatUiState.modelPicker: ModelPickerUiState
     get() = modelPickerUiState(
         variant = ModelPickerVariant.Chat,
+        models = models,
         favorites = favorites,
         personas = personas,
         active = choice,

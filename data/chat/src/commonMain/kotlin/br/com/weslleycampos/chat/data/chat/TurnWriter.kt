@@ -10,8 +10,6 @@ import br.com.weslleycampos.chat.core.database.entities.PAIR_FIRST_SIDE
 import br.com.weslleycampos.chat.core.database.entities.PAIR_SECOND_SIDE
 import br.com.weslleycampos.chat.data.chat.models.ConversationTitles
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
-import br.com.weslleycampos.chat.data.chat.replies.CannedReplies
-import br.com.weslleycampos.chat.data.chat.replies.StreamedReply
 import kotlin.time.Clock
 
 /**
@@ -85,7 +83,6 @@ internal class TurnWriter(
      */
     private suspend fun startTurn(conversation: ConversationEntity, text: String): Turn {
         val now = clock.now().toEpochMilliseconds()
-        val repliesBefore = messageDao.countReplies(conversation.id)
         insertUserMessage(conversation.id, text, createdAt = now)
         val reply = thinking(conversation.id, createdAt = now)
         val second = conversation.comparedModelId()
@@ -97,7 +94,7 @@ internal class TurnWriter(
                 messageDao.insert(reply.copy(modelId = second, pairSide = PAIR_SECOND_SIDE)),
             )
         }
-        return Turn(conversationId = conversation.id, replyIds = replyIds, repliesBefore = repliesBefore)
+        return Turn(conversationId = conversation.id, replyIds = replyIds)
     }
 
     /** A thinking reply in the conversation, before its model, persona and pair side are set. */
@@ -115,24 +112,11 @@ internal class TurnWriter(
 
 /**
  * The model the conversation's next reply is compared with: its second model while compare is on,
- * no persona answers, and the catalogue still has that model, which is not the conversation's own.
- * `null` for a single reply.
+ * no persona answers, and that model is not the conversation's own. `null` for a single reply.
  */
 private fun ConversationEntity.comparedModelId(): String? = compareModelId?.takeIf {
-    compareOn && personaId == null && it != modelId && ModelCatalogue.find(it) != null
+    compareOn && personaId == null && it.isNotBlank() && ModelCatalogue.resolve(it) != ModelCatalogue.resolve(modelId)
 }
 
-/**
- * A send's rows: [replyIds] holds its reply, or a compare pair's two sides in their order, which
- * play the canned reply that comes after [repliesBefore] replies and its alternative.
- */
-internal class Turn(val conversationId: Long, val replyIds: List<Long>, val repliesBefore: Int) {
-    fun replies(): List<StreamedReply> = replyIds.mapIndexed { side, id ->
-        val blocks = if (side == PAIR_FIRST_SIDE) {
-            CannedReplies.next(repliesSoFar = repliesBefore)
-        } else {
-            CannedReplies.alternative(repliesSoFar = repliesBefore)
-        }
-        StreamedReply(replyId = id, blocks = blocks)
-    }
-}
+/** A send's rows: [replyIds] holds its thinking reply, or a compare pair's two sides in their order. */
+internal class Turn(val conversationId: Long, val replyIds: List<Long>)

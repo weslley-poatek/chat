@@ -16,8 +16,8 @@ import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
-// Rows to domain models and back. A model id the catalogue no longer has reads as its default model,
-// and a persona id that is not among the stored personas reads as no persona.
+// Rows to domain models and back. A model id reads as its model, an id stored before Fuelix as the
+// model it became, and a persona id that is not among the stored personas reads as no persona.
 
 internal fun ConversationEntity.toConversation(personas: Map<String, Persona>): Conversation = Conversation(
     id = id,

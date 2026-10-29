@@ -23,7 +23,7 @@ class ThreadMappersTest {
     private fun row(
         id: Long,
         role: MessageRole = MessageRole.ASSISTANT,
-        modelId: String? = "sonnet",
+        modelId: String? = SONNET,
         pairSide: Int? = null,
         status: MessageStatus = MessageStatus.DONE,
         latencyMillis: Long? = 900,
@@ -46,7 +46,7 @@ class ThreadMappersTest {
         val rows = listOf(
             row(id = 1, role = MessageRole.USER, createdAt = 500),
             row(id = 2, pairSide = PAIR_FIRST_SIDE, latencyMillis = 5_208, createdAt = 500),
-            row(id = 3, modelId = "gpt5", pairSide = PAIR_SECOND_SIDE, latencyMillis = 2_212, createdAt = 600),
+            row(id = 3, modelId = "gpt-5", pairSide = PAIR_SECOND_SIDE, latencyMillis = 2_212, createdAt = 600),
         )
 
         val messages = rows.toMessages(personas = emptyMap())
@@ -60,14 +60,14 @@ class ThreadMappersTest {
                 sides = listOf(
                     CompareSide(
                         id = 2,
-                        model = ModelCatalogue["sonnet"],
+                        model = ModelCatalogue.default,
                         blocks = listOf(Block.Paragraph("Use SSE")),
                         status = ReplyStatus.DONE,
                         latency = 5_208.milliseconds,
                     ),
                     CompareSide(
                         id = 3,
-                        model = ModelCatalogue["gpt5"],
+                        model = ModelCatalogue["gpt-5"],
                         blocks = listOf(Block.Paragraph("Use SSE")),
                         status = ReplyStatus.DONE,
                         latency = 2_212.milliseconds,
@@ -83,7 +83,7 @@ class ThreadMappersTest {
     fun aPairIsInProgressWhileEitherSideThinksOrStreams() {
         fun pair(first: MessageStatus, second: MessageStatus) = listOf(
             row(id = 2, pairSide = PAIR_FIRST_SIDE, status = first),
-            row(id = 3, modelId = "gpt5", pairSide = PAIR_SECOND_SIDE, status = second),
+            row(id = 3, modelId = "gpt-5", pairSide = PAIR_SECOND_SIDE, status = second),
         ).toMessages(personas = emptyMap()).single() as Message.ComparePair
 
         assertTrue(pair(MessageStatus.THINKING, MessageStatus.THINKING).isInProgress)
@@ -100,9 +100,9 @@ class ThreadMappersTest {
             row(id = 2),
             row(id = 3, role = MessageRole.USER),
             row(id = 4, pairSide = PAIR_FIRST_SIDE),
-            row(id = 5, modelId = "gpt5", pairSide = PAIR_SECOND_SIDE),
+            row(id = 5, modelId = "gpt-5", pairSide = PAIR_SECOND_SIDE),
             row(id = 6, role = MessageRole.USER),
-            row(id = 7, modelId = "gemini"),
+            row(id = 7, modelId = "gemini-2.5-pro"),
         )
 
         val messages = rows.toMessages(personas = emptyMap())
@@ -120,13 +120,17 @@ class ThreadMappersTest {
             row(id = 1, role = MessageRole.USER),
             row(id = 2, pairSide = PAIR_FIRST_SIDE),
             row(id = 3, role = MessageRole.USER),
-            row(id = 4, modelId = "gpt5", pairSide = PAIR_SECOND_SIDE),
+            row(id = 4, modelId = "gpt-5", pairSide = PAIR_SECOND_SIDE),
         )
 
         val messages = rows.toMessages(personas = emptyMap())
 
         assertEquals(listOf(1L, 2, 3, 4), messages.map { it.id })
-        assertEquals(ModelCatalogue["sonnet"], assertIs<Message.Assistant>(messages[1]).model)
-        assertEquals(ModelCatalogue["gpt5"], assertIs<Message.Assistant>(messages[3]).model)
+        assertEquals(ModelCatalogue.default, assertIs<Message.Assistant>(messages[1]).model)
+        assertEquals(ModelCatalogue["gpt-5"], assertIs<Message.Assistant>(messages[3]).model)
+    }
+
+    private companion object {
+        const val SONNET = "claude-sonnet-4-5-20250929"
     }
 }

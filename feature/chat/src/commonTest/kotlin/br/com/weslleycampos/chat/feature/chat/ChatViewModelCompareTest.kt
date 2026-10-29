@@ -180,7 +180,7 @@ class ChatViewModelCompareTest {
         )
         assertEquals("sonnet-4.5 ⇄ gpt-5", viewModel.state.chipLabel)
         assertEquals("ask sonnet-4.5 and gpt-5…", viewModel.state.composerPlaceholder)
-        assertEquals(listOf("favorite:gpt5", "model:gpt5"), viewModel.state.modelPicker.compared)
+        assertEquals(pickerRowKeys(Gpt5), viewModel.state.modelPicker.compared)
         assertEquals(
             "sonnet-4.5 ⇄ gpt-5 · tap another model to swap the second",
             viewModel.state.modelPicker.compareHint,
@@ -292,7 +292,7 @@ class ChatViewModelCompareTest {
         assertEquals("gemini-2.5-pro ⇄ gpt-5", viewModel.state.chipLabel)
         assertEquals("ask gemini-2.5-pro and gpt-5…", viewModel.state.composerPlaceholder)
         assertTrue(viewModel.state.modelPicker.compareOn)
-        assertEquals(listOf("favorite:gpt5", "model:gpt5"), viewModel.state.modelPicker.compared)
+        assertEquals(pickerRowKeys(Gpt5), viewModel.state.modelPicker.compared)
         assertEquals(Gemini, viewModel.state.model)
 
         val other = repository.seed("Postgres index")

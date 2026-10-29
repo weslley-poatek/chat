@@ -11,7 +11,9 @@ import br.com.weslleycampos.chat.core.database.daos.MessageDao
 import br.com.weslleycampos.chat.core.database.daos.PersonaDao
 import br.com.weslleycampos.chat.core.preferences.qualifiers.UnencryptedPreferences
 import br.com.weslleycampos.chat.data.chat.fakes.FakeChatDatabase
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient
 import br.com.weslleycampos.chat.data.chat.fakes.FakePreferences
+import br.com.weslleycampos.chat.data.fuelix.FuelixClient
 import org.koin.core.annotation.Module
 import org.koin.core.annotation.Single
 import org.koin.dsl.koinApplication
@@ -21,8 +23,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertSame
 
 /**
- * `DataChatModule` next to fakes of what `CoreDatabaseModule` and `PreferencesModule` provide in the
- * app, so the Koin compiler plugin checks the graph while this compiles and no database is opened.
+ * `DataChatModule` next to fakes of what `CoreDatabaseModule`, `PreferencesModule` and
+ * `DataFuelixModule` provide in the app, so the Koin compiler plugin checks the graph while this
+ * compiles and no database is opened and nothing is sent.
  */
 class DataChatModuleTest {
     @Test
@@ -139,4 +142,7 @@ internal class FakeDatabaseModule {
     @Single
     @UnencryptedPreferences
     fun preferences(): DataStore<Preferences> = FakePreferences()
+
+    @Single
+    fun fuelix(): FuelixClient = FakeFuelixClient()
 }

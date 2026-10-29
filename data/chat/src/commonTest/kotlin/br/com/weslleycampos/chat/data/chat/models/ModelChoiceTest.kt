@@ -8,9 +8,9 @@ import kotlin.time.Instant
 
 class ModelChoiceTest {
     private val terse = PersonaPresets.personas.single { it.id == "terse" }
-    private val sonnet = ModelCatalogue["sonnet"]
-    private val gpt5 = ModelCatalogue["gpt5"]
-    private val gemini = ModelCatalogue["gemini"]
+    private val sonnet = ModelCatalogue.default
+    private val gpt5 = ModelCatalogue["gpt-5"]
+    private val gemini = ModelCatalogue["gemini-2.5-pro"]
 
     @Test
     fun aModelRowPicksTheModelOnItsOwn() {
@@ -22,7 +22,7 @@ class ModelChoiceTest {
 
     @Test
     fun aPersonaRowPicksThePersonaAndItsModel() {
-        assertEquals(ModelChoice(model = ModelCatalogue["gpt5"], persona = terse), ModelChoice(terse))
+        assertEquals(ModelChoice(model = ModelCatalogue["gpt-5"], persona = terse), ModelChoice(terse))
     }
 
     @Test
@@ -30,14 +30,14 @@ class ModelChoiceTest {
         val conversation = Conversation(
             id = 1,
             title = "Postgres index",
-            model = ModelCatalogue["gpt5"],
+            model = ModelCatalogue["gpt-5"],
             persona = terse,
             createdAt = Instant.fromEpochMilliseconds(0),
             updatedAt = Instant.fromEpochMilliseconds(0),
         )
 
         assertEquals(ModelChoice(terse), conversation.choice)
-        assertEquals(ModelChoice(ModelCatalogue["gpt5"]), conversation.copy(persona = null).choice)
+        assertEquals(ModelChoice(ModelCatalogue["gpt-5"]), conversation.copy(persona = null).choice)
     }
 
     @Test

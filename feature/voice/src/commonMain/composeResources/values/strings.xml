@@ -16,4 +16,9 @@
     <string name="voice_mute_description">Mute</string>
     <string name="voice_end_description">End</string>
     <string name="voice_text_description">Switch to text</string>
+
+    <string name="voice_allow_microphone">tap to allow the microphone</string>
+    <string name="voice_toast_not_allowed">allow the microphone in Settings to talk</string>
+    <string name="voice_toast_unavailable">speech recognition isn’t available on this device</string>
+    <string name="voice_toast_failed">couldn’t hear you, tap to try again</string>
 </resources>

@@ -3,8 +3,8 @@ package br.com.weslleycampos.chat.data.chat.models
 /**
  * A name and a system prompt that answer with one model: the prototype's `PERSONAS`. Personas are
  * the user's data and live on this device; [PersonaPresets] are the ones every install starts with.
- * There is no provider, so [prompt] changes no reply: the picker shows it, and the chip and reply
- * meta show [name].
+ * [prompt] is the system prompt of the persona's replies, and the picker shows it; the chip and
+ * reply meta show [name].
  *
  * @property id Stable key, stored with conversations and replies: `reviewer`, `terse`, `digest`.
  * @property name "Code reviewer", as the picker, the model chip and the empty state show it.

@@ -3,6 +3,7 @@ package br.com.weslleycampos.chat.feature.history
 import br.com.weslleycampos.chat.core.ui.theme.ChatPalette
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
+import br.com.weslleycampos.chat.data.chat.models.ModelVendor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -64,20 +65,29 @@ class HistoryFormatsTest {
     }
 
     @Test
-    fun everyModelHasThePaletteNamedAfterItsId() {
-        for (model in ModelCatalogue.models) {
-            assertEquals(model.id.uppercase(), model.palette.name)
-        }
-        val unknown = ChatModel(
-            id = "gone",
-            name = "Gone",
-            shortName = "gone",
-            provider = "Nobody",
-            contextWindow = "1k",
-            cost = "$",
-            hue = 0,
+    fun everyModelWearsItsVendorsPaletteAsTheChatPicksIt() {
+        val palettes = mapOf(
+            ModelVendor.ANTHROPIC to ChatPalette.SONNET,
+            ModelVendor.OPENAI to ChatPalette.GPT5,
+            ModelVendor.GOOGLE to ChatPalette.GEMINI,
+            ModelVendor.META to ChatPalette.LLAMA,
+            ModelVendor.DEEPSEEK to ChatPalette.DEEPSEEK,
+            ModelVendor.MISTRAL to ChatPalette.MISTRAL,
+            ModelVendor.OTHER to ChatPalette.Default,
         )
-        assertEquals(ChatPalette.Default, unknown.palette)
+        assertEquals(ModelVendor.entries.toSet(), palettes.keys)
+        for ((vendor, palette) in palettes) {
+            val model = ChatModel(id = "any", name = "Any", shortName = "any", vendor = vendor)
+            assertEquals(palette, model.palette, vendor.name)
+        }
+
+        // Every model of a vendor wears the same accent: Opus is Sonnet's coral, o3 GPT-5's green.
+        assertEquals(ChatPalette.SONNET, ModelCatalogue["claude-opus-4-1-20250805"].palette)
+        assertEquals(ChatPalette.GPT5, ModelCatalogue["o3"].palette)
+        assertEquals(ChatPalette.GEMINI, ModelCatalogue["gemini-2.5-flash"].palette)
+        // A model Fuelix lists from no vendor the app knows, and one whose id names none at all.
+        assertEquals(ChatPalette.Default, ModelCatalogue["qwen3-coder"].palette)
+        assertEquals(ChatPalette.Default, ModelCatalogue["gone"].palette)
     }
 
     @Test

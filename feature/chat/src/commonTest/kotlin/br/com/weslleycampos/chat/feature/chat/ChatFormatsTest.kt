@@ -3,6 +3,8 @@ package br.com.weslleycampos.chat.feature.chat
 import br.com.weslleycampos.chat.core.ui.theme.ChatPalette
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.ModelVendor
+import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import kotlinx.datetime.FixedOffsetTimeZone
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.UtcOffset
@@ -115,6 +117,19 @@ class ChatFormatsTest {
     }
 
     @Test
+    fun theEmptyStateMetaLeavesOutAContextWindowOrCostTheAppDoesNotKnow() {
+        // The catalogue knows DeepSeek V4.1 Flash's cost but not its context window.
+        assertEquals("DeepSeek · $", modelMetaLine(ModelCatalogue["deepseek-v4.1-flash"], persona = null))
+        // A model Fuelix lists that the catalogue has no values for: its vendor alone.
+        assertEquals("Anthropic", modelMetaLine(ModelCatalogue["claude-haiku-4-5-20251001"], persona = null))
+        assertEquals("Other", modelMetaLine(ModelCatalogue["qwen3-coder"], persona = null))
+        assertEquals(
+            "Google · 1M context · persona: Paper digest",
+            modelMetaLine(Gemini.copy(cost = null), persona = PersonaPresets.personas[2]),
+        )
+    }
+
+    @Test
     fun aTipsStarredWordsAreItsEmphasisedRuns() {
         assertEquals(
             listOf("hold mic" to true, " to talk · " to false, "tap" to true, " for voice mode" to false),
@@ -131,13 +146,37 @@ class ChatFormatsTest {
     }
 
     @Test
-    fun everyModelHasThePaletteNamedAfterItsId() {
-        assertEquals(
-            ModelCatalogue.models.map { it.id.uppercase() },
-            ModelCatalogue.models.map { it.palette.name },
+    fun everyModelWearsItsVendorsPalette() {
+        val palettes = mapOf(
+            ModelVendor.ANTHROPIC to ChatPalette.SONNET,
+            ModelVendor.OPENAI to ChatPalette.GPT5,
+            ModelVendor.GOOGLE to ChatPalette.GEMINI,
+            ModelVendor.META to ChatPalette.LLAMA,
+            ModelVendor.DEEPSEEK to ChatPalette.DEEPSEEK,
+            ModelVendor.MISTRAL to ChatPalette.MISTRAL,
+            ModelVendor.OTHER to ChatPalette.Default,
         )
-        assertEquals(ChatPalette.GEMINI, Gemini.palette)
-        assertEquals(ChatPalette.Default, ModelCatalogue.default.copy(id = "unknown").palette)
+
+        assertEquals(ModelVendor.entries.toSet(), palettes.keys)
+        for ((vendor, palette) in palettes) {
+            assertEquals(palette, ModelCatalogue.default.copy(vendor = vendor).palette, vendor.name)
+        }
+        assertEquals(
+            listOf(
+                ChatPalette.SONNET,
+                ChatPalette.SONNET,
+                ChatPalette.GPT5,
+                ChatPalette.GPT5,
+                ChatPalette.GEMINI,
+                ChatPalette.LLAMA,
+                ChatPalette.DEEPSEEK,
+                ChatPalette.MISTRAL,
+            ),
+            ModelCatalogue.models.map { it.palette },
+        )
+        // The id does not pick the palette: a model of a vendor the catalogue does not list is its vendor's.
+        assertEquals(ChatPalette.SONNET, ModelCatalogue["claude-haiku-4-5-20251001"].palette)
+        assertEquals(ChatPalette.Default, ModelCatalogue["qwen3-coder"].palette)
     }
 
     @Test

@@ -6,10 +6,12 @@ import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailed
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.datetime.TimeZone
@@ -26,9 +28,9 @@ internal class FixedClock(var now: Instant = Now) : Clock {
 /** Times on [clock], in UTC. */
 internal fun testTimes(clock: Clock = FixedClock()) = HistoryTimes(clock = clock, zone = { TimeZone.UTC })
 
-internal val Gemini: ChatModel = ModelCatalogue["gemini"]
-internal val Gpt5: ChatModel = ModelCatalogue["gpt5"]
-internal val Llama: ChatModel = ModelCatalogue["llama"]
+internal val Gemini: ChatModel = ModelCatalogue["gemini-2.5-pro"]
+internal val Gpt5: ChatModel = ModelCatalogue["gpt-5"]
+internal val Llama: ChatModel = ModelCatalogue["llama-4-maverick-17b-128e"]
 
 /**
  * An in-memory [ChatRepository] that keeps the real one's History contract: the list leaves archived
@@ -85,6 +87,9 @@ internal class FakeChatRepository : ChatRepository {
 
     /** History never chooses a model. */
     override suspend fun choose(conversationId: Long, choice: ModelChoice): Boolean = false
+
+    /** History never sends, so no reply of its fails. */
+    override val replyFailures: Flow<ReplyFailed> = emptyFlow()
 
     override suspend fun setPinned(conversationId: Long, pinned: Boolean): Boolean {
         pins += conversationId to pinned

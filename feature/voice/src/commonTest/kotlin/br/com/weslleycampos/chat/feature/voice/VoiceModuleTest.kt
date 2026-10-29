@@ -8,6 +8,8 @@ import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntryProvider
 import br.com.weslleycampos.chat.data.chat.ModelRepository
 import br.com.weslleycampos.chat.data.chat.VoiceRepository
+import br.com.weslleycampos.chat.feature.voice.speech.SpeechInput
+import br.com.weslleycampos.chat.feature.voice.speech.SpeechOutput
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,13 +31,14 @@ import kotlin.test.assertSame
 
 /**
  * `VoiceModule` next to fakes of what the app's other modules provide, so the Koin compiler plugin
- * checks the graph while this compiles.
+ * checks the graph while this compiles. The fakes load last: their speech replaces the device's,
+ * which needs the Android `Context` the app gives at startup.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceModuleTest {
     private val koin = koinApplication {
-        module<FakeAppModule>()
         module<VoiceModule>()
+        module<FakeAppModule>()
     }.koin
 
     @BeforeTest
@@ -50,6 +53,12 @@ class VoiceModuleTest {
     @Test
     fun koinProvidesTheEntryProvider() {
         assertIs<VoiceEntryProvider>(koin.getAll<EntryProvider>().single())
+    }
+
+    @Test
+    fun koinProvidesOneSpeechInputAndOutputForTheDevice() {
+        assertSame(koin.get<SpeechInput>(), koin.get<SpeechInput>())
+        assertSame(koin.get<SpeechOutput>(), koin.get<SpeechOutput>())
     }
 
     @Test
@@ -74,4 +83,10 @@ internal class FakeAppModule {
 
     @Single
     fun navigator(): Navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(VoiceEntry()) })
+
+    @Single
+    fun input(): SpeechInput = FakeSpeechInput()
+
+    @Single
+    fun output(): SpeechOutput = FakeSpeechOutput()
 }

@@ -2,6 +2,7 @@ package br.com.weslleycampos.chat.feature.history
 
 import br.com.weslleycampos.chat.core.ui.theme.ChatPalette
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
+import br.com.weslleycampos.chat.data.chat.models.ModelVendor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -64,11 +65,20 @@ fun historyStatus(conversationCount: Int?): String = when (conversationCount) {
 }
 
 /**
- * The accent of a model's dot: the `:core:ui` palette named after its id (`sonnet` → `SONNET`), or
- * the default for an id the palettes do not know, as the chat picks it.
+ * The accent of a model's dot, as the chat picks it: its vendor's `:core:ui` palette, Anthropic's
+ * coral, OpenAI's green, Google's blue, Meta's violet, DeepSeek's sky and Mistral's gold; the default
+ * for any other vendor.
  */
 internal val ChatModel.palette: ChatPalette
-    get() = ChatPalette.entries.firstOrNull { it.name.equals(id, ignoreCase = true) } ?: ChatPalette.Default
+    get() = when (vendor) {
+        ModelVendor.ANTHROPIC -> ChatPalette.SONNET
+        ModelVendor.OPENAI -> ChatPalette.GPT5
+        ModelVendor.GOOGLE -> ChatPalette.GEMINI
+        ModelVendor.META -> ChatPalette.LLAMA
+        ModelVendor.DEEPSEEK -> ChatPalette.DEEPSEEK
+        ModelVendor.MISTRAL -> ChatPalette.MISTRAL
+        ModelVendor.OTHER -> ChatPalette.Default
+    }
 
 /**
  * The device's clock and time zone, which History's days and times are read in. The time zone is

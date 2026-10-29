@@ -11,14 +11,22 @@ import br.com.weslleycampos.chat.data.chat.models.HistorySearch
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.Persona
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailed
+import br.com.weslleycampos.chat.data.chat.replies.ReplyPrompts
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -32,11 +40,13 @@ import kotlin.time.Clock
  * alive any more, and every read and send waits for that first.
  *
  * Personas and the default model come from [models], so a persona read here is one that
- * [ModelRepository.observePersonas] lists. Replies stream in [scope], which outlives any screen.
+ * [ModelRepository.observePersonas] lists. Replies stream from Fuelix through [streamer] in [scope],
+ * which outlives any screen, and a failure is told on [replyFailures].
  * History's lists come from [historyDao]; pinning, archiving and deleting go through
  * [conversationDao], one at a time with sends and choices. A choice's compare columns are written
  * through [compareDao], in the transaction that writes its model.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 internal class RoomChatRepository(
     private val conversationDao: ConversationDao,
     private val historyDao: HistoryDao,
@@ -58,6 +68,14 @@ internal class RoomChatRepository(
 
     private val turns = TurnWriter(conversationDao = conversationDao, messageDao = messageDao, clock = clock)
 
+    /** Failures as they happen; a collector that is not there misses them, and a slow one the oldest. */
+    private val failures = MutableSharedFlow<ReplyFailed>(
+        extraBufferCapacity = FAILURE_BUFFER,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    override val replyFailures: Flow<ReplyFailed> = failures.asSharedFlow()
+
     override fun observeConversation(id: Long): Flow<Conversation?> = afterRecovery(recovery) {
         combine(conversationDao.observe(id), models.personasById()) { row, personas -> row?.toConversation(personas) }
     }
@@ -78,7 +96,9 @@ internal class RoomChatRepository(
         val rows = if (text == null) {
             historyDao.observeAll()
         } else {
-            historyDao.search(pattern = containsPattern(text), modelIds = HistorySearch.modelIds(text))
+            models.observeModels().flatMapLatest { listed ->
+                historyDao.search(pattern = containsPattern(text), modelIds = HistorySearch.modelIds(text, listed))
+            }
         }
         combine(rows, models.personasById()) { conversations, personas ->
             conversations.map { it.toConversation(personas) }
@@ -99,7 +119,13 @@ internal class RoomChatRepository(
                 transactions.inWriteTransaction { turns.continueIn(conversationId, message) }
             }
         } ?: return null
-        scope.launch { streamer.stream(turn.replies()) }
+        // The reply, or both sides of its pair, streams on; a failure is told on replyFailures.
+        scope.launch {
+            val thread = messageDao.observeByConversation(turn.conversationId).first()
+            val personas = models.observePersonas().first().associateBy(Persona::id)
+            streamer.stream(ReplyPrompts.requests(turn.replyIds, thread, personas))
+                ?.let { failures.tryEmit(ReplyFailed(turn.conversationId, it)) }
+        }
         return turn.conversationId
     }
 
@@ -124,6 +150,9 @@ internal class RoomChatRepository(
     override suspend fun delete(conversationId: Long): Boolean =
         sending.withLock { conversationDao.delete(conversationId) > 0 }
 }
+
+/** How many failures wait for a slow collector before the oldest is dropped. */
+private const val FAILURE_BUFFER = 8
 
 /** [source] without repeats, once [recovery] has marked the replies an earlier run left playing. */
 private fun <T> afterRecovery(recovery: Deferred<*>, source: () -> Flow<T>): Flow<T> = flow {

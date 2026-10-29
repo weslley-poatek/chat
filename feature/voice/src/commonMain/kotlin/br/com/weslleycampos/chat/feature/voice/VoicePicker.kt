@@ -34,8 +34,22 @@ class VoicePicker internal constructor(
     var pending: ModelChoice? = null
         private set
 
-    /** The model chip: the sheet opens. */
-    fun onOpen() = state.update { it.copy(modelPickerOpen = true) }
+    /**
+     * The model chip: the sheet opens, and asks Fuelix again which models the key can use. It lists
+     * the ones it knows meanwhile, and keeps them when Fuelix does not answer.
+     */
+    fun onOpen() {
+        state.update { it.copy(modelPickerOpen = true) }
+        scope.launch {
+            try {
+                models.refreshModels()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (ignored: Exception) {
+                // The list stays as last stored.
+            }
+        }
+    }
 
     /** A tap on the scrim, a drag down or Back: the sheet closes, picking nothing. */
     fun onDismiss() = state.update { it.copy(modelPickerOpen = false) }

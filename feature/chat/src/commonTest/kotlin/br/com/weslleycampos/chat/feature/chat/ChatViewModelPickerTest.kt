@@ -104,7 +104,10 @@ class ChatViewModelPickerTest {
         val models = FakeModelRepository(favorites = listOf(Gpt5, Llama))
         val viewModel = chatViewModel(models = models)
 
-        assertEquals(listOf("favorite:gpt5", "favorite:llama"), viewModel.state.modelPicker.favorites.map { it.key })
+        assertEquals(
+            listOf("favorite:${Gpt5.id}", "favorite:${Llama.id}"),
+            viewModel.state.modelPicker.favorites.map { it.key },
+        )
         assertEquals(
             listOf("Code reviewer", "Terse", "Paper digest"),
             viewModel.state.modelPicker.personas.map { it.name },
@@ -116,6 +119,66 @@ class ChatViewModelPickerTest {
         assertTrue(viewModel.state.modelPicker.favorites.isEmpty())
         assertEquals(listOf("Terse"), viewModel.state.modelPicker.personas.map { it.name })
         assertEquals(ModelCatalogue.models.size, viewModel.state.modelPicker.allModels.size)
+    }
+
+    @Test
+    fun openingTheSheetAsksFuelixForTheKeysModelsAndListsThemByVendor() = runTest {
+        val haiku = ModelCatalogue["claude-haiku-4-5-20251001"]
+        val qwen = ModelCatalogue["qwen3-coder"]
+        val models = FakeModelRepository().apply { listed = listOf(Gpt5, haiku, qwen) }
+        val viewModel = chatViewModel(models = models)
+        assertEquals(ModelCatalogue.models, viewModel.state.models)
+        assertEquals(0, models.refreshes)
+
+        viewModel.onOpenModelPicker()
+        // The sheet opens at once on the models it knows.
+        assertTrue(viewModel.state.modelPickerOpen)
+        assertEquals(ModelCatalogue.models.size, viewModel.state.modelPicker.allModels.size)
+
+        runCurrent()
+        assertEquals(1, models.refreshes)
+        assertEquals(listOf("anthropic", "openai", "other"), viewModel.state.modelPicker.vendors.map { it.label })
+        assertEquals(listOf(haiku, Gpt5, qwen), viewModel.state.modelPicker.allModels.map { it.choice.model })
+
+        // Every opening asks again; dismissing does not.
+        viewModel.onDismissModelPicker()
+        runCurrent()
+        assertEquals(1, models.refreshes)
+        viewModel.onOpenModelPicker()
+        runCurrent()
+        assertEquals(2, models.refreshes)
+    }
+
+    @Test
+    fun whenFuelixListsNothingOrTheRefreshFailsTheSheetKeepsTheModelsItKnows() = runTest {
+        val models = FakeModelRepository(models = listOf(Gemini, Gpt5))
+        val viewModel = chatViewModel(models = models)
+
+        viewModel.onOpenModelPicker()
+        runCurrent()
+        assertEquals(1, models.refreshes)
+        assertEquals(listOf(Gpt5, Gemini), viewModel.state.modelPicker.allModels.map { it.choice.model })
+
+        models.refreshFailure = IllegalStateException("no connection")
+        viewModel.onDismissModelPicker()
+        viewModel.onOpenModelPicker()
+        runCurrent()
+        assertEquals(2, models.refreshes)
+        assertTrue(viewModel.state.modelPickerOpen)
+        assertEquals(listOf(Gpt5, Gemini), viewModel.state.modelPicker.allModels.map { it.choice.model })
+    }
+
+    @Test
+    fun theSheetFollowsTheModelsTheRepositoryListsWheneverTheyChange() = runTest {
+        val models = FakeModelRepository()
+        val viewModel = chatViewModel(models = models)
+
+        models.models.value = listOf(Mistral, Llama)
+        runCurrent()
+
+        assertEquals(listOf(Mistral, Llama), viewModel.state.models)
+        assertEquals(listOf("meta", "mistral"), viewModel.state.modelPicker.vendors.map { it.label })
+        assertEquals(0, models.refreshes)
     }
 
     // A new chat
@@ -357,8 +420,8 @@ class ChatViewModelPickerTest {
             viewModel.state.modelPicker.favorites.map { it.name },
         )
         val stars = viewModel.state.modelPicker.allModels.associate { it.choice.model.id to it.favorite }
-        assertEquals(false, stars.getValue("gemini"))
-        assertEquals(true, stars.getValue("llama"))
+        assertEquals(false, stars.getValue(Gemini.id))
+        assertEquals(true, stars.getValue(Llama.id))
         assertTrue(viewModel.state.modelPickerOpen)
         assertEquals(ModelChoice(ModelCatalogue.default), viewModel.state.choice)
     }
@@ -368,16 +431,16 @@ class ChatViewModelPickerTest {
         val repository = FakeChatRepository(backgroundScope)
         val conversation = repository.seed("Postgres index", model = Gemini)
         val viewModel = chatViewModel(repository)
-        assertEquals(listOf("favorite:sonnet", "model:sonnet"), viewModel.state.modelPicker.marked)
+        assertEquals(pickerRowKeys(ModelCatalogue.default), viewModel.state.modelPicker.marked)
 
         viewModel.onPick(ModelChoice(Reviewer))
         assertEquals(listOf("persona:reviewer"), viewModel.state.modelPicker.marked)
 
         viewModel.onPick(ModelChoice(Llama))
-        assertEquals(listOf("model:llama"), viewModel.state.modelPicker.marked)
+        assertEquals(listOf("model:${Llama.id}"), viewModel.state.modelPicker.marked)
 
         viewModel.onOpenRecent(conversation.id)
         runCurrent()
-        assertEquals(listOf("favorite:gemini", "model:gemini"), viewModel.state.modelPicker.marked)
+        assertEquals(pickerRowKeys(Gemini), viewModel.state.modelPicker.marked)
     }
 }

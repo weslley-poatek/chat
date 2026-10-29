@@ -7,9 +7,9 @@ package br.com.weslleycampos.chat.data.chat
 interface ChatDataEraser {
     /**
      * Deletes every conversation with its messages, archived and pinned ones included, and the
-     * favorites and default model, which then read as on a fresh install:
-     * [ModelRepository.DEFAULT_FAVORITE_IDS] and `ModelCatalogue.default`. The persona presets are
-     * catalogue data and stay. A reply still streaming stops at its next tick, as after
+     * favorites, the default model and the key's model list, which then read as on a fresh install:
+     * [ModelRepository.DEFAULT_FAVORITE_IDS], `ModelCatalogue.default` and `ModelCatalogue.models`.
+     * The persona presets are catalogue data and stay. A reply still streaming stops at its next write, as after
      * [ChatRepository.delete]. Running it again erases nothing more.
      */
     suspend fun eraseAll()

@@ -18,7 +18,7 @@ sealed interface Message {
     ) : Message
 
     /**
-     * A canned reply. [blocks] grow while it streams; see [ReplyStatus].
+     * A model's reply. [blocks] grow while it streams; see [ReplyStatus].
      *
      * @property model The model that wrote it, for the meta row's short name.
      * @property persona The persona it was written as, for the meta row's " · code reviewer", or

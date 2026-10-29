@@ -6,15 +6,19 @@ import br.com.weslleycampos.chat.core.preferences.qualifiers.EncryptedPreference
 import br.com.weslleycampos.chat.data.auth.AccountManager
 import br.com.weslleycampos.chat.data.auth.AuthManager
 import br.com.weslleycampos.chat.data.chat.ChatDataEraser
+import br.com.weslleycampos.chat.data.fuelix.FuelixKeySource
 import br.com.weslleycampos.chat.data.settings.fakes.FakeAccountManager
 import br.com.weslleycampos.chat.data.settings.fakes.FakeAuthManager
 import br.com.weslleycampos.chat.data.settings.fakes.FakeChatDataEraser
 import br.com.weslleycampos.chat.data.settings.fakes.FakePreferences
+import br.com.weslleycampos.chat.data.settings.models.ModelProvider
+import kotlinx.coroutines.test.runTest
 import org.koin.core.annotation.Module
 import org.koin.core.annotation.Single
 import org.koin.dsl.koinApplication
 import org.koin.plugin.module.dsl.module
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 
@@ -33,6 +37,24 @@ class DataSettingsModuleTest {
         try {
             assertIs<EncryptedProviderKeyRepository>(koin.get<ProviderKeyRepository>())
             assertSame(koin.get<ProviderKeyRepository>(), koin.get<ProviderKeyRepository>())
+        } finally {
+            koin.close()
+        }
+    }
+
+    @Test
+    fun koinProvidesOneEncryptedFuelixKeySourceThatReadsTheKeyTheRepositorySaves() = runTest {
+        val koin = koinApplication {
+            module<FakeSettingsDependencies>()
+            module<DataSettingsModule>()
+        }.koin
+        try {
+            assertIs<EncryptedFuelixKeySource>(koin.get<FuelixKeySource>())
+            assertSame(koin.get<FuelixKeySource>(), koin.get<FuelixKeySource>())
+
+            koin.get<ProviderKeyRepository>().save(ModelProvider.FUELIX, "sk-test-0000000000000000000000000000")
+
+            assertEquals("sk-test-0000000000000000000000000000", koin.get<FuelixKeySource>().key())
         } finally {
             koin.close()
         }

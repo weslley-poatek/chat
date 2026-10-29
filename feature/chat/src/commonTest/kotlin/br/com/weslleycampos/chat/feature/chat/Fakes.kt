@@ -14,10 +14,13 @@ import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailed
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -40,12 +43,15 @@ internal class FixedClock(var now: Instant = Now) : Clock {
 /** Times on [clock], in UTC. */
 internal fun testTimes(clock: Clock = FixedClock()) = ChatTimes(clock = clock, timeZone = { TimeZone.UTC })
 
-internal val Gemini: ChatModel = ModelCatalogue["gemini"]
-internal val Gpt5: ChatModel = ModelCatalogue["gpt5"]
-internal val Llama: ChatModel = ModelCatalogue["llama"]
-internal val Mistral: ChatModel = ModelCatalogue["mistral"]
+internal val Gemini: ChatModel = ModelCatalogue["gemini-2.5-pro"]
+internal val Gpt5: ChatModel = ModelCatalogue["gpt-5"]
+internal val Llama: ChatModel = ModelCatalogue["llama-4-maverick-17b-128e"]
+internal val Mistral: ChatModel = ModelCatalogue["mistral-large"]
 
-/** The presets: "Code reviewer" on sonnet, "Terse" on gpt5, "Paper digest" on gemini. */
+/** The keys of [model]'s rows in the Model picker: under "favorites", then under its vendor. */
+internal fun pickerRowKeys(model: ChatModel): List<String> = listOf("favorite:${model.id}", "model:${model.id}")
+
+/** The presets: "Code reviewer" on Sonnet, "Terse" on GPT-5, "Paper digest" on Gemini. */
 internal val Reviewer: Persona = PersonaPresets.personas[0]
 internal val Terse: Persona = PersonaPresets.personas[1]
 
@@ -88,12 +94,23 @@ private fun List<Message>.replyOnItsWay(): Boolean = when (val last = lastOrNull
  * An in-memory [ChatRepository] that keeps the real one's contract: [send] saves the message and a
  * thinking reply, returns the conversation's id, and plays the reply on [scope]. While the
  * conversation compares, the reply is a pair: its first card plays [ReplyBlocks] and its second
- * [AltBlocks], each done on its own. [answer], when set, replaces all of that.
+ * [AltBlocks], each done on its own. [answer], when set, replaces all of that. With [replyFailure],
+ * the reply stops once it has thought instead, and [replyFailures] says why, as [fail] does.
  */
 internal class FakeChatRepository(private val scope: CoroutineScope? = null) : ChatRepository {
     val conversations = MutableStateFlow<List<Conversation>>(emptyList())
     val messages = MutableStateFlow<Map<Long, List<Message>>>(emptyMap())
     val sends = mutableListOf<Pair<Long?, String>>()
+
+    /**
+     * When set, a reply sent from now on thinks for [ThinkingTime], then stops: it reads
+     * [ReplyStatus.INTERRUPTED] with nothing shown, a pair's both sides with it, and one failure
+     * is emitted.
+     */
+    var replyFailure: ReplyFailure? = null
+
+    /** Like the real one: every failure once, as it happens, and nothing replayed to a later collector. */
+    private val failures = MutableSharedFlow<ReplyFailed>(extraBufferCapacity = 16)
 
     /** The `newChat` choice of every send, in order. */
     val newChatChoices = mutableListOf<ModelChoice?>()
@@ -138,6 +155,13 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
 
     override fun observeConversationCount(): Flow<Int> =
         conversations.map { all -> all.count { !it.archived } }.distinctUntilChanged()
+
+    override val replyFailures: Flow<ReplyFailed> get() = failures
+
+    /** A reply of [conversationId] stopped for [failure], as the real one says it: to the collectors there are. */
+    fun fail(conversationId: Long, failure: ReplyFailure) {
+        failures.tryEmit(ReplyFailed(conversationId = conversationId, failure = failure))
+    }
 
     override suspend fun send(conversationId: Long?, text: String, newChat: ModelChoice?): Long? {
         sends += conversationId to text
@@ -342,8 +366,9 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         val thread = messages.value[conversation.id].orEmpty()
         if (thread.replyOnItsWay()) return null
         val user = Message.User(id = nextId++, conversationId = conversation.id, text = text, createdAt = Now)
+        val failure = replyFailure
         conversation.comparing?.let { second ->
-            playPair(conversation = conversation, second = second, thread = thread + user)
+            playPair(conversation = conversation, second = second, thread = thread + user, failure = failure)
             return conversation.id
         }
         val replyId = nextId++
@@ -360,6 +385,11 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         messages.update { it + (conversation.id to thread + user + reply(emptyList(), ReplyStatus.THINKING)) }
         checkNotNull(scope) { "Pass a scope to play replies" }.launch {
             delay(ThinkingTime)
+            if (failure != null) {
+                update(reply(emptyList(), ReplyStatus.INTERRUPTED))
+                fail(conversation.id, failure)
+                return@launch
+            }
             for (count in 1..ReplyBlocks.size) {
                 update(reply(ReplyBlocks.take(count), ReplyStatus.STREAMING))
                 delay(TickTime)
@@ -369,13 +399,21 @@ internal class FakeChatRepository(private val scope: CoroutineScope? = null) : C
         return conversation.id
     }
 
-    /** Saves the thinking pair after [thread] and plays both its cards a block a tick, each done on its own. */
-    private fun playPair(conversation: Conversation, second: ChatModel, thread: List<Message>) {
+    /**
+     * Saves the thinking pair after [thread] and plays both its cards a block a tick, each done on its
+     * own; or, with [failure], stops both once they have thought, as one failure.
+     */
+    private fun playPair(conversation: Conversation, second: ChatModel, thread: List<Message>, failure: ReplyFailure?) {
         val thinking = pair(conversation = conversation, second = second, tick = 0)
         nextId += thinking.sides.size
         messages.update { it + (conversation.id to thread + thinking) }
         checkNotNull(scope) { "Pass a scope to play replies" }.launch {
             delay(ThinkingTime)
+            if (failure != null) {
+                update(thinking.copy(sides = thinking.sides.map { it.copy(status = ReplyStatus.INTERRUPTED) }))
+                fail(conversation.id, failure)
+                return@launch
+            }
             var tick = 1
             while (true) {
                 val current = thinking.copy(
@@ -443,20 +481,42 @@ internal class FakeCompareRepository(private val chats: FakeChatRepository = Fak
 }
 
 /**
- * An in-memory [ModelRepository] that keeps the real one's contract: favorites in catalogue order,
- * the presets as personas, and every read a flow that emits only on change.
+ * An in-memory [ModelRepository] that keeps the real one's contract: the catalogue's models until a
+ * refresh reads [listed], favorites in the models' order, the presets as personas, and every read a
+ * flow that emits only on change.
  */
 internal class FakeModelRepository(
+    models: List<ChatModel> = ModelCatalogue.models,
     defaultModel: ChatModel = ModelCatalogue.default,
     favorites: List<ChatModel> = ModelRepository.DEFAULT_FAVORITE_IDS.map(ModelCatalogue::get),
     personas: List<Persona> = PersonaPresets.personas,
 ) : ModelRepository {
+    val models = MutableStateFlow(models)
     val defaultModel = MutableStateFlow(defaultModel)
     val favorites = MutableStateFlow(favorites)
     val personas = MutableStateFlow(personas)
 
+    /** How many times `refreshModels` was called. */
+    var refreshes = 0
+        private set
+
+    /** What Fuelix lists on the next refreshes; `null` while it lists nothing, so the list stays. */
+    var listed: List<ChatModel>? = null
+
+    /** When set, `refreshModels` throws it. */
+    var refreshFailure: Exception? = null
+
     /** Every `setFavorite`, in order. */
     val favoriteWrites = mutableListOf<Pair<ChatModel, Boolean>>()
+
+    override fun observeModels(): Flow<List<ChatModel>> = models
+
+    override suspend fun refreshModels(): Boolean {
+        refreshes++
+        refreshFailure?.let { throw it }
+        models.value = listed ?: return false
+        return true
+    }
 
     override fun observeFavorites(): Flow<List<ChatModel>> = favorites
 
@@ -464,7 +524,8 @@ internal class FakeModelRepository(
         favoriteWrites += model to favorite
         favorites.update { current ->
             val ids = current.map { it.id }.toSet().let { if (favorite) it + model.id else it - model.id }
-            ModelCatalogue.models.filter { it.id in ids }
+            // The listed ones in the list's order, then any no longer listed.
+            (models.value + current + model).distinctBy { it.id }.filter { it.id in ids }
         }
     }
 

@@ -22,6 +22,12 @@
     <string name="chat_toast_comparing">comparing %1$s ⇄ %2$s</string>
     <string name="chat_toast_continuing">continuing with %1$s</string>
     <string name="chat_toast_continue_failed">couldn’t continue, try again</string>
+    <string name="chat_toast_reply_no_key">add your Fuelix key in Settings</string>
+    <string name="chat_toast_reply_key_refused">Fuelix refused the key, check it in Settings</string>
+    <string name="chat_toast_reply_model_unavailable">this model isn’t available on your Fuelix key</string>
+    <string name="chat_toast_reply_rate_limited">Fuelix is busy, try again shortly</string>
+    <string name="chat_toast_reply_unreachable">couldn’t reach Fuelix, check your connection</string>
+    <string name="chat_toast_reply_failed">Fuelix couldn’t answer, try again</string>
 
     <string name="chat_compare_continue">continue with this →</string>
     <string name="chat_compare_continue_description">continue with %1$s</string>
@@ -41,7 +47,6 @@
     <string name="model_picker_favorites">favorites</string>
     <string name="model_picker_personas">personas</string>
     <string name="model_picker_new_persona">new persona</string>
-    <string name="model_picker_all_models">all models</string>
     <string name="model_picker_favorite">Favorite</string>
     <string name="model_picker_compare">compare</string>
     <string name="model_picker_compare_on">compare · on</string>

@@ -34,19 +34,21 @@
 > [!NOTE]
 > **Status: foundation.** The build system, dependency injection, secure storage, the local database
 > and sign-in with Google or an email and password are in place, and so is the chat data layer:
-> conversations and messages in Room, with canned replies streamed into them, the model picker's
-> favorites, personas and default model, History's data: the conversation list, its search, pins,
+> conversations and messages in Room, with real replies from Fuelix's gateway, through JetBrains Koog,
+> streamed into them, the model picker's models, favorites, personas and default model, History's data: the conversation list, its search, pins,
 > archives and deletes, forks: a conversation copied up to a message, with where it came from,
 > compare mode: two models answering side by side, streaming at once, and going on with one of them,
-> voice mode's sessions: each exchange of canned lines saved as a conversation, so it shows in
-> History and reads as text, and Settings' data: the user's own API key for Fuelix, the one
+> voice mode's sessions: each exchange, what you said and the model's spoken reply, saved as a
+> conversation, so it shows in History and reads as text, and Settings' data: the user's own API key for Fuelix, the one
 > provider, stored encrypted and only read back masked, and the account's sign-in methods, sign-out and deletion,
 > which also wipes everything the device keeps. After sign-in the app opens on voice mode: the
-> sphere listens, thinks and speaks on a timer with the design's canned lines, a tap skips to the
-> next phase, mute stills it, "end" starts a new session, and every exchange is saved as a
-> conversation. Its model chip opens the model picker: pick one of the eight models or a persona,
-> star favorites, and the accent follows at once. "Aa" opens the session as text in the chat thread,
-> where you can send a message, watch the reply think, stream and finish, copy its code, and reopen
+> sphere listens through the microphone with the device's speech recognition, showing your words as
+> you speak, thinks while the model answers, and says the reply aloud with the device's voice; a tap
+> ends listening or speaking, mute turns the microphone off, "end" starts a new session, and every
+> exchange is saved as a conversation. Its model chip opens the model picker:
+> pick any model your Fuelix key can use, listed by vendor, or a persona, star favorites, and the
+> accent, the vendor's colour, follows at once. "Aa" opens the session as text in the chat thread,
+> where you can send a message, watch the model's reply think, stream and finish, copy its code, and reopen
 > a recent conversation. Tap a message to copy it, fork the conversation there (the fork says where
 > it came from until its banner is dismissed), play a reply's read-aloud bar (visual only, nothing
 > speaks), or put a message of yours back in the composer. Turn compare on in the thread's picker
@@ -58,8 +60,8 @@
 > button of Voice and History opens Settings: who is signed in and how, sign out, and delete account,
 > which a second tap within 3 seconds confirms and which wipes the device after Firebase deletes the
 > account; and the "api keys" group, where you type your own key for Fuelix, the one provider,
-> whose gateway serves every model, stored encrypted and only shown masked (replies stay canned, so
-> no key is sent anywhere).
+> whose gateway serves every model, stored encrypted and only shown masked. Replies need it: until
+> it is set, or when Fuelix cannot answer, a toast says why and the reply reads "interrupted".
 > The voice mode screen in the banner comes from the design prototype, not from a build of the app.
 
 ## ✨ Highlights
@@ -123,7 +125,8 @@ flowchart TD
     featureVoice[":feature:voice<br/><i>Voice mode, the home screen · phases · model chip</i>"]
     featureSettings[":feature:settings<br/><i>Settings · account · sign out, delete account · api keys</i>"]
     dataAuth[":data:auth<br/><i>AuthManager · AccountManager · Firebase Auth</i>"]
-    dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · ForkRepository · CompareRepository · VoiceRepository · ChatDataEraser · canned streamed replies · history</i>"]
+    dataChat[":data:chat<br/><i>ChatRepository · ModelRepository · ForkRepository · CompareRepository · VoiceRepository · ChatDataEraser · replies streamed from Fuelix · history</i>"]
+    dataFuelix[":data:fuelix<br/><i>FuelixClient · Koog's OpenAI client · Fuelix gateway</i>"]
     dataSettings[":data:settings<br/><i>ProviderKeyRepository · AccountRepository · masked provider keys</i>"]
 
     androidApp -- "implementation" --> app
@@ -141,6 +144,7 @@ flowchart TD
     app -- "implementation" --> dataAuth
     app -- "implementation" --> dataChat
     app -- "implementation" --> dataSettings
+    app -- "implementation" --> dataFuelix
     featureAuth -- "implementation" --> dataAuth
     featureChat -- "implementation" --> dataChat
     featureHistory -- "implementation" --> dataChat
@@ -149,9 +153,11 @@ flowchart TD
     featureSettings -- "implementation" --> dataSettings
     dataChat -- "implementation" --> db
     dataChat -- "implementation" --> prefs
+    dataChat -- "implementation" --> dataFuelix
     dataSettings -- "api" --> dataAuth
     dataSettings -- "implementation" --> dataChat
     dataSettings -- "implementation" --> prefs
+    dataSettings -- "implementation" --> dataFuelix
 ```
 
 | Module | Role |
@@ -164,12 +170,13 @@ flowchart TD
 | [`:core:preferences`](core/preferences) | Singleton `DataStore<Preferences>` for ordinary settings and for credentials. [Read the module guide →](core/preferences/README.md) |
 | [`:core:ui`](core/ui) | The design system: `ChatTheme`, per-model palettes, typography, tokens and components. [Read the module guide →](core/ui/README.md) |
 | [`:data:auth`](data/auth) | `AuthManager`: the signed-in user and Google sign-in. `EmailAuthManager`: email + password sign-in, account creation and password-reset emails. `AccountManager`: how the signed-in user signs in (Google, email and password) and deleting their account. All on Firebase Auth, with the Android SDK on Android and the iOS SDK through SwiftPM. |
-| [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams one of the design's canned replies into the database on a timer, with its latency, and `choose`, which changes a conversation's model, persona and compare mode; while a conversation compares two models, `send` answers with a compare pair, both sides streaming at once. For History, the list of conversations that are not archived and its search over titles, the user's messages and model names, `setPinned`, `archive` and `delete`, and `groupHistory`, which splits the list into pinned, today, yesterday and earlier. `ModelRepository`: the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. `ForkRepository`: "fork here", a new conversation copied from another one up to a message, which records where it came from for the fork banner, and the banner's dismissal. `CompareRepository`: a compare pair's "continue with this →", which goes on with one side's model alone. `VoiceRepository`: voice mode's sessions, each exchange the design's canned transcript and reply in turn, saved as the user's message when listening ends and as a finished reply when thinking ends, so a voice conversation is listed in History and opens as text, and a pick there that also sets the default model. `ChatDataEraser`: every conversation, message, favorite and the default model erased at once, for deleting the account; the persona presets stay. Also the model catalogue, `ModelCatalogue`. No model provider and no API keys. |
-| [`:data:settings`](data/settings) | Settings' data. `ProviderKeyRepository`: the user's own API key for Fuelix (`ModelProvider`), the one provider, whose gateway at `https://api.fuelix.ai` serves every model of the catalogue, saved trimmed in the encrypted DataStore and only ever read back masked, as "sk-test…4f2a", with remove and remove all, which also clears keys saved for the providers of earlier builds. No key is sent anywhere, since replies stay canned. `AccountRepository`: the signed-in account with its sign-in methods, sign-out, which keeps everything on the device, and deleting the account, which deletes it on Firebase first and only then wipes the keys and the chat's data. |
+| [`:data:chat`](data/chat) | `ChatRepository`: conversations and their messages as `Flow`s from Room, `send`, which saves the message and streams the model's reply from Fuelix into the database as it arrives, written as paragraph, list and code blocks, with its latency, the persona's prompt as the system prompt, and `replyFailures`, why a reply got none ("add your Fuelix key", "busy", "unreachable"…), and `choose`, which changes a conversation's model, persona and compare mode; while a conversation compares two models, `send` answers with a compare pair, both sides streaming at once. For History, the list of conversations that are not archived and its search over titles, the user's messages and model names, `setPinned`, `archive` and `delete`, and `groupHistory`, which splits the list into pinned, today, yesterday and earlier. `ModelRepository`: every model the Fuelix key can use, as Fuelix last listed them (`refreshModels`), with their vendor, the favorite models and the default model for new chats in the plain DataStore, and the personas in Room, with the design's three presets seeded. `ForkRepository`: "fork here", a new conversation copied from another one up to a message, which records where it came from for the fork banner, and the banner's dismissal. `CompareRepository`: a compare pair's "continue with this →", which goes on with one side's model alone. `VoiceRepository`: voice mode's sessions, each exchange what the user said, saved as the user's message when listening ends, and the model's short spoken reply from Fuelix, saved as a finished reply when it arrives, so a voice conversation is listed in History and opens as text, and a pick there that also sets the default model. `ChatDataEraser`: every conversation, message, favorite and the default model erased at once, for deleting the account; the persona presets stay. Also the model catalogue, `ModelCatalogue`: the design's eight models on their Fuelix ids, listed until Fuelix's own list is read, the ids stored before Fuelix and what they read as, and a name and vendor for any other id. |
+| [`:data:fuelix`](data/fuelix) | `FuelixClient`: the Fuelix gateway at `https://api.fuelix.ai`, on its OpenAI-compatible API through [Koog](https://github.com/JetBrains/koog)'s `OpenAILLMClient` over Ktor: the models the key can use and a chat reply streamed from Chat Completions. Each call reads the key from `FuelixKeySource`, which `:data:settings` provides, and a failure is a `FuelixException` that says why (no key, key refused, model unavailable, rate limited, unreachable). The key is never part of an exception or a log. |
+| [`:data:settings`](data/settings) | Settings' data. `ProviderKeyRepository`: the user's own API key for Fuelix (`ModelProvider`), the one provider, whose gateway at `https://api.fuelix.ai` serves every model of the catalogue, saved trimmed in the encrypted DataStore and only ever read back masked, as "sk-test…4f2a", with remove and remove all, which also clears keys saved for the providers of earlier builds. `FuelixKeySource` hands the whole key to `:data:fuelix`, the one place it is read whole, for the `Authorization` header of its calls. `AccountRepository`: the signed-in account with its sign-in methods, sign-out, which keeps everything on the device, and deleting the account, which deletes it on Firebase first and only then wipes the keys and the chat's data. |
 | [`:feature:auth`](feature/auth) | The Splash session gate and the sign-in screen: Google, email + password sign-in, account creation and the password-reset email, as modes of one screen. Opens the Google account picker: Credential Manager on Android, `GIDSignIn` on iOS. |
-| [`:feature:chat`](feature/chat) | The chat thread, a conversation as text, which Voice's "Aa" and History's rows open: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", and the composer, whose mic goes on with the conversation in voice. A tap on a message shows its actions: "copy", "⑂ fork here", which opens the fork under a banner saying where it came from, "read aloud", a visual player with no speech, and "retry", which puts the message back in the composer. The model picker sheet: favorites, personas and every model, stars, and a pick that changes the conversation or the new chat. Compare mode: the picker's compare button and second model, the "sonnet-4.5 ⇄ gpt-5" chip, and each reply as a pair of cards, one per model, that stream at once in a swipeable carousel, with "continue with this →" on a finished card. The accent follows the conversation's model. The back chevron returns to History or Voice underneath. |
+| [`:feature:chat`](feature/chat) | The chat thread, a conversation as text, which Voice's "Aa" and History's rows open: the empty state with "recent" conversations, messages with paragraph, list and syntax-coloured code blocks, the streaming caret and latency, "copy", and the composer, whose mic goes on with the conversation in voice. A tap on a message shows its actions: "copy", "⑂ fork here", which opens the fork under a banner saying where it came from, "read aloud", a visual player with no speech, and "retry", which puts the message back in the composer. The model picker sheet: favorites, personas and every model the Fuelix key can use, a section per vendor, read again from Fuelix each time it opens, stars, and a pick that changes the conversation or the new chat. A reply Fuelix could not give shows a toast that says why. Compare mode: the picker's compare button and second model, the "sonnet-4.5 ⇄ gpt-5" chip, and each reply as a pair of cards, one per model, that stream at once in a swipeable carousel, with "continue with this →" on a finished card. The accent follows the conversation's model's vendor. The back chevron returns to History or Voice underneath. |
 | [`:feature:history`](feature/history) | History: every conversation on the device in "pinned", "today", "yesterday" and "earlier", newest first, regrouped when the date changes, with a Settings button; the search over titles, the user's messages and model names; the second model of a conversation that compares ("⇄ gpt-5"); rows that swipe left to pin, archive or delete, with the "archived" and "deleted" toasts, and the same actions for screen readers; a tap that opens the conversation as text in the chat thread, over History, so back returns here and then to Voice. The status row says how many conversations are on this device, since nothing syncs. |
-| [`:feature:voice`](feature/voice) | Voice mode, the home screen after sign-in: the particle sphere listening for 6.5 s, thinking for 2.4 s and speaking for 7 s, round and round, with the line heard or said revealed a word every 230 ms, and a tap on the sphere skipping to the next phase. Each exchange is saved as it is heard, so a voice session is a conversation in History. The model chip opens the model picker, without compare, and its pick also becomes the default model; mute stills the listening sphere; "end" starts a new session; "Aa" opens the session as text in the chat thread. The History button opens History and the Settings button Settings, each over Voice. The accent follows the session's model. |
+| [`:feature:voice`](feature/voice) | Voice mode, the home screen after sign-in: the particle sphere listening through the microphone with the device's speech recognition (Android's `SpeechRecognizer`, iOS's `SFSpeechRecognizer`), the words shown as they are heard, until the user stops speaking; thinking while the model answers through Fuelix; and saying the reply aloud with the device's speech synthesis (`TextToSpeech`, `AVSpeechSynthesizer`), each word shown as it is said; round and round. A tap on the sphere ends listening or speaking, and mute turns the microphone off. The microphone is asked for when voice mode first shows. Each exchange is saved as it is heard, so a voice session is a conversation in History. When Fuelix gives no reply, or the device cannot listen, a toast says why and the sphere waits for a tap. The model chip opens the model picker, without compare, and its pick also becomes the default model; mute stills the listening sphere; "end" starts a new session; "Aa" opens the session as text in the chat thread. The History button opens History and the Settings button Settings, each over Voice. The accent follows the session's model's vendor. |
 | [`:feature:settings`](feature/settings) | Settings, opened over Voice or History, whose back returns there: the "account" group, with the initials avatar, the name and email, the sign-in methods ("Google", "email"), "Sign out", which opens sign-in with the back stack cleared and keeps everything on the device, and "Delete account", which a first tap arms for 3 s ("tap again to confirm") and a second deletes, busy meanwhile, opening account creation with the stack cleared, or saying why Firebase refused; the "api keys" group, one row per provider (Fuelix only) with its dot, masked key or "not set" and "edit" / "add", and an edit row typed masked on a password keyboard, with "save" ("key encrypted and stored") and "remove"; and the footer, "Chat 1.0 (1) · android" or "· ios", from the installed app's version. The key being typed stays in the ViewModel's memory only. |
 
 <details>
@@ -205,6 +212,7 @@ iOS compilation reports `KOIN-D002` for valid lookups across Gradle modules. See
 | Storage | [AndroidX DataStore](https://developer.android.com/topic/libraries/architecture/datastore) Preferences (Okio) | `1.2.1` |
 | Database | [Room](https://developer.android.com/kotlin/multiplatform/room) (`androidx.room3`) · [SQLite](https://developer.android.com/kotlin/multiplatform/sqlite) bundled driver | `3.0.3` · `2.7.1` |
 | Serialization | [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) JSON, through its BOM, for the reply blocks column | `1.12.0` |
+| LLM client | [Koog](https://github.com/JetBrains/koog) `prompt-executor-openai-client` · `http-client-ktor`, on [Ktor](https://ktor.io) with OkHttp on Android and Darwin on iOS | `1.3.0` · `3.6.0` |
 | Date and time | [kotlinx-datetime](https://github.com/Kotlin/kotlinx-datetime), for local message times and dates and History's days | `0.8.0` |
 | Code generation | [KSP](https://github.com/google/ksp), for Room's compiler | `2.3.12` |
 | Authentication | [Firebase Auth](https://firebase.google.com/docs/auth) · Android BoM · iOS SDK | `34.19.0` · `12.19.2` |
@@ -300,6 +308,8 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 | Auth tests on the iOS simulator | `./gradlew :data:auth:iosSimulatorArm64Test :feature:auth:iosSimulatorArm64Test` |
 | Chat data tests on the Android host | `./gradlew :data:chat:testAndroidHostTest` |
 | Chat data tests on the iOS simulator | `./gradlew :data:chat:iosSimulatorArm64Test` |
+| Fuelix client tests on the Android host | `./gradlew :data:fuelix:testAndroidHostTest` |
+| Fuelix client tests on the iOS simulator | `./gradlew :data:fuelix:iosSimulatorArm64Test` |
 | Settings data tests on the Android host | `./gradlew :data:settings:testAndroidHostTest` |
 | Settings data tests on the iOS simulator | `./gradlew :data:settings:iosSimulatorArm64Test` |
 | Chat screen tests on the Android host | `./gradlew :feature:chat:testAndroidHostTest` |
@@ -321,14 +331,14 @@ Choose a simulator and press **Run**. The **Compile Kotlin Framework** build pha
 All shared configuration lives in the [`build-logic`](build-logic/convention/src/main/kotlin) included
 build. Each module picks the conventions it needs:
 
-| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:database` | `:core:navigation` | `:core:preferences` | `:core:ui` | `:data:auth` | `:data:chat` | `:data:settings` | `:feature:auth` | `:feature:chat` | `:feature:history` | `:feature:settings` | `:feature:voice` |
-| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | | | | | | | | | | | |
-| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | | ✅ | | ✅ | | | | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `chat.room` | KSP and the Room Gradle plugin with schemas in `schemas/`, Room runtime and bundled SQLite driver, the Room compiler per target, and the driver and schema path its tests need | | | ✅ | | | | | | | | | | | |
-| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Convention plugin | What it sets up | `:androidApp` | `:app` | `:core:database` | `:core:navigation` | `:core:preferences` | `:core:ui` | `:data:auth` | `:data:chat` | `:data:fuelix` | `:data:settings` | `:feature:auth` | `:feature:chat` | `:feature:history` | `:feature:settings` | `:feature:voice` |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `chat.android.application` | AGP application, Compose compiler, SDK levels, app id and version | ✅ | | | | | | | | | | | | | | |
+| `chat.multiplatform.library` | KMP + Android KMP library target, Kotlin serialization, host and device tests, iOS `App` frameworks | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.compose.library` | Compose Multiplatform, Material 3, Navigation 3, lifecycle, per-module `Res` class | | ✅ | | ✅ | | ✅ | | | | | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.room` | KSP and the Room Gradle plugin with schemas in `schemas/`, Room runtime and bundled SQLite driver, the Room compiler per target, and the driver and schema path its tests need | | | ✅ | | | | | | | | | | | | |
+| `chat.koin` | Koin compiler plugin, plus runtime and annotations for the module type, and Koin Compose where Compose is on | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `chat.detekt` | Detekt with formatting rules, the shared [`detekt.yml`](detekt.yml) and HTML reports | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 `:androidApp` also applies the `com.google.gms.google-services` plugin, which turns `google-services.json`
 into resources such as the `default_web_client_id` the Google account picker asks for.
@@ -418,7 +428,8 @@ chat/
 │   └── ui/                        🎨 ChatTheme, tokens and components
 ├── data/
 │   ├── auth/                      🔑 AuthManager, EmailAuthManager and AccountManager on Firebase Auth
-│   ├── chat/                      💬 ChatRepository, ModelRepository, ForkRepository, CompareRepository, VoiceRepository, ChatDataEraser, canned streamed replies, models, personas, History's groups
+│   ├── chat/                      💬 ChatRepository, ModelRepository, ForkRepository, CompareRepository, VoiceRepository, ChatDataEraser, replies streamed from Fuelix, models, personas, History's groups
+│   ├── fuelix/                    🛰️ FuelixClient on Koog's OpenAI client: the key's models and streamed chat replies
 │   └── settings/                  ⚙️ ProviderKeyRepository (masked provider keys, encrypted) and AccountRepository (sign-in methods, sign out, delete account)
 ├── feature/
 │   ├── auth/                      👋 Splash gate and the sign-in screen (Google, email + password)

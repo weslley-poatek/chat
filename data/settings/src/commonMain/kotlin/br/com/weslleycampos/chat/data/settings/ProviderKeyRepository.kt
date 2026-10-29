@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * The user's own API key for each [ModelProvider], kept encrypted on this device and only ever
- * read back masked: nothing here returns a whole key. Replies stay canned, so no key is sent
- * anywhere, and none is ever logged.
+ * read back masked: nothing here returns a whole key. Only `FuelixKeySource` reads the Fuelix key
+ * whole, for `:data:fuelix`'s requests, and no key is ever logged.
  */
 interface ProviderKeyRepository {
     /**

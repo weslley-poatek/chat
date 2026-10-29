@@ -2,6 +2,7 @@ package br.com.weslleycampos.chat.data.chat.models
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class PersonaPresetsTest {
     @Test
@@ -13,11 +14,11 @@ class PersonaPresetsTest {
                 listOf(
                     "reviewer",
                     "Code reviewer",
-                    "sonnet",
+                    "claude-sonnet-4-5-20250929",
                     "Correctness first, style last. Cite line numbers. No praise.",
                 ),
-                listOf("terse", "Terse", "gpt5", "One paragraph max. Code over prose."),
-                listOf("digest", "Paper digest", "gemini", "Claim, method, evidence, caveats. Bullets."),
+                listOf("terse", "Terse", "gpt-5", "One paragraph max. Code over prose."),
+                listOf("digest", "Paper digest", "gemini-2.5-pro", "Claim, method, evidence, caveats. Bullets."),
             ),
             rows,
         )
@@ -26,7 +27,7 @@ class PersonaPresetsTest {
     @Test
     fun everyPresetAnswersWithACatalogueModel() {
         PersonaPresets.personas.forEach { persona ->
-            assertEquals(ModelCatalogue.find(persona.model.id), persona.model)
+            assertTrue(persona.model in ModelCatalogue.models, persona.id)
         }
     }
 }

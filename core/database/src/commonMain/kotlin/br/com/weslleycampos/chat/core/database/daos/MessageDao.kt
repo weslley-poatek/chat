@@ -43,10 +43,7 @@ interface MessageDao {
     )
     suspend fun countReplies(conversationId: Long): Int
 
-    /**
-     * The conversation's user messages: how many exchanges voice mode has had in it, typed ones
-     * included, which picks its next canned exchange.
-     */
+    /** The conversation's user messages: how many exchanges it has had, typed and spoken. */
     @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId AND role = 'user'")
     suspend fun countUserMessages(conversationId: Long): Int
 

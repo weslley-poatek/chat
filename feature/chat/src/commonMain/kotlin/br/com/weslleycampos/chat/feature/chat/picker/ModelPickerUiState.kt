@@ -3,7 +3,6 @@ package br.com.weslleycampos.chat.feature.chat.picker
 import androidx.compose.runtime.Immutable
 import br.com.weslleycampos.chat.core.ui.theme.ChatPalette
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
-import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.feature.chat.MetaSeparator
@@ -42,11 +41,12 @@ enum class ModelPickerMark(val glyph: String) {
 /**
  * One row of the sheet, the prototype's `mRow`.
  *
- * @property key Unique in the sheet: a model is listed under "favorites" and again under "all models".
+ * @property key Unique in the sheet: a model is listed under "favorites" and again under its vendor.
  * @property choice What a tap on the row picks: the model alone, or the persona on its model.
- * @property meta "Anthropic · 200k ctx · $$", or "→ sonnet-4.5 · Correctness first, …" for a persona.
- * @property palette The 8 dp dot's colour: the model's accent, a persona's model's for a persona.
- * @property favorite "★" (`true`) or "☆" (`false`) on an "all models" row; `null` elsewhere, no star.
+ * @property meta "claude-sonnet-4-5-20250929 · 200k ctx · $$", or "→ sonnet-4.5 · Correctness first, …"
+ *   for a persona.
+ * @property palette The 8 dp dot's colour: the model's vendor's accent, a persona's model's for a persona.
+ * @property favorite "★" (`true`) or "☆" (`false`) on a vendor's row; `null` elsewhere, no star.
  * @property mark "●" on what answers, "◐" on the model it is compared with, else `null`.
  */
 @Immutable
@@ -61,10 +61,20 @@ data class ModelPickerRow(
 )
 
 /**
- * Everything the Model picker sheet lists, in its order: "favorites", "personas" (with "+ new
- * persona") on the chat sheet only, then "all models"; and on the chat sheet the compare button and,
- * while compare is on, its hint under the title.
+ * One vendor's models in the sheet, under its name.
  *
+ * @property label "anthropic", "openai": the vendor's name, written as the sheet's section labels are.
+ */
+@Immutable
+data class ModelPickerVendor(val label: String, val rows: List<ModelPickerRow>)
+
+/**
+ * Everything the Model picker sheet lists, in its order: "favorites", "personas" (with "+ new
+ * persona") on the chat sheet only, then every model the Fuelix key can use, a section per vendor;
+ * and on the chat sheet the compare button and, while compare is on, its hint under the title.
+ *
+ * @property vendors The models by vendor: Anthropic, OpenAI, Google, Meta, DeepSeek, Mistral, then
+ *   any other, each listing its models in the order `ModelRepository.observeModels` gives them.
  * @property compareOn The compare button reads "compare · on", filled with the accent.
  * @property compareHint The line under the title while compare is on: "pick a second model to run
  *   beside sonnet-4.5" or "sonnet-4.5 ⇄ gpt-5 · tap another model to swap the second"; else `null`.
@@ -74,10 +84,13 @@ data class ModelPickerUiState(
     val variant: ModelPickerVariant,
     val favorites: List<ModelPickerRow>,
     val personas: List<ModelPickerRow>,
-    val allModels: List<ModelPickerRow>,
+    val vendors: List<ModelPickerVendor>,
     val compareOn: Boolean = false,
     val compareHint: String? = null,
 ) {
+    /** Every vendor's rows, in the sheet's order. */
+    val allModels: List<ModelPickerRow> get() = vendors.flatMap(ModelPickerVendor::rows)
+
     /** The "personas" section and "+ new persona": the chat sheet's only. */
     val showsPersonas: Boolean get() = variant == ModelPickerVariant.Chat
 
@@ -87,9 +100,10 @@ data class ModelPickerUiState(
 
 /**
  * The sheet for [variant], marking [active]: the chat's [ModelChoice] on the chat sheet, or
- * `ModelChoice(defaultModel)` on the default one. [favorites] come in [ModelCatalogue] order, as
- * `ModelRepository.observeFavorites` gives them, and [personas] in theirs; the default sheet
- * leaves the personas out.
+ * `ModelChoice(defaultModel)` on the default one. [models] are the key's, as
+ * `ModelRepository.observeModels` gives them, grouped here by vendor; [favorites] come in their
+ * order, as `ModelRepository.observeFavorites` gives them, and [personas] in theirs. The default
+ * sheet leaves the personas out.
  *
  * The "●" goes on the persona that answers, or, with none, on every row of the model that does,
  * the prototype's `active` in `mRow`; on the chat sheet "◐" goes on every row of the model it is
@@ -97,6 +111,7 @@ data class ModelPickerUiState(
  */
 fun modelPickerUiState(
     variant: ModelPickerVariant,
+    models: List<ChatModel>,
     favorites: List<ChatModel>,
     personas: List<Persona>,
     active: ModelChoice,
@@ -136,7 +151,14 @@ fun modelPickerUiState(
         variant = variant,
         favorites = favorites.map { modelRow(section = "favorite", model = it, star = false) },
         personas = personaRows,
-        allModels = ModelCatalogue.models.map { modelRow(section = "model", model = it, star = true) },
+        vendors = models.distinctBy(ChatModel::id).groupBy(ChatModel::vendor).entries
+            .sortedBy { (vendor, _) -> vendor.ordinal }
+            .map { (vendor, listed) ->
+                ModelPickerVendor(
+                    label = vendor.displayName.lowercase(),
+                    rows = listed.map { modelRow(section = "model", model = it, star = true) },
+                )
+            },
         compareOn = chat && active.compareOn,
         compareHint = if (chat) compareHint(active) else null,
     )
@@ -153,9 +175,12 @@ fun compareHint(choice: ModelChoice): String? {
     return "${compareLabel(choice.model, comparing)}${MetaSeparator}tap another model to swap the second"
 }
 
-/** A model row's meta: `` `${provider} · ${ctx} ctx · ${cost}` ``, "Anthropic · 200k ctx · $$". */
+/**
+ * A model row's meta: its Fuelix id, then its context window and cost where known,
+ * "claude-sonnet-4-5-20250929 · 200k ctx · $$". The vendor is the section the row is in.
+ */
 fun modelRowMeta(model: ChatModel): String =
-    listOf(model.provider, "${model.contextWindow} ctx", model.cost).joinToString(MetaSeparator)
+    listOfNotNull(model.id, model.contextWindow?.let { "$it ctx" }, model.cost).joinToString(MetaSeparator)
 
 /** A persona row's meta: `` `→ ${short} · ${prompt}` ``, "→ sonnet-4.5 · Correctness first, …". */
 fun personaRowMeta(persona: Persona): String = "→ ${persona.model.shortName}$MetaSeparator${persona.prompt}"

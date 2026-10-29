@@ -6,6 +6,7 @@ import br.com.weslleycampos.chat.core.preferences.qualifiers.EncryptedPreference
 import br.com.weslleycampos.chat.data.auth.AccountManager
 import br.com.weslleycampos.chat.data.auth.AuthManager
 import br.com.weslleycampos.chat.data.chat.ChatDataEraser
+import br.com.weslleycampos.chat.data.fuelix.FuelixKeySource
 import org.koin.core.annotation.Single
 
 /** The app's one [ProviderKeyRepository], on the encrypted DataStore. */
@@ -13,6 +14,12 @@ import org.koin.core.annotation.Single
 internal fun providerKeyRepository(
     @EncryptedPreferences preferences: DataStore<Preferences>,
 ): ProviderKeyRepository = EncryptedProviderKeyRepository(preferences = preferences)
+
+/** The Fuelix key, whole, for `:data:fuelix`'s requests: the one Settings saved. */
+@Single
+internal fun fuelixKeySource(
+    @EncryptedPreferences preferences: DataStore<Preferences>,
+): FuelixKeySource = EncryptedFuelixKeySource(preferences = preferences)
 
 /**
  * The app's one [AccountRepository]: the account from `:data:auth`'s managers, and a delete that

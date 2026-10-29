@@ -35,25 +35,33 @@ class EntityMappersTest {
     private val personas: Map<String, Persona> = mapOf(terse.id to terse)
 
     @Test
-    fun aConversationRowReadsWithItsCatalogueModelAndInstants() {
-        val row = ConversationEntity(id = 3, title = "Hello", modelId = "gpt5", createdAt = 1_000, updatedAt = 2_000)
+    fun aConversationRowReadsWithItsModelAndInstants() {
+        val row = ConversationEntity(id = 3, title = "Hello", modelId = "gpt-5", createdAt = 1_000, updatedAt = 2_000)
 
         assertEquals(
             Conversation(
                 id = 3,
                 title = "Hello",
-                model = ModelCatalogue["gpt5"],
+                model = ModelCatalogue["gpt-5"],
                 createdAt = Instant.fromEpochMilliseconds(1_000),
                 updatedAt = Instant.fromEpochMilliseconds(2_000),
             ),
             row.toConversation(personas),
         )
-        assertEquals(ModelCatalogue.default, row.copy(modelId = "retired").toConversation(personas).model)
+    }
+
+    @Test
+    fun aModelIdStoredBeforeFuelixReadsAsTheModelItBecameAnyOtherAsItselfAndABlankOneAsTheDefault() {
+        val row = ConversationEntity(id = 3, title = "Hello", modelId = "gpt5", createdAt = 1_000, updatedAt = 2_000)
+
+        assertEquals(ModelCatalogue["gpt-5"], row.toConversation(personas).model)
+        assertEquals(ModelCatalogue.of("gpt-6"), row.copy(modelId = "gpt-6").toConversation(personas).model)
+        assertEquals(ModelCatalogue.default, row.copy(modelId = "").toConversation(personas).model)
     }
 
     @Test
     fun aConversationRowReadsWithItsPinnedAndArchivedFlags() {
-        val row = ConversationEntity(id = 3, title = "Hello", modelId = "gpt5", createdAt = 1_000, updatedAt = 2_000)
+        val row = ConversationEntity(id = 3, title = "Hello", modelId = "gpt-5", createdAt = 1_000, updatedAt = 2_000)
 
         val plain = row.toConversation(personas)
         val pinned = row.copy(pinned = true).toConversation(personas)
@@ -66,7 +74,7 @@ class EntityMappersTest {
 
     @Test
     fun aForkedRowReadsWithItsOriginAndAnyOtherRowAsNoFork() {
-        val row = ConversationEntity(id = 3, title = "Hello", modelId = "gpt5", createdAt = 1_000, updatedAt = 2_000)
+        val row = ConversationEntity(id = 3, title = "Hello", modelId = "gpt-5", createdAt = 1_000, updatedAt = 2_000)
         val forked = row.copy(forkedFromTitle = "useDebounce hook with leading edge", forkedAtMessage = 2)
 
         assertNull(row.toConversation(personas).fork)
@@ -83,18 +91,26 @@ class EntityMappersTest {
     }
 
     @Test
-    fun aComparingRowReadsWithItsCompareAndASecondModelTheCatalogueNoLongerHasAsNone() {
-        val row = ConversationEntity(id = 3, title = "Hello", modelId = "sonnet", createdAt = 1_000, updatedAt = 2_000)
+    fun aComparingRowReadsWithItsCompareAndABlankSecondModelAsNone() {
+        val row = ConversationEntity(
+            id = 3,
+            title = "Hello",
+            modelId = ModelCatalogue.DEFAULT_MODEL_ID,
+            createdAt = 1_000,
+            updatedAt = 2_000,
+        )
 
-        val comparing = row.copy(compareOn = true, compareModelId = "gpt5").toConversation(personas)
+        val comparing = row.copy(compareOn = true, compareModelId = "gpt-5").toConversation(personas)
         val waiting = row.copy(compareOn = true).toConversation(personas)
-        val retired = row.copy(compareOn = true, compareModelId = "retired").toConversation(personas)
+        val blank = row.copy(compareOn = true, compareModelId = " ").toConversation(personas)
+        val unlisted = row.copy(compareOn = true, compareModelId = "gpt-6").toConversation(personas)
 
-        assertEquals(true to ModelCatalogue["gpt5"], comparing.compareOn to comparing.compareWith)
-        assertEquals(ModelCatalogue["gpt5"], comparing.comparing)
+        assertEquals(true to ModelCatalogue["gpt-5"], comparing.compareOn to comparing.compareWith)
+        assertEquals(ModelCatalogue["gpt-5"], comparing.comparing)
         assertEquals(true to null, waiting.compareOn to waiting.compareWith)
-        assertEquals(true to null, retired.compareOn to retired.compareWith)
-        assertNull(retired.comparing)
+        assertEquals(true to null, blank.compareOn to blank.compareWith)
+        assertNull(blank.comparing)
+        assertEquals(ModelCatalogue.of("gpt-6"), unlisted.comparing)
         assertEquals(false to null, row.toConversation(personas).let { it.compareOn to it.compareWith })
     }
 
@@ -103,7 +119,7 @@ class EntityMappersTest {
         val row = ConversationEntity(
             id = 3,
             title = "Hello",
-            modelId = "gpt5",
+            modelId = "gpt-5",
             createdAt = 1_000,
             updatedAt = 2_000,
             personaId = "terse",
@@ -147,7 +163,7 @@ class EntityMappersTest {
             role = MessageRole.ASSISTANT,
             text = "",
             blocks = stored,
-            modelId = "opus",
+            modelId = "claude-opus-4-1-20250805",
             status = MessageStatus.DONE,
             latencyMillis = 1_900,
             createdAt = 1_000,
@@ -157,7 +173,7 @@ class EntityMappersTest {
             Message.Assistant(
                 id = 6,
                 conversationId = 3,
-                model = ModelCatalogue["opus"],
+                model = ModelCatalogue["claude-opus-4-1-20250805"],
                 blocks = blocks,
                 status = ReplyStatus.DONE,
                 latency = 1_900.milliseconds,
@@ -171,12 +187,13 @@ class EntityMappersTest {
     }
 
     @Test
-    fun aPersonaRowReadsWithItsCatalogueModelAndBack() {
-        val row = PersonaEntity(id = "terse", name = "Terse", modelId = "gpt5", prompt = terse.prompt, position = 1)
+    fun aPersonaRowReadsWithItsModelAndBack() {
+        val row = PersonaEntity(id = "terse", name = "Terse", modelId = "gpt-5", prompt = terse.prompt, position = 1)
 
         assertEquals(terse, row.toPersona())
         assertEquals(row, terse.toEntity(position = 1))
-        assertEquals(ModelCatalogue.default, row.copy(modelId = "retired").toPersona().model)
+        assertEquals(terse, row.copy(modelId = "gpt5").toPersona())
+        assertEquals(ModelCatalogue.default, row.copy(modelId = "").toPersona().model)
     }
 
     @Test

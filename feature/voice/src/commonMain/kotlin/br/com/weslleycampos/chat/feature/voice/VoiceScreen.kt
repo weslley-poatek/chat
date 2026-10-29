@@ -35,14 +35,18 @@ import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import br.com.weslleycampos.chat.core.ui.ChatTheme
+import br.com.weslleycampos.chat.core.ui.components.ChatToast
 import br.com.weslleycampos.chat.core.ui.components.ChatVoicePhase
 import br.com.weslleycampos.chat.core.ui.components.ChatVoiceSphere
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
 import br.com.weslleycampos.chat.data.chat.models.VoiceExchange
 import br.com.weslleycampos.chat.feature.chat.palette
+import br.com.weslleycampos.chat.feature.chat.toast
 import br.com.weslleycampos.chat.feature.voice.resources.FeatureVoiceRes
+import br.com.weslleycampos.chat.feature.voice.resources.voice_allow_microphone
 import br.com.weslleycampos.chat.feature.voice.resources.voice_skip
 import org.jetbrains.compose.resources.stringResource
 
@@ -57,8 +61,9 @@ private val TranscriptMinHeight = 46.dp
 /**
  * The Voice mode frame (frames.md §2.6), the home screen: the bar with History, the model chip and
  * Settings; the particle sphere and its glow, which a tap moves to the next phase; the phase label
- * and the line being heard or said; and mute, end and "Aa". It fills the screen under the status
- * bar, the controls clear of the navigation bar or home indicator.
+ * and the line being heard or said; and mute, end and "Aa". A toast says why Fuelix gave no reply,
+ * over the sphere's lower edge. It fills the screen under the status bar, the controls clear of the
+ * navigation bar or home indicator.
  *
  * The accent is what answers the session: wrap the screen in
  * `ChatTheme(palette = uiState.model.palette)`.
@@ -98,8 +103,16 @@ fun VoiceScreen(
         ) {
             // The glow is the sphere's own, centred on it: 0.12 of the accent, 0.22 while speaking.
             ChatVoiceSphere(modifier = Modifier.fillMaxSize(), phase = uiState.phase, muted = uiState.muted)
+            ChatToast(
+                message = uiState.toast?.let { stringResource(it) },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = ChatTheme.spacing.large),
+            )
         }
-        VoiceCaptionText(phaseLabel = stringResource(uiState.phaseLabel), caption = uiState.caption)
+        val allow = stringResource(FeatureVoiceRes.string.voice_allow_microphone)
+        VoiceCaptionText(
+            phaseLabel = stringResource(uiState.phaseLabel),
+            caption = if (uiState.microphone) uiState.caption else VoiceCaption(shown = "", rest = allow),
+        )
         VoiceControls(
             muted = uiState.muted,
             muteLabel = stringResource(uiState.muteLabel),
@@ -159,9 +172,9 @@ private val PreviewExchange = VoiceExchange(
         "until the window closes. I will put the timer in a ref so it survives renders.",
 )
 
-/** Words in at 230 ms a word: 3 s into listening, and all of speaking's 7 s (30 of `MODEL_T`'s 33). */
+/** Words in at 230 ms a word: 3 s into listening, and every word of `MODEL_T` as speaking ends. */
 private const val PreviewListeningWords = 13
-private const val PreviewSpeakingWords = 30
+private const val PreviewSpeakingWords = 33
 
 data class VoicePreviewCase(val name: String, val uiState: VoiceUiState, val darkTheme: Boolean) {
     val displayName: String get() = "$name · ${if (darkTheme) "Dark" else "Light"}"
@@ -175,10 +188,12 @@ class VoiceScreenPreviewParameterProvider : PreviewParameterProvider<VoicePrevie
         "Listening" to listening,
         "Thinking" to listening.copy(phase = ChatVoicePhase.Thinking, words = 0),
         "Speaking" to listening.copy(phase = ChatVoicePhase.Speaking, words = PreviewListeningWords),
-        "Speaking · time up" to listening.copy(phase = ChatVoicePhase.Speaking, words = PreviewSpeakingWords),
+        "Speaking · whole" to listening.copy(phase = ChatVoicePhase.Speaking, words = PreviewSpeakingWords),
         "Muted" to listening.copy(muted = true),
         "Persona" to listening.copy(choice = ModelChoice(PersonaPresets.personas.first())),
-        "Gemini" to listening.copy(choice = ModelChoice(ModelCatalogue["gemini"])),
+        "Gemini" to listening.copy(choice = ModelChoice(ModelCatalogue["gemini-2.5-pro"])),
+        "No key" to listening.copy(toast = ReplyFailure.NO_KEY.toast),
+        "No microphone" to VoiceUiState(microphone = false),
         "Loading" to VoiceUiState(),
     )
 

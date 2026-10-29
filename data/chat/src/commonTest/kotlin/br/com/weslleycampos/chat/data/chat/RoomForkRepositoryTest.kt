@@ -6,8 +6,9 @@ import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
 import br.com.weslleycampos.chat.core.database.entities.StoredBlock
 import br.com.weslleycampos.chat.data.chat.fakes.FakeChatDatabase
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient.Companion.PIECE_DELAY
 import br.com.weslleycampos.chat.data.chat.fakes.FakePreferences
-import br.com.weslleycampos.chat.data.chat.fakes.FixedRandom
 import br.com.weslleycampos.chat.data.chat.fakes.TEST_START
 import br.com.weslleycampos.chat.data.chat.fakes.TestClock
 import br.com.weslleycampos.chat.data.chat.models.Block
@@ -19,8 +20,9 @@ import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
-import br.com.weslleycampos.chat.data.chat.replies.CannedReplies
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
+import br.com.weslleycampos.chat.data.fuelix.FuelixMessage
+import br.com.weslleycampos.chat.data.fuelix.FuelixRole
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -43,14 +45,18 @@ import kotlin.time.Duration.Companion.minutes
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoomForkRepositoryTest {
     private var database = FakeChatDatabase()
+    private val fuelix = FakeFuelixClient()
     private val reviewer: Persona = PersonaPresets.personas.single { it.id == "reviewer" }
     private val comparing = ModelChoice(
-        model = ModelCatalogue["sonnet"],
+        model = ModelCatalogue.default,
         compareOn = true,
-        compareWith = ModelCatalogue["gpt5"],
+        compareWith = ModelCatalogue["gpt-5"],
     )
 
-    /** Streams at the slowest pace and shortest thinking time, in the test's own scope. */
+    /** What [modelId] answers when nothing else is scripted for it. */
+    private fun answer(modelId: String): List<Block> = listOf(Block.Paragraph(FakeFuelixClient.answer(modelId)))
+
+    /** Replies stream from [fuelix] on the test's virtual time, in the test's own scope. */
     private fun TestScope.chat(): RoomChatRepository {
         val clock = TestClock(testScheduler)
         return RoomChatRepository(
@@ -62,9 +68,10 @@ class RoomForkRepositoryTest {
             models = LocalModelRepository(
                 personaDao = database.personaDao,
                 preferences = FakePreferences(),
+                fuelix = fuelix,
                 scope = this,
             ),
-            streamer = ReplyStreamer(messageDao = database.messageDao, clock = clock, random = FixedRandom()),
+            streamer = ReplyStreamer(messageDao = database.messageDao, fuelix = fuelix, clock = clock),
             clock = clock,
             scope = this,
         )
@@ -231,7 +238,7 @@ class RoomForkRepositoryTest {
         val (user, reply) = chat.thread(source)
 
         assertNull(forks.fork(source, messageId = reply.id))
-        advanceTimeBy(400)
+        advanceTimeBy(PIECE_DELAY * 1.5)
         assertEquals(ReplyStatus.STREAMING, (chat.thread(source).last() as Message.Assistant).status)
         assertNull(forks.fork(source, messageId = reply.id))
         val atTheUser = assertNotNull(forks.fork(source, messageId = user.id))
@@ -250,7 +257,7 @@ class RoomForkRepositoryTest {
     fun anInterruptedReplyIsCopiedInterruptedWithWhatItRevealed() = runTest {
         database = FakeChatDatabase(
             conversations = listOf(
-                ConversationEntity(id = 1, title = "Stale closure", modelId = "gpt5", createdAt = 0, updatedAt = 0),
+                ConversationEntity(id = 1, title = "Stale closure", modelId = "gpt-5", createdAt = 0, updatedAt = 0),
             ),
             messages = listOf(
                 message(id = 1, role = MessageRole.USER, status = MessageStatus.DONE),
@@ -274,7 +281,7 @@ class RoomForkRepositoryTest {
     }
 
     @Test
-    fun aForkAtAUserMessageEndsOnItAndASendGoesOnWithTheNextCannedReply() = runTest {
+    fun aForkAtAUserMessageEndsOnItAndASendGoesOnFromTheCopiedThread() = runTest {
         val chat = chat()
         val source = conversationOf(chat, "Write a useDebounce hook", "Add a leading option")
         val thread = chat.thread(source)
@@ -286,9 +293,19 @@ class RoomForkRepositoryTest {
         assertEquals(fork, chat.send(fork, "Now cancel on unmount"))
         advanceUntilIdle()
         val replies = chat.thread(fork).filterIsInstance<Message.Assistant>()
-        assertEquals(listOf(CannedReplies.replies[0], CannedReplies.replies[1]), replies.map { it.blocks })
+        val sonnet = ModelCatalogue.DEFAULT_MODEL_ID
+        assertEquals(listOf(answer(sonnet), answer(sonnet)), replies.map { it.blocks })
         assertEquals(5, chat.thread(fork).size)
         assertEquals(4, chat.thread(source).size)
+        assertEquals(
+            listOf(
+                FuelixMessage(FuelixRole.USER, "Write a useDebounce hook"),
+                FuelixMessage(FuelixRole.ASSISTANT, FakeFuelixClient.answer(sonnet)),
+                FuelixMessage(FuelixRole.USER, "Add a leading option"),
+                FuelixMessage(FuelixRole.USER, "Now cancel on unmount"),
+            ),
+            fuelix.calls.last().messages,
+        )
     }
 
     @Test
@@ -389,7 +406,7 @@ class RoomForkRepositoryTest {
         assertEquals(fork, chat.send(fork, "and reconnects?"))
         advanceUntilIdle()
         val pair = assertIs<Message.ComparePair>(chat.thread(fork).last())
-        assertEquals(listOf(CannedReplies.replies[0], CannedReplies.alternatives[0]), pair.sides.map { it.blocks })
+        assertEquals(listOf(answer(ModelCatalogue.DEFAULT_MODEL_ID), answer("gpt-5")), pair.sides.map { it.blocks })
     }
 
     private fun message(
@@ -403,7 +420,7 @@ class RoomForkRepositoryTest {
         role = role,
         text = if (role == MessageRole.USER) "why?" else "",
         blocks = blocks,
-        modelId = if (role == MessageRole.USER) null else "gpt5",
+        modelId = if (role == MessageRole.USER) null else "gpt-5",
         status = status,
         latencyMillis = null,
         createdAt = 0,

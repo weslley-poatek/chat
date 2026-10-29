@@ -8,28 +8,20 @@ import kotlin.time.Duration.Companion.milliseconds
 /** The prototype's `words` interval (line 748): one more word of the line shows every 230 ms. */
 val WordInterval: Duration = 230.milliseconds
 
-private val ListeningDuration = 6500.milliseconds
-private val ThinkingDuration = 2400.milliseconds
-private val SpeakingDuration = 7000.milliseconds
+/** How long listening waits with no new word, once some were heard, before it takes them as said. */
+val SilenceAfterSpeech: Duration = 2000.milliseconds
+
+/** The breath between a listen that heard nothing and the next one. */
+val ListenAgainPause: Duration = 500.milliseconds
+
+/** How long speaking stays on the whole reply once its last word shows. */
+private val SpeakingHold = 1000.milliseconds
 
 /**
- * How long the phase lasts unless a tap skips it, the prototype's `schedulePhase` (line 750):
- * listening 6500 ms, thinking 2400 ms, speaking 7000 ms.
+ * How long speaking [reply] lasts unless a tap skips it, on a device that cannot say it: a word
+ * every [WordInterval], then [SpeakingHold] on the whole reply.
  */
-val ChatVoicePhase.duration: Duration
-    get() = when (this) {
-        ChatVoicePhase.Listening -> ListeningDuration
-        ChatVoicePhase.Thinking -> ThinkingDuration
-        ChatVoicePhase.Speaking -> SpeakingDuration
-    }
-
-/** The phase that follows, the prototype's `advancePhase` (line 751): listening, thinking, speaking, listening… */
-val ChatVoicePhase.next: ChatVoicePhase
-    get() = when (this) {
-        ChatVoicePhase.Listening -> ChatVoicePhase.Thinking
-        ChatVoicePhase.Thinking -> ChatVoicePhase.Speaking
-        ChatVoicePhase.Speaking -> ChatVoicePhase.Listening
-    }
+fun speakingDuration(reply: String): Duration = WordInterval * reply.split(' ').size + SpeakingHold
 
 /**
  * The caption under the sphere, the prototype's `voiceTranscript` and `voiceTranscriptRest`
@@ -44,7 +36,7 @@ data class VoiceCaption(val shown: String, val rest: String) {
 
 /**
  * The caption for [phase], [words] words in:
- * - listening: the [exchange]'s transcript, its first [words] words shown and the rest to come;
+ * - listening: the words heard so far, its first [words] shown;
  * - thinking: the whole transcript shown;
  * - speaking: the reply, its first [words] words shown and the rest to come.
  *

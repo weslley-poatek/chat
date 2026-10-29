@@ -91,8 +91,12 @@ class HistoryUiStateTest {
     fun aRowShowsThePinMarkItsTitleItsModelsDotAndShortNameAndItsTime() {
         val pinned = conversation(id = 4, title = "RFC: memory retention", updatedAt = Now - 2.days, pinned = true)
             .toRowUi(now = Now, timeZone = TimeZone.UTC)
-        val gemini = conversation(id = 5, title = "SSE vs WebSocket", updatedAt = Now - 20.hours, modelId = "gemini")
-            .toRowUi(now = Now, timeZone = TimeZone.UTC)
+        val gemini = conversation(
+            id = 5,
+            title = "SSE vs WebSocket",
+            updatedAt = Now - 20.hours,
+            modelId = "gemini-2.5-pro",
+        ).toRowUi(now = Now, timeZone = TimeZone.UTC)
 
         assertEquals(
             HistoryRowUi(
@@ -120,11 +124,16 @@ class HistoryUiStateTest {
 
     @Test
     fun aComparingConversationsRowShowsTheComparedModelAsItsExtraAndOtherRowsNone() {
-        val base = conversation(id = 4, title = "SSE vs WebSocket", updatedAt = Now - 20.hours, modelId = "gemini")
-        val comparing = base.copy(compareOn = true, compareWith = ModelCatalogue["gpt5"])
+        val base = conversation(
+            id = 4,
+            title = "SSE vs WebSocket",
+            updatedAt = Now - 20.hours,
+            modelId = "gemini-2.5-pro",
+        )
+        val comparing = base.copy(compareOn = true, compareWith = ModelCatalogue["gpt-5"])
             .toRowUi(now = Now, timeZone = TimeZone.UTC)
         val pickingSecond = base.copy(compareOn = true).toRowUi(now = Now, timeZone = TimeZone.UTC)
-        val stale = base.copy(compareOn = false, compareWith = ModelCatalogue["gpt5"])
+        val stale = base.copy(compareOn = false, compareWith = ModelCatalogue["gpt-5"])
             .toRowUi(now = Now, timeZone = TimeZone.UTC)
 
         assertEquals("gpt-5", comparing.comparedWith)

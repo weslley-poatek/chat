@@ -19,6 +19,7 @@ internal class LocalChatDataEraser(
         preferences.edit { stored ->
             stored.remove(LocalModelRepository.FavoritesKey)
             stored.remove(LocalModelRepository.DefaultModelKey)
+            stored.remove(LocalModelRepository.ModelIdsKey)
         }
     }
 }

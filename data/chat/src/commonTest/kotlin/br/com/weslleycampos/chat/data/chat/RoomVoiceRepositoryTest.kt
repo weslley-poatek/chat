@@ -5,8 +5,9 @@ import br.com.weslleycampos.chat.core.database.entities.MessageEntity
 import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
 import br.com.weslleycampos.chat.data.chat.fakes.FakeChatDatabase
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient.Companion.PIECE_DELAY
 import br.com.weslleycampos.chat.data.chat.fakes.FakePreferences
-import br.com.weslleycampos.chat.data.chat.fakes.FixedRandom
 import br.com.weslleycampos.chat.data.chat.fakes.TEST_START
 import br.com.weslleycampos.chat.data.chat.fakes.TestClock
 import br.com.weslleycampos.chat.data.chat.models.Block
@@ -17,13 +18,17 @@ import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
+import br.com.weslleycampos.chat.data.chat.models.VoiceAnswer
 import br.com.weslleycampos.chat.data.chat.models.VoiceExchange
 import br.com.weslleycampos.chat.data.chat.models.VoiceSession
 import br.com.weslleycampos.chat.data.chat.models.VoiceTurn
-import br.com.weslleycampos.chat.data.chat.replies.CannedReplies
+import br.com.weslleycampos.chat.data.chat.replies.ReplyPrompts
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
-import br.com.weslleycampos.chat.data.chat.replies.VoiceLines
+import br.com.weslleycampos.chat.data.fuelix.FuelixException
+import br.com.weslleycampos.chat.data.fuelix.FuelixMessage
+import br.com.weslleycampos.chat.data.fuelix.FuelixRole
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -32,6 +37,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -44,28 +50,35 @@ import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Voice mode's data: [RoomVoiceRepository] next to the [RoomChatRepository] it reads through and the
- * [LocalModelRepository] it picks with, on one fake database. Each test plays the Voice screen's
- * phases by hand: [VoiceRepository.saveTranscript] when listening ends, [VoiceRepository.saveReply]
- * when thinking ends, on the test's virtual time.
+ * [LocalModelRepository] it picks with, on one fake database and one fake Fuelix. Each test plays
+ * the Voice screen's phases by hand: [VoiceRepository.saveTranscript] with what was heard when
+ * listening ends, then [VoiceRepository.answer] while thinking, on the test's virtual time.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoomVoiceRepositoryTest {
     private var database = FakeChatDatabase()
     private val preferences = FakePreferences()
+    private val fuelix = FakeFuelixClient()
 
-    private val lines: List<VoiceExchange> = VoiceLines.exchanges
     private val reviewer: Persona = PersonaPresets.personas.single { it.id == "reviewer" }
     private val terse: Persona = PersonaPresets.personas.single { it.id == "terse" }
-    private val sonnet: ChatModel = ModelCatalogue["sonnet"]
-    private val gpt5: ChatModel = ModelCatalogue["gpt5"]
-    private val gemini: ChatModel = ModelCatalogue["gemini"]
+    private val sonnet: ChatModel = ModelCatalogue.default
+    private val gpt5: ChatModel = ModelCatalogue["gpt-5"]
+    private val gemini: ChatModel = ModelCatalogue["gemini-2.5-pro"]
     private val comparing = ModelChoice(model = sonnet, compareOn = true, compareWith = gpt5)
 
-    /** The prototype's `USER_T`, cut to the 40 characters of a title. */
+    /** What the user is heard saying first: the prototype's `USER_T`. */
+    private val heard = "So the debounce hook works, but I also want it to fire on the leading edge of a burst, " +
+        "not just the trailing one."
+
+    /** What the user is heard saying next. */
+    private val heardNext = "And if the component unmounts while the timer is pending?"
+
+    /** [heard] cut to the 40 characters of a title. */
     private val firstTitle = "So the debounce hook works, but I also w"
 
-    /** The thinking phase's length, in ms: what a reply's latency is when no tap skips it. */
-    private val thinking = 2400L
+    /** How long a default answer takes to come whole: its four pieces, 50 ms apart. */
+    private val answering = PIECE_DELAY * FakeFuelixClient.DEFAULT_PIECES
 
     private class Repositories(
         val voice: RoomVoiceRepository,
@@ -73,13 +86,15 @@ class RoomVoiceRepositoryTest {
         val models: ModelRepository,
     )
 
-    /**
-     * Voice, chat and models on [database] and [preferences], as Koin wires them. Typed replies
-     * stream at the slowest pace and shortest thinking time, in the test's own scope.
-     */
+    /** Voice, chat and models on [database], [preferences] and [fuelix], as Koin wires them, in the test's scope. */
     private fun TestScope.repositories(): Repositories {
         val clock = TestClock(testScheduler)
-        val models = LocalModelRepository(personaDao = database.personaDao, preferences = preferences, scope = this)
+        val models = LocalModelRepository(
+            personaDao = database.personaDao,
+            preferences = preferences,
+            fuelix = fuelix,
+            scope = this,
+        )
         val chat = RoomChatRepository(
             conversationDao = database.conversationDao,
             historyDao = database.historyDao,
@@ -87,7 +102,7 @@ class RoomVoiceRepositoryTest {
             compareDao = database.compareDao,
             transactions = database.transactions,
             models = models,
-            streamer = ReplyStreamer(messageDao = database.messageDao, clock = clock, random = FixedRandom()),
+            streamer = ReplyStreamer(messageDao = database.messageDao, fuelix = fuelix, clock = clock),
             clock = clock,
             scope = this,
         )
@@ -97,20 +112,16 @@ class RoomVoiceRepositoryTest {
             conversationDao = database.conversationDao,
             messageDao = database.messageDao,
             transactions = database.transactions,
+            fuelix = fuelix,
             clock = clock,
         )
         return Repositories(voice = voice, chat = chat, models = models)
     }
 
-    /** One whole exchange as the screen plays it: listening ends, then thinking for [thinkingMillis]. */
-    private suspend fun TestScope.exchange(
-        voice: VoiceRepository,
-        conversationId: Long?,
-        thinkingMillis: Long = thinking,
-    ): VoiceTurn {
-        val turn = assertNotNull(voice.saveTranscript(conversationId))
-        advanceTimeBy(thinkingMillis)
-        assertTrue(voice.saveReply(turn))
+    /** One whole exchange as the screen plays it: listening ends on [transcript], then thinking until its answer. */
+    private suspend fun exchange(voice: VoiceRepository, conversationId: Long?, transcript: String = heard): VoiceTurn {
+        val turn = assertNotNull(voice.saveTranscript(conversationId, transcript))
+        assertIs<VoiceAnswer.Spoken>(voice.answer(turn))
         return turn
     }
 
@@ -121,18 +132,23 @@ class RoomVoiceRepositoryTest {
         .filter { it.conversationId == conversationId && it.role == MessageRole.USER }
         .map { it.text }
 
+    /** What [model] answers when nothing else is scripted for it. */
+    private fun answer(model: ChatModel): String = FakeFuelixClient.answer(model.id)
+
+    private fun asUser(text: String) = FuelixMessage(FuelixRole.USER, text)
+
     @Test
-    fun aNewSessionPlaysTheFirstExchangeOnTheDefaultModelFollowsTheDefaultAndSavesNothing() = runTest {
+    fun aNewSessionIsOnTheDefaultModelFollowsTheDefaultAndSavesNothing() = runTest {
         val repositories = repositories()
 
         assertEquals(
-            VoiceSession(conversationId = null, model = ModelCatalogue.default, next = lines[0]),
+            VoiceSession(conversationId = null, model = ModelCatalogue.default),
             repositories.voice.observeSession(null).first(),
         )
         repositories.models.setDefaultModel(gemini)
 
         assertEquals(
-            VoiceSession(conversationId = null, model = gemini, next = lines[0]),
+            VoiceSession(conversationId = null, model = gemini),
             repositories.voice.observeSession(null).first(),
         )
         assertTrue(database.conversationRows.value.isEmpty())
@@ -140,14 +156,14 @@ class RoomVoiceRepositoryTest {
     }
 
     @Test
-    fun theFirstTranscriptCreatesAConversationTitledAfterItOnTheDefaultModel() = runTest {
+    fun theFirstTranscriptIsSavedTrimmedInAConversationTitledAfterItOnTheDefaultModel() = runTest {
         val repositories = repositories()
         val chat = repositories.chat
         repositories.models.setDefaultModel(gemini)
 
-        val turn = assertNotNull(repositories.voice.saveTranscript(null))
+        val turn = assertNotNull(repositories.voice.saveTranscript(null, "  $heard \n"))
 
-        assertEquals(lines[0], turn.exchange)
+        assertEquals(VoiceExchange(transcript = heard), turn.exchange)
         assertEquals(
             Conversation(
                 id = turn.conversationId,
@@ -163,7 +179,7 @@ class RoomVoiceRepositoryTest {
                 Message.User(
                     id = turn.transcriptId,
                     conversationId = turn.conversationId,
-                    text = lines[0].transcript,
+                    text = heard,
                     createdAt = TEST_START,
                 ),
             ),
@@ -172,14 +188,36 @@ class RoomVoiceRepositoryTest {
     }
 
     @Test
+    fun aBlankTranscriptSavesNothing() = runTest {
+        val repositories = repositories()
+        val voice = repositories.voice
+        val id = exchange(voice, conversationId = null).conversationId
+        val updatedAt = repositories.chat.conversation(id).updatedAt
+        advanceTimeBy(1000)
+        val writes = database.writes
+
+        assertNull(voice.saveTranscript(null, ""))
+        assertNull(voice.saveTranscript(null, " \n\t"))
+        assertNull(voice.saveTranscript(id, "  "))
+
+        assertEquals(writes, database.writes)
+        assertEquals(listOf(id), database.conversationRows.value.map { it.id })
+        assertEquals(updatedAt, repositories.chat.conversation(id).updatedAt)
+    }
+
+    @Test
     fun theFirstTranscriptStartsOnThePersonaOrModelPickedBeforeItWithoutCompareAndLeavesTheDefaultAlone() = runTest {
         val repositories = repositories()
         val voice = repositories.voice
         val chat = repositories.chat
 
-        val asReviewer = assertNotNull(voice.saveTranscript(null, newSession = ModelChoice(reviewer)))
+        val asReviewer = assertNotNull(voice.saveTranscript(null, heard, newSession = ModelChoice(reviewer)))
         val compared = assertNotNull(
-            voice.saveTranscript(null, newSession = ModelChoice(model = gemini, compareOn = true, compareWith = gpt5)),
+            voice.saveTranscript(
+                null,
+                heard,
+                newSession = ModelChoice(model = gemini, compareOn = true, compareWith = gpt5),
+            ),
         )
 
         assertEquals(ModelChoice(reviewer), chat.conversation(asReviewer.conversationId).choice)
@@ -190,24 +228,25 @@ class RoomVoiceRepositoryTest {
     }
 
     @Test
-    fun aNewSessionChoiceThatIsNotInTheCatalogueOrNotStoredSavesNothing() = runTest {
+    fun aNewSessionChoiceWithABlankModelOrAPersonaThatIsNotStoredSavesNothing() = runTest {
         val voice = repositories().voice
 
-        assertNull(voice.saveTranscript(null, newSession = ModelChoice(gemini.copy(id = "gemini-1"))))
-        assertNull(voice.saveTranscript(null, newSession = ModelChoice(terse.copy(id = "ghost"))))
+        assertNull(voice.saveTranscript(null, heard, newSession = ModelChoice(gemini.copy(id = " "))))
+        assertNull(voice.saveTranscript(null, heard, newSession = ModelChoice(terse.copy(id = "ghost"))))
 
         assertTrue(database.conversationRows.value.isEmpty())
         assertTrue(database.messageRows.value.isEmpty())
     }
 
     @Test
-    fun theReplyIsSavedDoneAndWholeAsOneParagraphFromTheModelAndPersonaWithTheThinkingTimeAsItsLatency() = runTest {
+    fun theAnswerIsSavedDoneAndWholeFromTheModelAndPersonaWithTheTimeItTookAsItsLatency() = runTest {
         val repositories = repositories()
-        val turn = assertNotNull(repositories.voice.saveTranscript(null, newSession = ModelChoice(reviewer)))
-        advanceTimeBy(thinking)
+        val turn = assertNotNull(repositories.voice.saveTranscript(null, heard, newSession = ModelChoice(reviewer)))
+        fuelix.reply(reviewer.model.id, "Add a leading ", "flag.")
 
-        assertTrue(repositories.voice.saveReply(turn))
+        val answer = repositories.voice.answer(turn)
 
+        assertEquals(VoiceAnswer.Spoken("Add a leading flag."), answer)
         val messages = repositories.chat.observeMessages(turn.conversationId).first()
         assertEquals(2, messages.size)
         assertEquals(
@@ -216,9 +255,9 @@ class RoomVoiceRepositoryTest {
                 conversationId = turn.conversationId,
                 model = reviewer.model,
                 persona = reviewer,
-                blocks = listOf(Block.Paragraph(lines[0].reply)),
+                blocks = listOf(Block.Paragraph("Add a leading flag.")),
                 status = ReplyStatus.DONE,
-                latency = thinking.milliseconds,
+                latency = PIECE_DELAY * 2,
                 createdAt = TEST_START,
             ),
             messages.last(),
@@ -228,42 +267,111 @@ class RoomVoiceRepositoryTest {
     }
 
     @Test
-    fun aTapThatSkipsThinkingSavesTheReplyWithTheShorterThinkingTime() = runTest {
-        val repositories = repositories()
+    fun theAnswerAsksTheConversationsModelWithTheVoicePromptThePersonasPromptAndTheConversationSoFar() = runTest {
+        val voice = repositories().voice
+        exchange(voice, conversationId = null)
+        val asReviewer = assertNotNull(voice.saveTranscript(null, heard, newSession = ModelChoice(reviewer)))
+        voice.answer(asReviewer)
+        exchange(voice, conversationId = asReviewer.conversationId, transcript = heardNext)
 
-        val turn = exchange(repositories.voice, conversationId = null, thinkingMillis = 900)
-
-        val reply = repositories.chat.observeMessages(turn.conversationId).first().last()
-        assertEquals(900.milliseconds, assertIs<Message.Assistant>(reply).latency)
-    }
-
-    @Test
-    fun exchangesRotateThroughTheLinesAndTheSessionMovesOnAsSoonAsListeningEnds() = runTest {
-        val repositories = repositories()
-        val voice = repositories.voice
-        val id = exchange(voice, conversationId = null).conversationId
-
-        val played = (1..lines.size).map {
-            val next = assertNotNull(voice.observeSession(id).first()).next
-            val turn = assertNotNull(voice.saveTranscript(id))
-            assertEquals(next, turn.exchange)
-            assertEquals(VoiceLines.next(exchangesSoFar = it + 1), voice.observeSession(id).first()?.next)
-            advanceTimeBy(thinking)
-            assertTrue(voice.saveReply(turn))
-            turn.exchange
-        }
-
-        assertEquals(lines.drop(1) + lines[0], played)
-        val thread = repositories.chat.observeMessages(id).first()
-        assertEquals((lines + lines[0]).map { it.transcript }, thread.filterIsInstance<Message.User>().map { it.text })
+        val (alone, persona, followUp) = fuelix.calls
+        assertEquals(sonnet.id, alone.model)
+        assertEquals(listOf(FuelixMessage(FuelixRole.SYSTEM, ReplyPrompts.VOICE_PROMPT), asUser(heard)), alone.messages)
+        val prompt = FuelixMessage(FuelixRole.SYSTEM, ReplyPrompts.VOICE_PROMPT + "\n\n" + reviewer.prompt)
+        assertEquals(reviewer.model.id, persona.model)
+        assertEquals(listOf(prompt, asUser(heard)), persona.messages)
         assertEquals(
-            (lines + lines[0]).map { listOf(Block.Paragraph(it.reply)) },
-            thread.filterIsInstance<Message.Assistant>().map { it.blocks },
+            listOf(
+                prompt,
+                asUser(heard),
+                FuelixMessage(FuelixRole.ASSISTANT, answer(reviewer.model)),
+                asUser(heardNext),
+            ),
+            followUp.messages,
         )
     }
 
     @Test
-    fun theSessionEmitsWhenATranscriptIsSavedOrTheChoiceChangesButNotForTheReply() = runTest {
+    fun theSpokenAnswerHasItsWordsOneSpaceApartAndIsSavedAsTheModelWroteIt() = runTest {
+        val repositories = repositories()
+        val turn = assertNotNull(repositories.voice.saveTranscript(null, heard))
+        fuelix.reply(sonnet.id, "  Add a  leading\n", "flag,\tthen wait.  ")
+
+        val answer = repositories.voice.answer(turn)
+
+        assertEquals(VoiceAnswer.Spoken("Add a leading flag, then wait."), answer)
+        val reply = assertIs<Message.Assistant>(repositories.chat.observeMessages(turn.conversationId).first().last())
+        assertEquals(listOf(Block.Paragraph("Add a  leading\nflag,\tthen wait.")), reply.blocks)
+    }
+
+    @Test
+    fun aFailedAnswerSavesNothingAndTheTurnCanBeAnsweredAgain() = runTest {
+        val voice = repositories().voice
+        val turn = assertNotNull(voice.saveTranscript(null, heard))
+        fuelix.reply(sonnet.id, failure = FuelixException.MissingKey())
+        fuelix.reply(sonnet.id, "Add a ", failure = FuelixException.KeyRefused())
+
+        assertEquals(VoiceAnswer.Failed(ReplyFailure.NO_KEY), voice.answer(turn))
+        assertEquals(VoiceAnswer.Failed(ReplyFailure.KEY_REFUSED), voice.answer(turn))
+
+        assertEquals(listOf(heard), userTexts(turn.conversationId))
+        assertEquals(1, database.messageRows.value.size)
+        assertTrue(database.unfinishedMessages().isEmpty())
+        assertEquals(VoiceAnswer.Spoken(answer(sonnet)), voice.answer(turn))
+        assertEquals(2, database.messageRows.value.size)
+    }
+
+    @Test
+    fun anEmptyAnswerFailsAndSavesNothing() = runTest {
+        val voice = repositories().voice
+        val turn = assertNotNull(voice.saveTranscript(null, heard))
+        fuelix.reply(sonnet.id)
+        fuelix.reply(sonnet.id, " ", "\n\t")
+
+        assertEquals(VoiceAnswer.Failed(ReplyFailure.FAILED), voice.answer(turn))
+        assertEquals(VoiceAnswer.Failed(ReplyFailure.FAILED), voice.answer(turn))
+
+        assertEquals(1, database.messageRows.value.size)
+    }
+
+    @Test
+    fun anAnswerCancelledWhileThinkingSavesNothingAndLeavesNothingUnfinished() = runTest {
+        val voice = repositories().voice
+        val turn = assertNotNull(voice.saveTranscript(null, heard))
+        val thinking = launch { voice.answer(turn) }
+        advanceTimeBy(PIECE_DELAY * 2.5)
+
+        thinking.cancel()
+        runCurrent()
+
+        assertEquals(listOf(heard), userTexts(turn.conversationId))
+        assertEquals(1, database.messageRows.value.size)
+        assertTrue(database.unfinishedMessages().isEmpty())
+        assertEquals(VoiceAnswer.Spoken(answer(sonnet)), voice.answer(turn))
+    }
+
+    @Test
+    fun eachTranscriptIsSavedAsHeardAndAnsweredInTurn() = runTest {
+        val repositories = repositories()
+        val voice = repositories.voice
+        val transcripts = listOf(heard, heardNext, "Last thing. How would you test it?")
+        val id = exchange(voice, conversationId = null, transcript = transcripts[0]).conversationId
+
+        val turns = transcripts.drop(1).map { exchange(voice, conversationId = id, transcript = it) }
+
+        assertEquals(transcripts.drop(1).map { VoiceExchange(transcript = it) }, turns.map { it.exchange })
+        assertEquals(List(2) { id }, turns.map { it.conversationId })
+        val thread = repositories.chat.observeMessages(id).first()
+        assertEquals(transcripts, thread.filterIsInstance<Message.User>().map { it.text })
+        assertEquals(
+            List(transcripts.size) { listOf(Block.Paragraph(answer(sonnet))) },
+            thread.filterIsInstance<Message.Assistant>().map { it.blocks },
+        )
+        assertEquals(listOf(firstTitle), repositories.chat.observeHistory().first().map { it.title })
+    }
+
+    @Test
+    fun theSessionEmitsWhenTheChoiceChangesButNotForATranscriptOrAnAnswer() = runTest {
         val repositories = repositories()
         val voice = repositories.voice
         val first = exchange(voice, conversationId = null)
@@ -273,30 +381,22 @@ class RoomVoiceRepositoryTest {
         }
         advanceUntilIdle()
 
-        val turn = assertNotNull(voice.saveTranscript(first.conversationId))
+        val turn = assertNotNull(voice.saveTranscript(first.conversationId, heardNext))
         advanceUntilIdle()
-        assertTrue(voice.saveReply(turn))
+        assertIs<VoiceAnswer.Spoken>(voice.answer(turn))
         advanceUntilIdle()
         assertTrue(voice.choose(first.conversationId, ModelChoice(reviewer)))
         advanceUntilIdle()
 
-        val session = VoiceSession(
-            conversationId = first.conversationId,
-            model = ModelCatalogue.default,
-            next = lines[1],
-        )
+        val session = VoiceSession(conversationId = first.conversationId, model = ModelCatalogue.default)
         assertEquals(
-            listOf<VoiceSession?>(
-                session,
-                session.copy(next = lines[2]),
-                session.copy(model = reviewer.model, persona = reviewer, next = lines[2]),
-            ),
+            listOf<VoiceSession?>(session, session.copy(model = reviewer.model, persona = reviewer)),
             sessions,
         )
     }
 
     @Test
-    fun aTypedConversationGoesOnInVoiceFromItsExchangesAndMovesToTheTopOfHistory() = runTest {
+    fun aTypedConversationGoesOnInVoiceAndMovesToTheTopOfHistory() = runTest {
         val repositories = repositories()
         val chat = repositories.chat
         val typed = assertNotNull(chat.send(null, "why is my debounce stale?"))
@@ -307,16 +407,30 @@ class RoomVoiceRepositoryTest {
         advanceUntilIdle()
         assertEquals(listOf(newer, typed), chat.observeHistory().first().map { it.id })
 
-        assertEquals(lines[2], repositories.voice.observeSession(typed).first()?.next)
-        val turn = exchange(repositories.voice, conversationId = typed)
+        val session = repositories.voice.observeSession(typed).first()
+        assertEquals(VoiceSession(conversationId = typed, model = sonnet), session)
+        val turn = assertNotNull(repositories.voice.saveTranscript(typed, heard))
+        val listeningEnded = currentTime
+        assertIs<VoiceAnswer.Spoken>(repositories.voice.answer(turn))
 
         assertEquals(typed, turn.conversationId)
-        assertEquals(lines[2], turn.exchange)
+        assertEquals(VoiceExchange(transcript = heard), turn.exchange)
         assertEquals(listOf(typed, newer), chat.observeHistory().first().map { it.id })
         val conversation = chat.conversation(typed)
         assertEquals("why is my debounce stale?", conversation.title)
-        assertEquals(TEST_START + (currentTime - thinking).milliseconds, conversation.updatedAt)
-        assertEquals(listOf("why is my debounce stale?", "and the shell one?", lines[2].transcript), userTexts(typed))
+        assertEquals(TEST_START + listeningEnded.milliseconds, conversation.updatedAt)
+        assertEquals(listOf("why is my debounce stale?", "and the shell one?", heard), userTexts(typed))
+        assertEquals(
+            listOf(
+                FuelixMessage(FuelixRole.SYSTEM, ReplyPrompts.VOICE_PROMPT),
+                asUser("why is my debounce stale?"),
+                FuelixMessage(FuelixRole.ASSISTANT, answer(sonnet)),
+                asUser("and the shell one?"),
+                FuelixMessage(FuelixRole.ASSISTANT, answer(sonnet)),
+                asUser(heard),
+            ),
+            fuelix.calls.last().messages,
+        )
     }
 
     @Test
@@ -326,22 +440,25 @@ class RoomVoiceRepositoryTest {
         assertTrue(repositories.chat.archive(id))
         assertTrue(repositories.chat.observeHistory().first().isEmpty())
 
-        assertNotNull(repositories.voice.saveTranscript(id))
+        assertNotNull(repositories.voice.saveTranscript(id, heardNext))
 
         assertEquals(listOf(id), repositories.chat.observeHistory().first().map { it.id })
         assertFalse(repositories.chat.conversation(id).archived)
     }
 
     @Test
-    fun aVoiceConversationReopenedAfterARestartGoesOnWithTheRotation() = runTest {
+    fun aVoiceConversationReopenedAfterARestartGoesOnFromItsExchanges() = runTest {
         val before = repositories()
         val id = exchange(before.voice, conversationId = null).conversationId
-        exchange(before.voice, conversationId = id)
 
         val after = repositories()
 
-        assertEquals(lines[2], after.voice.observeSession(id).first()?.next)
-        assertEquals(lines[2], assertNotNull(after.voice.saveTranscript(id)).exchange)
+        assertEquals(VoiceSession(conversationId = id, model = sonnet), after.voice.observeSession(id).first())
+        exchange(after.voice, conversationId = id, transcript = heardNext)
+        assertEquals(
+            listOf(asUser(heard), FuelixMessage(FuelixRole.ASSISTANT, answer(sonnet)), asUser(heardNext)),
+            fuelix.calls.last().messages.drop(1),
+        )
     }
 
     @Test
@@ -349,23 +466,18 @@ class RoomVoiceRepositoryTest {
         val repositories = repositories()
         val voice = repositories.voice
         val chat = repositories.chat
-        val ended = assertNotNull(voice.saveTranscript(null))
+        val ended = assertNotNull(voice.saveTranscript(null, heard))
         advanceTimeBy(1000)
 
         val id = ended.conversationId
-        assertEquals(
-            listOf(lines[0].transcript),
-            chat.observeMessages(id).first().map { assertIs<Message.User>(it).text },
-        )
+        assertEquals(listOf(heard), chat.observeMessages(id).first().map { assertIs<Message.User>(it).text })
         assertTrue(database.unfinishedMessages().isEmpty())
         assertEquals(listOf(id), chat.observeHistory().first().map { it.id })
 
-        assertEquals(lines[1], voice.observeSession(id).first()?.next)
-        val next = exchange(voice, conversationId = id)
-        assertEquals(lines[1], next.exchange)
-        assertFalse(voice.saveReply(ended))
+        exchange(voice, conversationId = id, transcript = heardNext)
+        assertEquals(VoiceAnswer.Dropped, voice.answer(ended))
         assertEquals(
-            listOf(lines[0].transcript, lines[1].transcript, lines[1].reply),
+            listOf(heard, heardNext, answer(sonnet)),
             chat.observeMessages(id).first().map {
                 when (it) {
                     is Message.User -> it.text
@@ -381,38 +493,44 @@ class RoomVoiceRepositoryTest {
     fun aSessionEndedWhileSpeakingKeepsTheReplyWholeAndATurnIsAnsweredOnlyOnce() = runTest {
         val repositories = repositories()
         val voice = repositories.voice
-        val turn = assertNotNull(voice.saveTranscript(null))
-        advanceTimeBy(thinking)
-        assertTrue(voice.saveReply(turn))
+        val turn = exchange(voice, conversationId = null)
         // Speaking has revealed a few words when the session ends; the reply is already saved whole.
         advanceTimeBy(1000)
+        val calls = fuelix.calls.size
 
-        assertFalse(voice.saveReply(turn))
+        assertEquals(VoiceAnswer.Dropped, voice.answer(turn))
 
         val replies = repositories.chat.observeMessages(turn.conversationId).first()
             .filterIsInstance<Message.Assistant>()
-        assertEquals(listOf(listOf(Block.Paragraph(lines[0].reply))), replies.map { it.blocks })
+        assertEquals(listOf(listOf(Block.Paragraph(answer(sonnet)))), replies.map { it.blocks })
         assertEquals(ReplyStatus.DONE, replies.single().status)
+        assertEquals(answering, replies.single().latency)
         assertTrue(database.unfinishedMessages().isEmpty())
+        assertEquals(calls, fuelix.calls.size)
     }
 
     @Test
-    fun aTurnIsNotAnsweredAfterATypedMessageOrOnceItsConversationIsGone() = runTest {
+    fun aTurnIsDroppedWithoutAskingFuelixAfterATypedMessageOrOnceItsConversationIsGone() = runTest {
         val repositories = repositories()
         val voice = repositories.voice
         val chat = repositories.chat
         val id = exchange(voice, conversationId = null).conversationId
 
-        val overtaken = assertNotNull(voice.saveTranscript(id))
+        val overtaken = assertNotNull(voice.saveTranscript(id, heardNext))
         assertEquals(id, chat.send(id, "typed instead"))
         advanceUntilIdle()
-        assertFalse(voice.saveReply(overtaken))
-        assertFalse(voice.saveReply(overtaken.copy(transcriptId = database.messageRows.value.last().id)))
+        val calls = fuelix.calls.size
+        assertEquals(VoiceAnswer.Dropped, voice.answer(overtaken))
+        assertEquals(
+            VoiceAnswer.Dropped,
+            voice.answer(overtaken.copy(transcriptId = database.messageRows.value.last().id)),
+        )
 
-        val orphan = assertNotNull(voice.saveTranscript(id))
+        val orphan = assertNotNull(voice.saveTranscript(id, heardNext))
         assertTrue(chat.delete(id))
-        assertFalse(voice.saveReply(orphan))
+        assertEquals(VoiceAnswer.Dropped, voice.answer(orphan))
         assertTrue(database.messageRows.value.isEmpty())
+        assertEquals(calls, fuelix.calls.size)
     }
 
     @Test
@@ -421,21 +539,21 @@ class RoomVoiceRepositoryTest {
         val voice = repositories.voice
         val id = assertNotNull(repositories.chat.send(null, "typed first"))
 
-        assertNull(voice.saveTranscript(id))
-        advanceTimeBy(400)
+        assertNull(voice.saveTranscript(id, heard))
+        advanceTimeBy(PIECE_DELAY * 1.5)
         assertEquals(MessageStatus.STREAMING, database.messageRows.value.last().status)
-        assertNull(voice.saveTranscript(id))
+        assertNull(voice.saveTranscript(id, heard))
         assertEquals(listOf("typed first"), userTexts(id))
 
         advanceUntilIdle()
-        assertEquals(lines[1], assertNotNull(voice.saveTranscript(id)).exchange)
+        assertEquals(VoiceExchange(transcript = heard), assertNotNull(voice.saveTranscript(id, heard)).exchange)
     }
 
     @Test
     fun aReplyAnEarlierRunLeftThinkingDoesNotHoldUpTheFirstTranscript() = runTest {
         database = FakeChatDatabase(
             conversations = listOf(
-                ConversationEntity(id = 1, title = "left open", modelId = "gpt5", createdAt = 0, updatedAt = 0),
+                ConversationEntity(id = 1, title = "left open", modelId = gpt5.id, createdAt = 0, updatedAt = 0),
             ),
             messages = listOf(
                 message(id = 1, role = MessageRole.USER, status = MessageStatus.DONE),
@@ -444,9 +562,9 @@ class RoomVoiceRepositoryTest {
         )
         val voice = repositories().voice
 
-        val turn = assertNotNull(voice.saveTranscript(1))
+        val turn = assertNotNull(voice.saveTranscript(1, heardNext))
 
-        assertEquals(lines[1], turn.exchange)
+        assertEquals(VoiceExchange(transcript = heardNext), turn.exchange)
         assertEquals(MessageStatus.INTERRUPTED, database.message(2).status)
     }
 
@@ -456,15 +574,17 @@ class RoomVoiceRepositoryTest {
         val voice = repositories.voice
 
         assertNull(voice.observeSession(42).first())
-        assertNull(voice.saveTranscript(42))
-        assertFalse(voice.saveReply(VoiceTurn(conversationId = 42, transcriptId = 1, exchange = lines[0])))
+        assertNull(voice.saveTranscript(42, heard))
+        val nowhere = VoiceTurn(conversationId = 42, transcriptId = 1, exchange = VoiceExchange(transcript = heard))
+        assertEquals(VoiceAnswer.Dropped, voice.answer(nowhere))
         assertTrue(database.conversationRows.value.isEmpty())
+        assertTrue(fuelix.calls.isEmpty())
 
         val id = exchange(voice, conversationId = null).conversationId
         assertTrue(repositories.chat.delete(id))
 
         assertNull(voice.observeSession(id).first())
-        assertNull(voice.saveTranscript(id))
+        assertNull(voice.saveTranscript(id, heardNext))
         assertTrue(database.conversationRows.value.isEmpty())
     }
 
@@ -479,13 +599,18 @@ class RoomVoiceRepositoryTest {
         assertEquals(listOf(id), chat.observeRecentConversations().first().map { it.id })
         assertEquals(listOf(id), chat.observeHistory("leading edge").first().map { it.id })
         val thread = chat.observeMessages(id).first()
-        assertEquals(lines[0].transcript, assertIs<Message.User>(thread[0]).text)
+        assertEquals(heard, assertIs<Message.User>(thread[0]).text)
         assertEquals(ReplyStatus.DONE, assertIs<Message.Assistant>(thread[1]).status)
 
         assertEquals(id, chat.send(id, "and in text?"))
         advanceUntilIdle()
 
-        assertEquals(CannedReplies.replies[1], (chat.observeMessages(id).first().last() as Message.Assistant).blocks)
+        val typed = assertIs<Message.Assistant>(chat.observeMessages(id).first().last())
+        assertEquals(listOf(Block.Paragraph(answer(sonnet))), typed.blocks)
+        assertEquals(
+            listOf(asUser(heard), FuelixMessage(FuelixRole.ASSISTANT, answer(sonnet)), asUser("and in text?")),
+            fuelix.calls.last().messages,
+        )
     }
 
     @Test
@@ -500,17 +625,15 @@ class RoomVoiceRepositoryTest {
         assertTrue(database.conversationRows.value.isEmpty())
         val turn = exchange(voice, conversationId = null)
         assertEquals(gemini, repositories.chat.conversation(turn.conversationId).model)
+        assertEquals(gemini.id, fuelix.calls.last().model)
         val typed = assertNotNull(repositories.chat.send(null, "a new chat"))
         assertEquals(gemini, repositories.chat.conversation(typed).model)
 
         assertTrue(voice.choose(null, ModelChoice(terse)))
 
         assertEquals(terse.model, repositories.models.observeDefaultModel().first())
-        assertEquals(
-            VoiceSession(conversationId = null, model = gpt5, next = lines[0]),
-            voice.observeSession(null).first(),
-        )
-        val withPersona = assertNotNull(voice.saveTranscript(null, newSession = ModelChoice(terse)))
+        assertEquals(VoiceSession(conversationId = null, model = gpt5), voice.observeSession(null).first())
+        val withPersona = assertNotNull(voice.saveTranscript(null, heard, newSession = ModelChoice(terse)))
         assertEquals(ModelChoice(terse), repositories.chat.conversation(withPersona.conversationId).choice)
     }
 
@@ -537,16 +660,16 @@ class RoomVoiceRepositoryTest {
     }
 
     @Test
-    fun aChoiceThatIsNotInTheCatalogueNotStoredOrForAConversationThatIsNotThereChangesNothing() = runTest {
+    fun aChoiceWithABlankModelNotStoredOrForAConversationThatIsNotThereChangesNothing() = runTest {
         val repositories = repositories()
         val voice = repositories.voice
         val id = exchange(voice, conversationId = null).conversationId
-        val retired = ModelChoice(gemini.copy(id = "gemini-1"))
+        val blank = ModelChoice(gemini.copy(id = " "))
         val ghost = ModelChoice(terse.copy(id = "ghost"))
 
-        assertFalse(voice.choose(null, retired))
+        assertFalse(voice.choose(null, blank))
         assertFalse(voice.choose(null, ghost))
-        assertFalse(voice.choose(id, retired))
+        assertFalse(voice.choose(id, blank))
         assertFalse(voice.choose(id, ghost))
         assertFalse(voice.choose(42, ModelChoice(gemini)))
 
@@ -561,6 +684,7 @@ class RoomVoiceRepositoryTest {
         val chat = repositories.chat
         val id = assertNotNull(chat.send(null, "compare these", newChat = comparing))
         advanceUntilIdle()
+        val calls = fuelix.calls.size
 
         val session = assertNotNull(repositories.voice.observeSession(id).first())
         exchange(repositories.voice, conversationId = id)
@@ -570,6 +694,7 @@ class RoomVoiceRepositoryTest {
         val reply = assertIs<Message.Assistant>(chat.observeMessages(id).first().last())
         assertEquals(sonnet, reply.model)
         assertEquals(gpt5, chat.conversation(id).comparing)
+        assertEquals(listOf(sonnet.id), fuelix.calls.drop(calls).map { it.model })
     }
 
     @Test
@@ -577,7 +702,7 @@ class RoomVoiceRepositoryTest {
         val repositories = repositories()
 
         val id = exchange(repositories.voice, conversationId = null).conversationId
-        exchange(repositories.voice, conversationId = id)
+        exchange(repositories.voice, conversationId = id, transcript = heardNext)
 
         // The conversation, the transcript and the reply; then the move to the top, the transcript and the reply.
         assertEquals(6, database.writes)
@@ -590,7 +715,7 @@ class RoomVoiceRepositoryTest {
         role = role,
         text = if (role == MessageRole.USER) "hi" else "",
         blocks = emptyList(),
-        modelId = if (role == MessageRole.USER) null else "gpt5",
+        modelId = if (role == MessageRole.USER) null else gpt5.id,
         status = status,
         latencyMillis = null,
         createdAt = 0,

@@ -4,12 +4,19 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
+import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
 import br.com.weslleycampos.chat.core.ui.components.ChatVoicePhase
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
+import br.com.weslleycampos.chat.data.chat.models.VoiceAnswer
+import br.com.weslleycampos.chat.data.chat.models.VoiceExchange
 import br.com.weslleycampos.chat.data.chat.models.VoiceTurn
+import br.com.weslleycampos.chat.feature.chat.toast
+import br.com.weslleycampos.chat.feature.voice.speech.SpeechProblem
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -20,13 +27,22 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
+/** What the user says first, four words: heard whole [SpokenWord] × 4 in. */
+private const val Question = "so the hook works"
+
+/** What the user says next. */
+private const val FollowUp = "what about unmount"
+
 /**
- * Voice's phase machine on `VoiceViewModel`: the phases and their times, the words, taps, and what
- * each phase saves.
+ * Voice's phase machine on `VoiceViewModel`, on the fakes' speech, once something was heard: thinking
+ * for as long as Fuelix takes, speaking for as long as the device says the reply, a reply Fuelix could
+ * not give, and the screen leaving. Listening is `VoiceViewModelListeningTest`'s.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceViewModelTest {
@@ -38,18 +54,25 @@ class VoiceViewModelTest {
     @AfterTest
     fun tearDown() = Dispatchers.resetMain()
 
+    /** The view model on its fakes, resumed unless [start] is `false`. */
     private fun TestScope.voiceViewModel(
         voices: FakeVoiceRepository = FakeVoiceRepository(),
+        input: FakeSpeechInput = FakeSpeechInput(),
+        output: FakeSpeechOutput = FakeSpeechOutput(),
         entry: VoiceEntry = VoiceEntry(),
+        start: Boolean = true,
     ): VoiceViewModel {
         val viewModel = VoiceViewModel(
             entry = entry,
             navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(entry) }),
             voices = voices,
             models = FakeModelRepository(),
+            input = input,
+            output = output,
         )
         runCurrent()
-        started.add(viewModel).onStart()
+        started.add(viewModel)
+        if (start) viewModel.onStart()
         runCurrent()
         return viewModel
     }
@@ -59,271 +82,431 @@ class VoiceViewModelTest {
         runCurrent()
     }
 
+    private fun TestScope.tap(viewModel: VoiceViewModel) {
+        viewModel.onSphereTap()
+        runCurrent()
+    }
+
     private val VoiceViewModel.state: VoiceUiState get() = uiState.value
 
-    @Test
-    fun listeningLasts6500MsThinking2400MsAndSpeaking7000MsThenListeningAgainForever() = started.runTest {
-        val viewModel = voiceViewModel()
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+    /** From the start to the first reply being spoken: [Question] heard, then Fuelix's time. */
+    private val toSpeaking: Duration = spokenTime(Question) + AnswerTime
 
-        advance(6499.milliseconds)
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-        advance(1.milliseconds)
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-
-        advance(2399.milliseconds)
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-        advance(1.milliseconds)
-        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
-
-        advance(6999.milliseconds)
-        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
-        advance(1.milliseconds)
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-
-        // And round again, with the same times.
-        advance(6500.milliseconds)
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-        advance(2400.milliseconds)
-        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
-        advance(7000.milliseconds)
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-    }
+    // Thinking
 
     @Test
-    fun aWordShowsEvery230MsAndEachPhaseStartsAgainFromNone() = started.runTest {
-        val viewModel = voiceViewModel()
-        assertEquals(0, viewModel.state.words)
-        assertEquals(VoiceCaption(shown = "", rest = "so the hook works"), viewModel.state.caption)
-
-        advance(229.milliseconds)
-        assertEquals(0, viewModel.state.words)
-        advance(1.milliseconds)
-        assertEquals(1, viewModel.state.words)
-        advance(230.milliseconds)
-        assertEquals(2, viewModel.state.words)
-        assertEquals(VoiceCaption(shown = "so the", rest = " hook works"), viewModel.state.caption)
-
-        // 28 words by 6440 ms, then thinking starts at 6500 with none.
-        advance(5980.milliseconds)
-        assertEquals(28, viewModel.state.words)
-        advance(60.milliseconds)
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-        assertEquals(0, viewModel.state.words)
-        advance(230.milliseconds)
-        assertEquals(1, viewModel.state.words)
-
-        // Speaking reveals the reply from its first word.
-        advance(2170.milliseconds)
-        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
-        assertEquals(VoiceCaption(shown = "", rest = "add a leading flag"), viewModel.state.caption)
-        advance(690.milliseconds)
-        assertEquals(VoiceCaption(shown = "add a leading", rest = " flag"), viewModel.state.caption)
-    }
-
-    @Test
-    fun aTapEndsThePhaseAtOnceAndTheNextOneGetsItsWholeTime() = started.runTest {
-        val viewModel = voiceViewModel()
-        advance(1000.milliseconds)
-
-        viewModel.onSphereTap()
-        runCurrent()
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-        assertEquals(0, viewModel.state.words)
-
-        advance(2399.milliseconds)
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-        advance(1.milliseconds)
-        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
-
-        advance(460.milliseconds)
-        assertEquals(2, viewModel.state.words)
-        viewModel.onSphereTap()
-        runCurrent()
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-        assertEquals(0, viewModel.state.words)
-        advance(6499.milliseconds)
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-        advance(1.milliseconds)
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-    }
-
-    @Test
-    fun theTranscriptIsSavedWhenListeningEndsAndTheReplyWhenThinkingEnds() = started.runTest {
+    fun theTranscriptIsSavedAsListeningEndsAndThinkingLastsUntilTheReplyArrives() = started.runTest {
         val voices = FakeVoiceRepository()
-        val viewModel = voiceViewModel(voices = voices)
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(
+            voices = voices,
+            input = FakeSpeechInput().apply { says(Question) },
+            output = output,
+        )
 
-        advance(6499.milliseconds)
-        assertEquals(emptyList(), voices.transcripts)
-        advance(1.milliseconds)
-        assertEquals(listOf<Pair<Long?, ModelChoice?>>(null to null), voices.transcripts)
+        advance(spokenTime(Question))
+        val turn = VoiceTurn(conversationId = 1, transcriptId = 100, exchange = VoiceExchange(transcript = Question))
+        assertEquals(listOf(turn), voices.asked)
+        assertEquals(1L, viewModel.state.conversationId)
+        advance(AnswerTime - 1.milliseconds)
+        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
         assertEquals(emptyList(), voices.replies)
+        assertEquals(emptyList(), output.texts)
 
-        advance(2399.milliseconds)
-        assertEquals(emptyList(), voices.replies)
         advance(1.milliseconds)
-        assertEquals(listOf(VoiceTurn(conversationId = 1, transcriptId = 100, exchange = Exchanges[0])), voices.replies)
-
-        // Speaking saves nothing more.
-        advance(6999.milliseconds)
-        assertEquals(1, voices.transcripts.size)
-        assertEquals(1, voices.replies.size)
+        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
+        assertEquals(listOf(turn), voices.replies)
+        assertEquals(VoiceExchange(transcript = Question, reply = Replies[0]), viewModel.state.exchange)
     }
 
     @Test
-    fun aTapThatEndsListeningOrThinkingSavesWhatTheTimerWould() = started.runTest {
-        val voices = FakeVoiceRepository()
-        val viewModel = voiceViewModel(voices = voices)
-        advance(800.milliseconds)
+    fun thinkingWaitsForTheReplyHoweverLongItTakes() = started.runTest {
+        val reply = CompletableDeferred<VoiceAnswer>()
+        val voices = FakeVoiceRepository().apply { answerScript = { reply.await() } }
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(
+            voices = voices,
+            input = FakeSpeechInput().apply { says(Question) },
+            output = output,
+        )
+        advance(spokenTime(Question))
 
-        viewModel.onSphereTap()
-        runCurrent()
-        assertEquals(listOf<Pair<Long?, ModelChoice?>>(null to null), voices.transcripts)
-        assertEquals(emptyList(), voices.replies)
+        advance(60_000.milliseconds)
+        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
+        assertEquals(VoiceCaption(shown = Question, rest = ""), viewModel.state.caption)
 
-        advance(300.milliseconds)
-        viewModel.onSphereTap()
+        reply.complete(VoiceAnswer.Spoken("ok then"))
         runCurrent()
         assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
-        assertEquals(listOf(VoiceTurn(conversationId = 1, transcriptId = 100, exchange = Exchanges[0])), voices.replies)
-
-        // Skipping speaking saves nothing: the reply is already whole.
-        viewModel.onSphereTap()
-        runCurrent()
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-        assertEquals(1, voices.transcripts.size)
-        assertEquals(1, voices.replies.size)
+        assertEquals(listOf("ok then"), output.texts)
     }
 
     @Test
-    fun theFirstTranscriptMovesTheSessionToTheConversationItCreated() = started.runTest {
+    fun tapsWhileThinkingAreIgnoredAndNotCarriedIntoSpeaking() = started.runTest {
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(input = FakeSpeechInput().apply { says(Question) }, output = output)
+        advance(spokenTime(Question) + 1000.milliseconds)
+
+        tap(viewModel)
+        tap(viewModel)
+        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
+
+        advance(AnswerTime - 1000.milliseconds)
+        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
+        advance(spokenTime(Replies[0]) - 1.milliseconds)
+        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
+        assertEquals(0, output.cancellations)
+        advance(1.milliseconds)
+        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+    }
+
+    @Test
+    fun aTranscriptThatIsNotSavedAsksForNoReplyAndListensAgain() = started.runTest {
+        val voices = FakeVoiceRepository().apply { refuseTranscripts = true }
+        val input = FakeSpeechInput().apply { says(Question) }
+        val viewModel = voiceViewModel(voices = voices, input = input)
+
+        advance(spokenTime(Question))
+
+        assertEquals(listOf(Question), voices.transcripts.map { it.text })
+        assertEquals(emptyList(), voices.asked)
+        assertNull(viewModel.state.conversationId)
+        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+        assertEquals(VoiceCaption.Empty, viewModel.state.caption)
+        assertEquals(2, input.listens)
+    }
+
+    @Test
+    fun aReplyThatIsDroppedListensAgain() = started.runTest {
+        val voices = FakeVoiceRepository().apply {
+            answerScript = {
+                delay(1000.milliseconds)
+                VoiceAnswer.Dropped
+            }
+        }
+        val input = FakeSpeechInput().apply { says(Question) }
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(voices = voices, input = input, output = output)
+        advance(spokenTime(Question))
+
+        advance(1000.milliseconds - 1.milliseconds)
+        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
+        advance(1.milliseconds)
+
+        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+        assertEquals(VoiceCaption.Empty, viewModel.state.caption)
+        assertEquals(2, input.listens)
+        assertEquals(emptyList(), output.texts)
+        assertNull(viewModel.state.toast)
+    }
+
+    @Test
+    fun theFirstTranscriptMovesTheSessionToTheConversationItCreatedAndTheNextOneSavesThere() = started.runTest {
         val voices = FakeVoiceRepository()
-        val viewModel = voiceViewModel(voices = voices)
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(
+            voices = voices,
+            input = FakeSpeechInput().apply {
+                says(Question)
+                says(FollowUp)
+            },
+            output = output,
+        )
         assertNull(viewModel.state.conversationId)
 
-        advance(6500.milliseconds)
+        advance(spokenTime(Question))
         assertEquals(1L, viewModel.state.conversationId)
-
-        // The next loop plays the conversation's next exchange and saves into it.
-        advance(9400.milliseconds)
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-        assertEquals(Exchanges[1], viewModel.state.exchange)
-        advance(6500.milliseconds)
-        assertEquals(listOf<Pair<Long?, ModelChoice?>>(null to null, 1L to null), voices.transcripts)
-        advance(2400.milliseconds)
-        assertEquals(listOf(1L, 1L), voices.replies.map { it.conversationId })
-        assertEquals(Exchanges[1], voices.replies.last().exchange)
+        advance(AnswerTime + spokenTime(Replies[0]) + spokenTime(FollowUp))
+        assertEquals(
+            listOf(
+                SavedTranscript(conversationId = null, text = Question),
+                SavedTranscript(conversationId = 1, text = FollowUp),
+            ),
+            voices.transcripts,
+        )
+        advance(AnswerTime)
+        assertEquals(VoiceExchange(transcript = FollowUp, reply = Replies[1]), viewModel.state.exchange)
+        assertEquals(listOf(Replies[0], Replies[1]), output.texts)
         assertEquals(1, voices.conversations.value.size)
     }
 
     @Test
-    fun listeningTakesTheSessionsNextExchangeWhenItStartsAndThinkingAndSpeakingPlayTheSavedTurns() = started.runTest {
-        val voices = FakeVoiceRepository(
-            conversations = mapOf(5L to FakeVoiceConversation(ModelChoice(Gemini), userMessages = 1)),
+    fun anEntrysConversationSavesItsTranscriptsThereAndOneThatIsGoneStartsANewSession() = started.runTest {
+        val voices = FakeVoiceRepository(conversations = mapOf(5L to FakeVoiceConversation(ModelChoice(Gemini))))
+        val onFive = voiceViewModel(
+            voices = voices,
+            input = FakeSpeechInput().apply { says(Question) },
+            entry = VoiceEntry(conversationId = 5),
         )
-        val viewModel = voiceViewModel(voices = voices, entry = VoiceEntry(conversationId = 5))
-        assertEquals(5L, viewModel.state.conversationId)
-        assertEquals(ModelChoice(Gemini), viewModel.state.choice)
-        assertEquals(Exchanges[1], viewModel.state.exchange)
+        assertEquals(ModelChoice(Gemini), onFive.state.choice)
+        advance(spokenTime(Question))
+        assertEquals(listOf(SavedTranscript(conversationId = 5, text = Question)), voices.transcripts)
+        onFive.onStop()
 
-        // A typed message meanwhile moves the session's next on; listening keeps the line it started.
-        voices.conversations.update { it + (5L to it.getValue(5L).copy(userMessages = 2)) }
-        advance(3000.milliseconds)
-        assertEquals(Exchanges[1], viewModel.state.exchange)
-
-        // The transcript saved was the next one, so thinking and speaking play the turn's.
-        advance(3500.milliseconds)
-        assertEquals(listOf<Pair<Long?, ModelChoice?>>(5L to null), voices.transcripts)
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-        assertEquals(Exchanges[2], viewModel.state.exchange)
-        assertEquals(VoiceCaption(shown = Exchanges[2].transcript, rest = ""), viewModel.state.caption)
-        advance(2400.milliseconds)
-        assertEquals(Exchanges[2], viewModel.state.exchange)
-        assertEquals(Exchanges[2], voices.replies.single().exchange)
+        val gone = voiceViewModel(
+            voices = voices,
+            input = FakeSpeechInput().apply { says(FollowUp) },
+            entry = VoiceEntry(conversationId = 9),
+        )
+        assertNull(gone.state.conversationId)
+        advance(spokenTime(FollowUp))
+        assertEquals(SavedTranscript(conversationId = null, text = FollowUp), voices.transcripts.last())
+        assertEquals(6L, gone.state.conversationId)
     }
 
+    // Speaking
+
     @Test
-    fun aTranscriptThatIsNotSavedSavesNoReplyAndTheLoopGoesOn() = started.runTest {
-        val voices = FakeVoiceRepository().apply { refuseTranscripts = true }
-        val viewModel = voiceViewModel(voices = voices)
+    fun speakingSaysTheReplyShowingEachWordAsItStartsAndListensAgainWhenItEnds() = started.runTest {
+        val input = FakeSpeechInput().apply { says(Question) }
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(input = input, output = output)
 
-        advance(6500.milliseconds)
-        assertEquals(1, voices.transcripts.size)
-        assertNull(viewModel.state.conversationId)
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-        assertEquals(VoiceCaption(shown = Exchanges[0].transcript, rest = ""), viewModel.state.caption)
-
-        advance(2400.milliseconds)
+        advance(toSpeaking)
         assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
-        assertEquals(Exchanges[0], viewModel.state.exchange)
-        assertEquals(emptyList(), voices.replies)
+        assertEquals(listOf(Replies[0]), output.texts)
+        assertTrue(output.speaking)
+        assertEquals(VoiceCaption(shown = "add", rest = " a leading flag"), viewModel.state.caption)
+        advance(SpokenWord)
+        assertEquals(VoiceCaption(shown = "add a", rest = " leading flag"), viewModel.state.caption)
+        advance(SpokenWord * 2)
+        assertEquals(VoiceCaption(shown = Replies[0], rest = ""), viewModel.state.caption)
 
-        // Once a transcript can be saved again, the next loop saves it, offering the same exchange.
-        voices.refuseTranscripts = false
-        advance(7000.milliseconds)
+        // The last word is still being said.
+        advance(SpokenWord - 1.milliseconds)
+        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
+        advance(1.milliseconds)
         assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-        assertEquals(Exchanges[0], viewModel.state.exchange)
-        advance(8900.milliseconds)
-        assertEquals(listOf<Pair<Long?, ModelChoice?>>(null to null, null to null), voices.transcripts)
-        assertEquals(1L, viewModel.state.conversationId)
-        assertEquals(1, voices.replies.size)
+        assertFalse(output.speaking)
+        assertEquals(0, output.cancellations)
+        assertEquals(2, input.listens)
     }
 
     @Test
-    fun aConversationThatIsGoneStartsOverAsANewSession() = started.runTest {
-        val voices = FakeVoiceRepository()
-        val viewModel = voiceViewModel(voices = voices, entry = VoiceEntry(conversationId = 9))
-        assertNull(viewModel.state.conversationId)
-        assertEquals(Exchanges[0], viewModel.state.exchange)
+    fun aTapStopsSpeakingAtOnceAndListensAgain() = started.runTest {
+        val input = FakeSpeechInput().apply { says(Question) }
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(input = input, output = output)
+        advance(toSpeaking + SpokenWord)
 
-        advance(6500.milliseconds)
-        assertEquals(listOf<Pair<Long?, ModelChoice?>>(null to null), voices.transcripts)
-        assertEquals(1L, viewModel.state.conversationId)
+        tap(viewModel)
+
+        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+        assertEquals(0, viewModel.state.words)
+        assertFalse(output.speaking)
+        assertEquals(1, output.cancellations)
+        assertEquals(2, input.listens)
     }
 
     @Test
-    fun stoppingHoldsThePhasesAndStartingAgainBeginsAtListening() = started.runTest {
-        val voices = FakeVoiceRepository()
-        val viewModel = voiceViewModel(voices = voices)
-        advance(7000.milliseconds)
+    fun aDeviceThatCannotSpeakShowsAWordEvery230MsForTheRepliesSpeakingDuration() = started.runTest {
+        val output = FakeSpeechOutput().apply { failure = SpeechProblem.UNAVAILABLE }
+        val viewModel = voiceViewModel(input = FakeSpeechInput().apply { says(Question) }, output = output)
+
+        advance(toSpeaking)
+        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
+        assertEquals(listOf(Replies[0]), output.texts)
+        assertEquals(0, viewModel.state.words)
+        advance(WordInterval)
+        assertEquals(1, viewModel.state.words)
+        advance(WordInterval * 3)
+        assertEquals(VoiceCaption(shown = Replies[0], rest = ""), viewModel.state.caption)
+
+        advance(speakingDuration(Replies[0]) - WordInterval * 4 - 1.milliseconds)
+        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
+        advance(1.milliseconds)
+        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+        // Silent speaking is no failure: nothing to say about it.
+        assertNull(viewModel.state.toast)
+    }
+
+    @Test
+    fun aTapEndsTheWordsOfADeviceThatCannotSpeak() = started.runTest {
+        val input = FakeSpeechInput().apply { says(Question) }
+        val output = FakeSpeechOutput().apply { failure = SpeechProblem.FAILED }
+        val viewModel = voiceViewModel(input = input, output = output)
+        advance(toSpeaking + WordInterval)
+
+        tap(viewModel)
+
+        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+        assertEquals(2, input.listens)
+    }
+
+    // A reply Fuelix could not give
+
+    @Test
+    fun aFailedReplyShowsWhyFor1400MsAndStopsAtListeningWithNothingHeard() = started.runTest {
+        val voices = FakeVoiceRepository().apply { answerFailure = ReplyFailure.NO_KEY }
+        val input = FakeSpeechInput().apply { says(Question) }
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(voices = voices, input = input, output = output)
+
+        advance(toSpeaking - 1.milliseconds)
         assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
+        assertNull(viewModel.state.toast)
+        advance(1.milliseconds)
+        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+        assertEquals(VoiceCaption.Empty, viewModel.state.caption)
+        assertEquals(ReplyFailure.NO_KEY.toast, viewModel.state.toast)
+        // The transcript stays, with no reply, and nothing is said.
+        assertEquals(1L, viewModel.state.conversationId)
+        assertEquals(emptyList(), voices.replies)
+        assertEquals(emptyList(), output.texts)
+
+        advance(ChatToastDefaults.Duration - 1.milliseconds)
+        assertEquals(ReplyFailure.NO_KEY.toast, viewModel.state.toast)
+        advance(1.milliseconds)
+        assertNull(viewModel.state.toast)
+        // The microphone stays off, however long it waits.
+        advance(60_000.milliseconds)
+        assertEquals(1, input.listens)
+        assertFalse(input.listening)
+    }
+
+    @Test
+    fun aTapAfterAFailedReplyListensAgain() = started.runTest {
+        val voices = FakeVoiceRepository().apply { answerFailure = ReplyFailure.UNREACHABLE }
+        val input = FakeSpeechInput().apply { says(Question) }
+        val viewModel = voiceViewModel(voices = voices, input = input)
+        advance(toSpeaking)
+        voices.answerFailure = null
+        input.says(FollowUp)
+
+        tap(viewModel)
+        assertEquals(2, input.listens)
+        advance(spokenTime(FollowUp) + AnswerTime)
+
+        assertEquals(ChatVoicePhase.Speaking, viewModel.state.phase)
+        assertEquals(listOf(null, 1L), voices.transcripts.map { it.conversationId })
+        assertEquals(VoiceExchange(transcript = FollowUp, reply = Replies[0]), viewModel.state.exchange)
+    }
+
+    @Test
+    fun aReplyThatThrowsIsAFailedReply() = started.runTest {
+        val voices = FakeVoiceRepository().apply { answerScript = { error("socket closed") } }
+        val viewModel = voiceViewModel(voices = voices, input = FakeSpeechInput().apply { says(Question) })
+
+        advance(spokenTime(Question))
+
+        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+        assertEquals(ReplyFailure.FAILED.toast, viewModel.state.toast)
+    }
+
+    @Test
+    fun endAfterAFailureStartsAFreshSessionAtOnce() = started.runTest {
+        val voices = FakeVoiceRepository().apply { answerFailure = ReplyFailure.NO_KEY }
+        val input = FakeSpeechInput().apply { says(Question) }
+        val viewModel = voiceViewModel(voices = voices, input = input)
+        advance(toSpeaking)
+        voices.answerFailure = null
+        input.says(FollowUp)
+
+        viewModel.onEnd()
+        runCurrent()
+        assertNull(viewModel.state.conversationId)
+        assertEquals(2, input.listens)
+        advance(spokenTime(FollowUp))
+
+        assertEquals(
+            listOf(
+                SavedTranscript(conversationId = null, text = Question),
+                SavedTranscript(conversationId = null, text = FollowUp),
+            ),
+            voices.transcripts,
+        )
+        assertEquals(2L, viewModel.state.conversationId)
+    }
+
+    @Test
+    fun afterAFailedReplyTheScreenComingBackListensAgainButATapWhileItIsAwayDoesNot() = started.runTest {
+        val voices = FakeVoiceRepository().apply { answerFailure = ReplyFailure.RATE_LIMITED }
+        val input = FakeSpeechInput().apply { says(Question) }
+        val viewModel = voiceViewModel(voices = voices, input = input)
+        advance(toSpeaking)
+
+        viewModel.onStop()
+        tap(viewModel)
+        assertEquals(1, input.listens)
+
+        viewModel.onStart()
+        runCurrent()
+        assertEquals(2, input.listens)
+        assertTrue(input.listening)
+    }
+
+    // Starting and stopping
+
+    @Test
+    fun stoppingTurnsTheMicrophoneOffAndStartingAgainListensAfresh() = started.runTest {
+        val voices = FakeVoiceRepository()
+        val input = FakeSpeechInput().apply { trailsOff(Question) }
+        val viewModel = voiceViewModel(voices = voices, input = input)
+        advance(SpokenWord * 2)
 
         viewModel.onStop()
         advance(60_000.milliseconds)
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
-        assertEquals(1, voices.transcripts.size)
-        // Left while thinking: the transcript stays and no reply is saved.
-        assertEquals(emptyList(), voices.replies)
+        assertFalse(input.listening)
+        assertEquals(1, input.cancellations)
+        assertEquals(emptyList(), voices.transcripts)
 
         viewModel.onStart()
         runCurrent()
         assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-        assertEquals(0, viewModel.state.words)
-        assertEquals(Exchanges[1], viewModel.state.exchange)
-        advance(6500.milliseconds)
-        assertEquals(listOf<Pair<Long?, ModelChoice?>>(null to null, 1L to null), voices.transcripts)
+        assertEquals(VoiceCaption.Empty, viewModel.state.caption)
+        assertEquals(2, input.listens)
+    }
+
+    @Test
+    fun stoppingWhileThinkingKeepsTheTranscriptAndAsksForTheReplyNoLonger() = started.runTest {
+        val voices = FakeVoiceRepository()
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(
+            voices = voices,
+            input = FakeSpeechInput().apply { says(Question) },
+            output = output,
+        )
+        advance(spokenTime(Question) + 1000.milliseconds)
+
+        viewModel.onStop()
+        advance(60_000.milliseconds)
+
+        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
+        assertEquals(1, voices.transcripts.size)
+        assertEquals(1, voices.asked.size)
+        assertEquals(emptyList(), voices.replies)
+        assertEquals(emptyList(), output.texts)
+    }
+
+    @Test
+    fun stoppingWhileSpeakingStopsTheVoice() = started.runTest {
+        val output = FakeSpeechOutput()
+        val viewModel = voiceViewModel(input = FakeSpeechInput().apply { says(Question) }, output = output)
+        advance(toSpeaking + SpokenWord)
+
+        viewModel.onStop()
+        runCurrent()
+
+        assertFalse(output.speaking)
+        assertEquals(1, output.cancellations)
     }
 
     @Test
     fun startingWhilePlayingChangesNothingAndATapWhileStoppedIsForgotten() = started.runTest {
-        val voices = FakeVoiceRepository()
-        val viewModel = voiceViewModel(voices = voices)
-        advance(3000.milliseconds)
+        val input = FakeSpeechInput().apply { trailsOff(Question) }
+        val viewModel = voiceViewModel(input = input)
+        advance(SpokenWord * 2)
 
         viewModel.onStart()
         runCurrent()
-        assertEquals(13, viewModel.state.words)
-        advance(3500.milliseconds)
-        assertEquals(1, voices.transcripts.size)
+        assertEquals(1, input.listens)
+        assertEquals(VoiceCaption(shown = "so the", rest = ""), viewModel.state.caption)
 
         viewModel.onStop()
-        viewModel.onSphereTap()
-        runCurrent()
-        assertEquals(ChatVoicePhase.Thinking, viewModel.state.phase)
+        tap(viewModel)
+        assertEquals(1, input.listens)
         viewModel.onStart()
         runCurrent()
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
-        advance(6499.milliseconds)
-        assertEquals(ChatVoicePhase.Listening, viewModel.state.phase)
+        assertEquals(2, input.listens)
     }
 }

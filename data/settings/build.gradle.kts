@@ -13,6 +13,8 @@ kotlin {
             api(projects.data.auth)
             // Deleting the account wipes the chat's conversations and choices through its ChatDataEraser.
             implementation(projects.data.chat)
+            // Fuelix's requests read the key saved here through its FuelixKeySource.
+            implementation(projects.data.fuelix)
             // Provider keys are kept in its encrypted DataStore.
             implementation(projects.core.preferences)
         }

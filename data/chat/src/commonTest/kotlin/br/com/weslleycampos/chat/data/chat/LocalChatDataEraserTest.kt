@@ -3,8 +3,9 @@ package br.com.weslleycampos.chat.data.chat
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import br.com.weslleycampos.chat.data.chat.fakes.FakeChatDatabase
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient.Companion.PIECE_DELAY
 import br.com.weslleycampos.chat.data.chat.fakes.FakePreferences
-import br.com.weslleycampos.chat.data.chat.fakes.FixedRandom
 import br.com.weslleycampos.chat.data.chat.fakes.TestClock
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
@@ -32,6 +33,7 @@ class LocalChatDataEraserTest {
     /** A key another part of the app might keep in the same store; the eraser leaves it alone. */
     private val otherKey = stringPreferencesKey("not_the_chats")
     private val preferences = FakePreferences(preferencesOf(otherKey to "kept"))
+    private val fuelix = FakeFuelixClient()
 
     private val eraser = LocalChatDataEraser(conversationDao = database.conversationDao, preferences = preferences)
 
@@ -39,7 +41,12 @@ class LocalChatDataEraserTest {
 
     private fun TestScope.chat(): Chat {
         val clock = TestClock(testScheduler)
-        val models = LocalModelRepository(personaDao = database.personaDao, preferences = preferences, scope = this)
+        val models = LocalModelRepository(
+            personaDao = database.personaDao,
+            preferences = preferences,
+            fuelix = fuelix,
+            scope = this,
+        )
         val chats = RoomChatRepository(
             conversationDao = database.conversationDao,
             historyDao = database.historyDao,
@@ -47,7 +54,7 @@ class LocalChatDataEraserTest {
             compareDao = database.compareDao,
             transactions = database.transactions,
             models = models,
-            streamer = ReplyStreamer(messageDao = database.messageDao, clock = clock, random = FixedRandom()),
+            streamer = ReplyStreamer(messageDao = database.messageDao, fuelix = fuelix, clock = clock),
             clock = clock,
             scope = this,
         )
@@ -55,7 +62,7 @@ class LocalChatDataEraserTest {
     }
 
     @Test
-    fun erasingDeletesEveryConversationAndMessageAndTheChoicesButKeepsThePersonas() = runTest {
+    fun erasingDeletesEveryConversationAndMessageTheChoicesAndTheKeysModelsButKeepsThePersonas() = runTest {
         val (models, chats) = chat()
         val first = assertNotNull(chats.send(null, "first"))
         val pinned = assertNotNull(chats.send(null, "pinned"))
@@ -63,8 +70,11 @@ class LocalChatDataEraserTest {
         advanceUntilIdle()
         chats.setPinned(pinned, pinned = true)
         chats.archive(archived)
-        models.setFavorite(ModelCatalogue["opus"], favorite = true)
-        models.setDefaultModel(ModelCatalogue["gemini"])
+        models.setFavorite(ModelCatalogue["claude-opus-4-1-20250805"], favorite = true)
+        models.setDefaultModel(ModelCatalogue["gemini-2.5-pro"])
+        fuelix.models = listOf("gpt-5", "claude-haiku-4-5-20251001")
+        assertTrue(models.refreshModels())
+        assertNotNull(preferences.stored.value[LocalModelRepository.ModelIdsKey])
 
         eraser.eraseAll()
 
@@ -78,15 +88,16 @@ class LocalChatDataEraserTest {
         assertTrue(database.messageRows.value.isEmpty())
         assertEquals(ModelRepository.DEFAULT_FAVORITE_IDS, models.observeFavorites().first().map { it.id })
         assertEquals(ModelCatalogue.default, models.observeDefaultModel().first())
+        assertEquals(ModelCatalogue.models, models.observeModels().first())
         assertEquals(PersonaPresets.personas, models.observePersonas().first())
         assertEquals(preferencesOf(otherKey to "kept"), preferences.stored.value)
     }
 
     @Test
-    fun erasingWhileAReplyStreamsStopsItAtItsNextTick() = runTest {
+    fun erasingWhileAReplyStreamsStopsItAtItsNextWrite() = runTest {
         val chats = chat().chats
         val id = assertNotNull(chats.send(null, "first"))
-        advanceTimeBy(400)
+        advanceTimeBy(PIECE_DELAY * 1.5)
         val reply = chats.observeMessages(id).first().filterIsInstance<Message.Assistant>().single()
         assertEquals(ReplyStatus.STREAMING, reply.status)
         val writesBefore = database.replyUpdates.count { it.id == reply.id }

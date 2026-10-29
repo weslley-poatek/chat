@@ -3,6 +3,7 @@ package br.com.weslleycampos.chat.feature.chat
 import br.com.weslleycampos.chat.core.ui.theme.ChatPalette
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.ModelVendor
 import br.com.weslleycampos.chat.data.chat.models.Persona
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -84,11 +85,12 @@ fun chipLabel(choice: ModelChoice): String {
 
 /**
  * The empty state's meta line, the prototype's `modelMetaLine`: "Anthropic · 200k context · $$",
- * ending " · persona: Code reviewer" while a persona answers.
+ * leaving out a context window or cost the app does not know, and ending " · persona: Code reviewer"
+ * while a persona answers.
  */
 fun modelMetaLine(model: ChatModel, persona: Persona?): String = listOfNotNull(
     model.provider,
-    "${model.contextWindow} context",
+    model.contextWindow?.let { "$it context" },
     model.cost,
     persona?.let { "persona: ${it.name}" },
 ).joinToString(MetaSeparator)
@@ -102,11 +104,20 @@ fun tipRuns(tip: String): List<Pair<String, Boolean>> = tip.split('*')
     .filter { (run, _) -> run.isNotEmpty() }
 
 /**
- * The accent of a model: the `:core:ui` palette named after its id (`sonnet` → `SONNET`), or the
- * default for an id the palettes do not know.
+ * The accent of a model: its vendor's `:core:ui` palette, as the prototype gave each vendor's models
+ * one: Anthropic's coral, OpenAI's green, Google's blue, Meta's violet, DeepSeek's sky and Mistral's
+ * gold; the default for any other vendor.
  */
 val ChatModel.palette: ChatPalette
-    get() = ChatPalette.entries.firstOrNull { it.name.equals(id, ignoreCase = true) } ?: ChatPalette.Default
+    get() = when (vendor) {
+        ModelVendor.ANTHROPIC -> ChatPalette.SONNET
+        ModelVendor.OPENAI -> ChatPalette.GPT5
+        ModelVendor.GOOGLE -> ChatPalette.GEMINI
+        ModelVendor.META -> ChatPalette.LLAMA
+        ModelVendor.DEEPSEEK -> ChatPalette.DEEPSEEK
+        ModelVendor.MISTRAL -> ChatPalette.MISTRAL
+        ModelVendor.OTHER -> ChatPalette.Default
+    }
 
 /** The device's clock and time zone, which the message meta and the "recent" rows are written in. */
 class ChatTimes(

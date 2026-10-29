@@ -6,6 +6,7 @@ import br.com.weslleycampos.chat.core.preferences.PreferencesModule
 import br.com.weslleycampos.chat.core.ui.CoreUiModule
 import br.com.weslleycampos.chat.data.auth.DataAuthModule
 import br.com.weslleycampos.chat.data.chat.DataChatModule
+import br.com.weslleycampos.chat.data.fuelix.DataFuelixModule
 import br.com.weslleycampos.chat.data.settings.DataSettingsModule
 import br.com.weslleycampos.chat.feature.auth.AuthModule
 import br.com.weslleycampos.chat.feature.chat.ChatModule
@@ -30,6 +31,7 @@ import org.koin.core.annotation.Module
         CoreUiModule::class,
         DataAuthModule::class,
         DataChatModule::class,
+        DataFuelixModule::class,
         DataSettingsModule::class,
         AuthModule::class,
         ChatModule::class,

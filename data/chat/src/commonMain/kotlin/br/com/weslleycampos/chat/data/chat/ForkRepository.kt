@@ -27,7 +27,7 @@ interface ForkRepository {
      * counting from 1, a compare pair counting as one message. The source is not changed.
      *
      * A fork at a user message ends on that message: no reply is started, and the next send
-     * continues the fork as in any conversation, its canned replies going on from the ones copied.
+     * continues the fork as in any conversation, after the replies copied.
      *
      * Forks nothing and returns `null` when [conversationId] names no conversation, when
      * [messageId] is not one of its messages, when it is a [Message.ComparePair] or one of its

@@ -31,8 +31,13 @@ import org.jetbrains.compose.resources.StringResource
  *   [WordInterval], from 0 at the start of each phase.
  * @property exchange The exchange this loop plays: the session's next when listening starts, then
  *   the saved turn's; `null` until the session is first read.
- * @property muted The prototype's `voiceMuted`: only the listening sphere is stilled.
- * @property favorites The sheet's "favorites", in catalogue order.
+ * @property muted The prototype's `voiceMuted`: the microphone is off and the listening sphere still.
+ * @property microphone The microphone is allowed. Until it is, the phases do not play and the
+ *   caption asks for it.
+ * @property toast Why Fuelix gave no reply, while the toast shows.
+ * @property models The sheet's models, by vendor: every one the Fuelix key can use, or the
+ *   catalogue's until Fuelix has listed them.
+ * @property favorites The sheet's "favorites", in the order of [models].
  * @property personas The sheet's "personas", in their order.
  * @property modelPickerOpen The Model picker shows over Voice.
  */
@@ -44,6 +49,9 @@ data class VoiceUiState(
     val words: Int = 0,
     val exchange: VoiceExchange? = null,
     val muted: Boolean = false,
+    val microphone: Boolean = true,
+    val toast: StringResource? = null,
+    val models: List<ChatModel> = ModelCatalogue.models,
     val favorites: List<ChatModel> = emptyList(),
     val personas: List<Persona> = emptyList(),
     val modelPickerOpen: Boolean = false,
@@ -71,6 +79,7 @@ data class VoiceUiState(
     val modelPicker: ModelPickerUiState
         get() = modelPickerUiState(
             variant = ModelPickerVariant.Chat,
+            models = models,
             favorites = favorites,
             personas = personas,
             active = choice,

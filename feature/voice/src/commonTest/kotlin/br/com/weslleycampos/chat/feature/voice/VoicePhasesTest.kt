@@ -16,17 +16,38 @@ private val Design = VoiceExchange(
 
 class VoicePhasesTest {
     @Test
-    fun listeningLasts6500MsThinking2400MsAndSpeaking7000Ms() {
-        assertEquals(6500.milliseconds, ChatVoicePhase.Listening.duration)
-        assertEquals(2400.milliseconds, ChatVoicePhase.Thinking.duration)
-        assertEquals(7000.milliseconds, ChatVoicePhase.Speaking.duration)
+    fun listeningEndsAfterTwoSecondsOfSilenceAndListensAgainHalfASecondAfterHearingNothing() {
+        assertEquals(2000.milliseconds, SilenceAfterSpeech)
+        assertEquals(500.milliseconds, ListenAgainPause)
     }
 
     @Test
-    fun thePhasesLoopListeningThinkingSpeakingAndBack() {
-        assertEquals(ChatVoicePhase.Thinking, ChatVoicePhase.Listening.next)
-        assertEquals(ChatVoicePhase.Speaking, ChatVoicePhase.Thinking.next)
-        assertEquals(ChatVoicePhase.Listening, ChatVoicePhase.Speaking.next)
+    fun withNoVoiceSpeakingLastsAWordEvery230MsThenASecondOnTheWholeReply() {
+        assertEquals(1230.milliseconds, speakingDuration("Sure."))
+        assertEquals(1920.milliseconds, speakingDuration("add a leading flag"))
+        // The design's 33-word reply: 7590 ms of words, its last one in place for a second.
+        assertEquals(8590.milliseconds, speakingDuration(Design.reply))
+        assertEquals(WordInterval * 33 + 1000.milliseconds, speakingDuration(Design.reply))
+    }
+
+    @Test
+    fun aLongerReplySpeaksLongerOneWordIntervalAWord() {
+        val short = "use fake timers"
+        val longer = "$short and advance them"
+
+        assertEquals(WordInterval * 3, speakingDuration(longer) - speakingDuration(short))
+    }
+
+    @Test
+    fun speakingLastsUntilItsLastWordHasShownForASecond() {
+        val words = Design.reply.split(' ').size
+        val lastWordShows = WordInterval * words
+
+        assertEquals(
+            VoiceCaption(shown = Design.reply, rest = ""),
+            voiceCaption(phase = ChatVoicePhase.Speaking, exchange = Design, words = words),
+        )
+        assertEquals(1000.milliseconds, speakingDuration(Design.reply) - lastWordShows)
     }
 
     @Test
@@ -70,7 +91,7 @@ class VoicePhasesTest {
     }
 
     @Test
-    fun speakingRevealsTheReplyWordByWordItsLastThreeWordsStillToComeWhenItsTimeIsUp() {
+    fun speakingRevealsTheReplyWordByWordWithTheRestOfTheSentenceToCome() {
         assertEquals(
             VoiceCaption(
                 shown = "Add a",
@@ -79,7 +100,7 @@ class VoicePhasesTest {
             ),
             voiceCaption(phase = ChatVoicePhase.Speaking, exchange = Design, words = 2),
         )
-        // 7000 ms at 230 ms a word is 30 of the reply's 33 words, as in the prototype.
+        // 7000 ms in at 230 ms a word, the prototype's whole speaking phase: 30 of the reply's 33 words.
         assertEquals(
             VoiceCaption(
                 shown = "Add a leading flag. On the first change in a burst set the value immediately, then suppress " +

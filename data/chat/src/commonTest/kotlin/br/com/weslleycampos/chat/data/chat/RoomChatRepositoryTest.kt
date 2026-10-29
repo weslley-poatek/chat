@@ -6,8 +6,9 @@ import br.com.weslleycampos.chat.core.database.entities.MessageRole
 import br.com.weslleycampos.chat.core.database.entities.MessageStatus
 import br.com.weslleycampos.chat.core.database.entities.StoredBlock
 import br.com.weslleycampos.chat.data.chat.fakes.FakeChatDatabase
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient.Companion.PIECE_DELAY
 import br.com.weslleycampos.chat.data.chat.fakes.FakePreferences
-import br.com.weslleycampos.chat.data.chat.fakes.FixedRandom
 import br.com.weslleycampos.chat.data.chat.fakes.TEST_START
 import br.com.weslleycampos.chat.data.chat.fakes.TestClock
 import br.com.weslleycampos.chat.data.chat.models.Block
@@ -18,9 +19,13 @@ import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailed
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
-import br.com.weslleycampos.chat.data.chat.replies.CannedReplies
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
+import br.com.weslleycampos.chat.data.fuelix.FuelixException
+import br.com.weslleycampos.chat.data.fuelix.FuelixMessage
+import br.com.weslleycampos.chat.data.fuelix.FuelixRole
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -48,19 +53,26 @@ import kotlin.time.Duration.Companion.milliseconds
 class RoomChatRepositoryTest {
     private var database = FakeChatDatabase()
     private val preferences = FakePreferences()
+    private val fuelix = FakeFuelixClient()
 
     private val reviewer: Persona = PersonaPresets.personas.single { it.id == "reviewer" }
     private val terse: Persona = PersonaPresets.personas.single { it.id == "terse" }
     private val digest: Persona = PersonaPresets.personas.single { it.id == "digest" }
-    private val gemini: ChatModel = ModelCatalogue["gemini"]
+    private val sonnet: ChatModel = ModelCatalogue.default
+    private val gpt5: ChatModel = ModelCatalogue["gpt-5"]
+    private val gemini: ChatModel = ModelCatalogue["gemini-2.5-pro"]
 
     /** The personas and preferences the chat repository reads, on the same fake database. */
-    private fun TestScope.models(): ModelRepository =
-        LocalModelRepository(personaDao = database.personaDao, preferences = preferences, scope = this)
+    private fun TestScope.models(): ModelRepository = LocalModelRepository(
+        personaDao = database.personaDao,
+        preferences = preferences,
+        fuelix = fuelix,
+        scope = this,
+    )
 
     /**
-     * Streams at the slowest pace and shortest thinking time, on the test's virtual time. Replies
-     * stream in the test's own scope by default, since `advanceUntilIdle` skips `backgroundScope`.
+     * Replies stream from [fuelix] on the test's virtual time, in the test's own scope by default,
+     * since `advanceUntilIdle` skips `backgroundScope`.
      */
     private fun TestScope.repository(
         scope: CoroutineScope = this,
@@ -74,7 +86,7 @@ class RoomChatRepositoryTest {
             compareDao = database.compareDao,
             transactions = database.transactions,
             models = models,
-            streamer = ReplyStreamer(messageDao = database.messageDao, clock = clock, random = FixedRandom()),
+            streamer = ReplyStreamer(messageDao = database.messageDao, fuelix = fuelix, clock = clock),
             clock = clock,
             scope = scope,
         )
@@ -82,6 +94,22 @@ class RoomChatRepositoryTest {
 
     private suspend fun ChatRepository.replies(conversationId: Long): List<Message.Assistant> =
         observeMessages(conversationId).first().filterIsInstance<Message.Assistant>()
+
+    /** Every failure [repository] tells from now on. */
+    private fun TestScope.failuresOf(repository: ChatRepository): List<ReplyFailed> {
+        val failures = mutableListOf<ReplyFailed>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            repository.replyFailures.collect { failures += it }
+        }
+        return failures
+    }
+
+    /** What [model] answers when nothing else is scripted for it. */
+    private fun answer(model: ChatModel): List<Block> = listOf(Block.Paragraph(FakeFuelixClient.answer(model.id)))
+
+    private fun asUser(text: String) = FuelixMessage(FuelixRole.USER, text)
+
+    private fun asModel(text: String) = FuelixMessage(FuelixRole.ASSISTANT, text)
 
     @Test
     fun aFirstSendCreatesAConversationTitledAfterTheMessageOnTheDefaultModel() = runTest {
@@ -129,7 +157,7 @@ class RoomChatRepositoryTest {
     }
 
     @Test
-    fun aReplyGoesFromThinkingThroughStreamingToDoneAndEveryTickReachesObservers() = runTest {
+    fun aReplyGoesFromThinkingThroughStreamingToDoneAndEveryWriteReachesObservers() = runTest {
         val repository = repository()
         val id = assertNotNull(repository.send(null, "why is my debounce stale?"))
         val replies = mutableListOf<Message.Assistant>()
@@ -139,49 +167,70 @@ class RoomChatRepositoryTest {
 
         advanceUntilIdle()
 
-        // REPLIES[0] at the slowest pace: 22 + 95 + 6 + 22 + 41 ticks of 28 ms after 320 ms of thinking.
-        // Every tick is written, but the list's last one only covers the break counted after its last
-        // item, which shows nothing new, so observers get one emission fewer than there are ticks.
-        val ticks = 186
-        assertEquals(ticks, database.replyUpdates.size)
+        // Four pieces 50 ms apart, each written as it arrives, then the whole reply written done.
+        val pieces = FakeFuelixClient.DEFAULT_PIECES
+        assertEquals(pieces + 1, database.replyUpdates.size)
         assertEquals(
-            listOf(ReplyStatus.THINKING) + List(ticks - 2) { ReplyStatus.STREAMING } + ReplyStatus.DONE,
+            listOf(ReplyStatus.THINKING) + List(pieces) { ReplyStatus.STREAMING } + ReplyStatus.DONE,
             replies.map { it.status },
         )
-        assertEquals(CannedReplies.replies[0], replies.last().blocks)
-        assertEquals((ticks * 28).milliseconds, replies.last().latency)
-        assertEquals(320L + ticks * 28, currentTime)
+        assertEquals(listOf(Block.Paragraph("Answer")), replies[1].blocks)
+        assertEquals(answer(sonnet), replies.last().blocks)
+        assertEquals(PIECE_DELAY * (pieces - 1), replies.last().latency)
+        assertEquals((PIECE_DELAY * pieces).inWholeMilliseconds, currentTime)
     }
 
     @Test
-    fun aConversationsRepliesRotateThroughTheThreeCannedRepliesAndANewConversationStartsOver() = runTest {
+    fun eachSendAsksTheConversationsModelWithTheConversationSoFarAndANewConversationStartsOver() = runTest {
         val repository = repository()
-        val first = assertNotNull(repository.send(null, "one"))
+        val id = assertNotNull(repository.send(null, "Write a useDebounce hook"))
         advanceUntilIdle()
-        repeat(3) {
-            repository.send(first, "again")
-            advanceUntilIdle()
-        }
-        val second = assertNotNull(repository.send(null, "two"))
+        fuelix.reply(sonnet.id, "Add a ", "`leading` flag.")
+        repository.send(id, "Add a leading option")
+        advanceUntilIdle()
+        repository.send(id, "Now cancel on unmount")
+        advanceUntilIdle()
+        val other = assertNotNull(repository.send(null, "Postgres index"))
         advanceUntilIdle()
 
-        val r = CannedReplies.replies
-        assertEquals(listOf(r[0], r[1], r[2], r[0]), repository.replies(first).map { it.blocks })
-        assertEquals(listOf(r[0]), repository.replies(second).map { it.blocks })
+        assertEquals(List(4) { sonnet.id }, fuelix.calls.map { it.model })
+        assertEquals(listOf(asUser("Write a useDebounce hook")), fuelix.calls[0].messages)
+        assertEquals(
+            listOf(
+                asUser("Write a useDebounce hook"),
+                asModel(FakeFuelixClient.answer(sonnet.id)),
+                asUser("Add a leading option"),
+                asModel("Add a `leading` flag."),
+                asUser("Now cancel on unmount"),
+            ),
+            fuelix.calls[2].messages,
+        )
+        assertEquals(listOf(asUser("Postgres index")), fuelix.calls[3].messages)
+        assertEquals(
+            listOf(answer(sonnet), listOf(Block.Paragraph("Add a `leading` flag.")), answer(sonnet)),
+            repository.replies(id).map { it.blocks },
+        )
+        assertEquals(listOf(answer(sonnet)), repository.replies(other).map { it.blocks })
     }
 
     @Test
     fun aSendWhileTheLastReplyThinksOrStreamsSendsNothing() = runTest {
         val repository = repository()
+        fuelix.hold(afterPieces = 0)
         val id = assertNotNull(repository.send(null, "first"))
+        advanceUntilIdle()
 
+        assertEquals(ReplyStatus.THINKING, repository.replies(id).single().status)
         assertNull(repository.send(id, "while thinking"))
-        advanceTimeBy(400)
+        fuelix.hold(afterPieces = 1)
+        advanceUntilIdle()
         assertEquals(ReplyStatus.STREAMING, repository.replies(id).single().status)
         assertNull(repository.send(id, "while streaming"))
         assertEquals(2, repository.observeMessages(id).first().size)
 
+        fuelix.release()
         advanceUntilIdle()
+        assertEquals(1, fuelix.calls.size)
         assertEquals(id, repository.send(id, "after it is done"))
         assertEquals(4, repository.observeMessages(id).first().size)
     }
@@ -192,11 +241,13 @@ class RoomChatRepositoryTest {
 
         assertNull(repository.send(null, "  \n\t "))
         assertNull(repository.send(42, "hello"))
+        advanceUntilIdle()
 
         assertTrue(database.conversationRows.value.isEmpty())
         assertTrue(database.messageRows.value.isEmpty())
         assertNull(repository.observeConversation(42).first())
         assertTrue(repository.observeMessages(42).first().isEmpty())
+        assertTrue(fuelix.calls.isEmpty())
     }
 
     @Test
@@ -221,7 +272,7 @@ class RoomChatRepositoryTest {
         val partial = listOf(StoredBlock.Paragraph("Two li"))
         database = FakeChatDatabase(
             conversations = listOf(
-                ConversationEntity(id = 1, title = "t", modelId = "gpt5", createdAt = 0, updatedAt = 0),
+                ConversationEntity(id = 1, title = "t", modelId = gpt5.id, createdAt = 0, updatedAt = 0),
             ),
             messages = listOf(
                 message(id = 1, role = MessageRole.USER, status = MessageStatus.DONE),
@@ -234,18 +285,41 @@ class RoomChatRepositoryTest {
 
         assertEquals(ReplyStatus.INTERRUPTED, interrupted.status)
         assertEquals(listOf(Block.Paragraph("Two li")), interrupted.blocks)
-        assertEquals(ModelCatalogue["gpt5"], interrupted.model)
+        assertEquals(gpt5, interrupted.model)
         assertEquals(1L, repository.send(1, "try again"))
         advanceUntilIdle()
-        assertEquals(CannedReplies.replies[1], repository.replies(1).last().blocks)
-        assertEquals(ModelCatalogue["gpt5"], repository.replies(1).last().model)
+        assertEquals(answer(gpt5), repository.replies(1).last().blocks)
+        assertEquals(gpt5, repository.replies(1).last().model)
+        assertEquals(
+            listOf(asUser("why?"), asModel("Two li"), asUser("try again")),
+            fuelix.calls.single().messages,
+        )
+    }
+
+    @Test
+    fun aConversationStoredOnAnIdFromBeforeFuelixIsAnsweredByTheModelItBecame() = runTest {
+        database = FakeChatDatabase(
+            conversations = listOf(
+                ConversationEntity(id = 1, title = "t", modelId = "gpt5", createdAt = 0, updatedAt = 0),
+            ),
+            messages = listOf(message(id = 1, role = MessageRole.USER, status = MessageStatus.DONE)),
+        )
+        val repository = repository()
+
+        assertEquals(1L, repository.send(1, "still there?"))
+        advanceUntilIdle()
+
+        assertEquals(gpt5.id, fuelix.calls.single().model)
+        assertEquals(gpt5, repository.replies(1).single().model)
+        assertEquals(answer(gpt5), repository.replies(1).single().blocks)
     }
 
     @Test
     fun aReplyKeepsStreamingIntoItsConversationWhileANewChatSends() = runTest {
         val repository = repository()
         val first = assertNotNull(repository.send(null, "first"))
-        advanceTimeBy(400)
+        advanceTimeBy(PIECE_DELAY * 1.5)
+        assertEquals(ReplyStatus.STREAMING, repository.replies(first).single().status)
 
         val second = assertNotNull(repository.send(null, "a new chat"))
         advanceUntilIdle()
@@ -253,8 +327,8 @@ class RoomChatRepositoryTest {
         assertNotEquals(first, second)
         assertEquals(listOf(ReplyStatus.DONE), repository.replies(first).map { it.status })
         assertEquals(listOf(ReplyStatus.DONE), repository.replies(second).map { it.status })
-        assertEquals(CannedReplies.replies[0], repository.replies(first).single().blocks)
-        assertEquals(CannedReplies.replies[0], repository.replies(second).single().blocks)
+        assertEquals(answer(sonnet), repository.replies(first).single().blocks)
+        assertEquals(answer(sonnet), repository.replies(second).single().blocks)
     }
 
     @Test
@@ -294,19 +368,81 @@ class RoomChatRepositoryTest {
     }
 
     @Test
-    fun aReplyWhoseStreamIsCancelledIsLeftInterruptedWithWhatItRevealed() = runTest {
+    fun aReplyWhoseStreamIsCancelledIsLeftInterruptedWithWhatItShowedAndNoFailureIsTold() = runTest {
         val streams = CoroutineScope(coroutineContext + Job(coroutineContext.job))
         val repository = repository(scope = streams)
+        val failures = failuresOf(repository)
         val id = assertNotNull(repository.send(null, "first"))
-        advanceTimeBy(400)
+        advanceTimeBy(PIECE_DELAY * 1.5)
 
         streams.cancel()
         runCurrent()
 
         val reply = repository.replies(id).single()
         assertEquals(ReplyStatus.INTERRUPTED, reply.status)
-        assertEquals(listOf(Block.Paragraph("Two ")), reply.blocks)
+        assertEquals(listOf(Block.Paragraph("Answer")), reply.blocks)
         assertNull(reply.latency)
+        assertTrue(failures.isEmpty())
+    }
+
+    @Test
+    fun aReplyThatFailsIsLeftInterruptedWithWhatItShowedAndItsFailureIsToldWithItsConversation() = runTest {
+        val repository = repository()
+        val failures = failuresOf(repository)
+        fuelix.reply(sonnet.id, "Two ", "lines", failure = FuelixException.RateLimited())
+
+        val id = assertNotNull(repository.send(null, "first"))
+        advanceUntilIdle()
+
+        assertEquals(listOf(ReplyFailed(conversationId = id, failure = ReplyFailure.RATE_LIMITED)), failures)
+        val reply = repository.replies(id).single()
+        assertEquals(ReplyStatus.INTERRUPTED, reply.status)
+        assertEquals(listOf(Block.Paragraph("Two lines")), reply.blocks)
+        assertNull(reply.latency)
+        assertEquals(id, repository.send(id, "try again"))
+        advanceUntilIdle()
+        assertEquals(ReplyStatus.DONE, repository.replies(id).last().status)
+        assertEquals(1, failures.size)
+    }
+
+    @Test
+    fun anEmptyReplyAndAMissingKeyAreToldAsFailuresOfTheirOwnConversations() = runTest {
+        val repository = repository()
+        val failures = failuresOf(repository)
+        fuelix.reply(sonnet.id)
+        fuelix.reply(sonnet.id, failure = FuelixException.MissingKey())
+
+        val empty = assertNotNull(repository.send(null, "first"))
+        advanceUntilIdle()
+        val noKey = assertNotNull(repository.send(null, "second"))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                ReplyFailed(conversationId = empty, failure = ReplyFailure.FAILED),
+                ReplyFailed(conversationId = noKey, failure = ReplyFailure.NO_KEY),
+            ),
+            failures,
+        )
+        assertEquals(
+            listOf(ReplyStatus.INTERRUPTED, ReplyStatus.INTERRUPTED),
+            listOf(empty, noKey).map { repository.replies(it).single().status },
+        )
+    }
+
+    @Test
+    fun aFailureNobodyIsCollectingIsNotToldLater() = runTest {
+        val repository = repository()
+        fuelix.reply(sonnet.id, failure = FuelixException.KeyRefused())
+        fuelix.reply(sonnet.id, failure = FuelixException.Unreachable(cause = IllegalStateException("offline")))
+        assertNotNull(repository.send(null, "first"))
+        advanceUntilIdle()
+
+        val failures = failuresOf(repository)
+        val second = assertNotNull(repository.send(null, "second"))
+        advanceUntilIdle()
+
+        assertEquals(listOf(ReplyFailed(conversationId = second, failure = ReplyFailure.UNREACHABLE)), failures)
     }
 
     @Test
@@ -316,11 +452,13 @@ class RoomChatRepositoryTest {
         val repository = repository(models = models)
 
         val id = assertNotNull(repository.send(null, "Rust ownership in async closures"))
+        advanceUntilIdle()
 
         val conversation = assertNotNull(repository.observeConversation(id).first())
         assertEquals(ModelChoice(ModelCatalogue["o3"]), conversation.choice)
         assertEquals(ModelCatalogue["o3"], repository.replies(id).single().model)
         assertNull(repository.replies(id).single().persona)
+        assertEquals("o3", fuelix.calls.single().model)
     }
 
     @Test
@@ -333,11 +471,14 @@ class RoomChatRepositoryTest {
         assertEquals(ModelChoice(gemini), repository.observeConversation(id).first()?.choice)
         assertEquals(gemini, repository.replies(id).single().model)
         assertEquals(ModelCatalogue.default, models.observeDefaultModel().first())
-        assertEquals(ConversationEntityChoice("gemini", null), database.conversationRows.value.single().choice())
+        assertEquals(
+            ConversationEntityChoice(gemini.id, null),
+            database.conversationRows.value.single().choice(),
+        )
     }
 
     @Test
-    fun aFirstSendWithAPersonaStartsOnThePersonaAndTheModelItAnswersWith() = runTest {
+    fun aFirstSendWithAPersonaStartsOnThePersonaAndAsksItsModelWithItsPrompt() = runTest {
         val repository = repository()
 
         val choice = ModelChoice(model = gemini, persona = terse)
@@ -347,24 +488,43 @@ class RoomChatRepositoryTest {
 
         val conversation = assertNotNull(repository.observeConversation(id).first())
         assertEquals(terse, conversation.persona)
-        assertEquals(ModelCatalogue["gpt5"], conversation.model)
+        assertEquals(gpt5, conversation.model)
         val reply = repository.replies(id).single()
         assertEquals(terse, reply.persona)
-        assertEquals(ModelCatalogue["gpt5"], reply.model)
+        assertEquals(gpt5, reply.model)
         assertEquals(ReplyStatus.DONE, reply.status)
+        val call = fuelix.calls.single()
+        assertEquals(gpt5.id, call.model)
+        assertEquals(
+            listOf(FuelixMessage(FuelixRole.SYSTEM, terse.prompt), asUser("Review this diff")),
+            call.messages,
+        )
     }
 
     @Test
-    fun aNewChatChoiceThatIsNotInTheCatalogueOrNotStoredSendsNothing() = runTest {
+    fun aNewChatChoiceWithABlankModelOrAPersonaThatIsNotStoredSendsNothing() = runTest {
         val repository = repository()
-        val retired = gemini.copy(id = "gemini-1")
+        val blank = gemini.copy(id = " ")
         val ghost = terse.copy(id = "ghost")
 
-        assertNull(repository.send(null, "hello", newChat = ModelChoice(retired)))
+        assertNull(repository.send(null, "hello", newChat = ModelChoice(blank)))
         assertNull(repository.send(null, "hello", newChat = ModelChoice(ghost)))
 
         assertTrue(database.conversationRows.value.isEmpty())
         assertTrue(database.messageRows.value.isEmpty())
+    }
+
+    @Test
+    fun aNewChatCanStartOnAnyModelTheKeyLists() = runTest {
+        val repository = repository()
+        val haiku = ModelCatalogue.of("claude-haiku-4-5-20251001")
+
+        val id = assertNotNull(repository.send(null, "hello", newChat = ModelChoice(haiku)))
+        advanceUntilIdle()
+
+        assertEquals(haiku, repository.observeConversation(id).first()?.model)
+        assertEquals(haiku, repository.replies(id).single().model)
+        assertEquals(haiku.id, fuelix.calls.single().model)
     }
 
     @Test
@@ -374,11 +534,13 @@ class RoomChatRepositoryTest {
         advanceUntilIdle()
 
         assertEquals(id, repository.send(id, "second", newChat = ModelChoice(gemini)))
+        advanceUntilIdle()
 
         val replies = repository.replies(id)
         assertEquals(listOf(reviewer, reviewer), replies.map { it.persona })
-        assertEquals(listOf("sonnet", "sonnet"), replies.map { it.model.id })
+        assertEquals(listOf(sonnet, sonnet), replies.map { it.model })
         assertEquals(ModelChoice(reviewer), repository.observeConversation(id).first()?.choice)
+        assertEquals(listOf(sonnet.id, sonnet.id), fuelix.calls.map { it.model })
     }
 
     @Test
@@ -403,17 +565,22 @@ class RoomChatRepositoryTest {
         val id = assertNotNull(repository.send(null, "Summarise this paper"))
         advanceUntilIdle()
 
-        assertTrue(repository.choose(id, ModelChoice(model = ModelCatalogue["opus"], persona = digest)))
+        val opus = ModelCatalogue["claude-opus-4-1-20250805"]
+
+        assertTrue(repository.choose(id, ModelChoice(model = opus, persona = digest)))
 
         assertEquals(ModelChoice(digest), repository.observeConversation(id).first()?.choice)
-        assertEquals(ConversationEntityChoice("gemini", "digest"), database.conversationRows.value.single().choice())
+        assertEquals(
+            ConversationEntityChoice(gemini.id, "digest"),
+            database.conversationRows.value.single().choice(),
+        )
     }
 
     @Test
     fun theNextReplyComesFromTheNewChoiceWhileTheReplyOnItsWayAndEarlierOnesKeepTheirs() = runTest {
         val repository = repository()
         val id = assertNotNull(repository.send(null, "first", newChat = ModelChoice(terse)))
-        advanceTimeBy(400)
+        advanceTimeBy(PIECE_DELAY * 1.5)
         assertEquals(ReplyStatus.STREAMING, repository.replies(id).single().status)
 
         assertTrue(repository.choose(id, ModelChoice(gemini)))
@@ -425,9 +592,14 @@ class RoomChatRepositoryTest {
         advanceUntilIdle()
 
         val replies = repository.replies(id)
-        assertEquals(listOf("gpt5", "gemini", "sonnet"), replies.map { it.model.id })
+        assertEquals(listOf(gpt5, gemini, sonnet), replies.map { it.model })
         assertEquals(listOf(terse, null, reviewer), replies.map { it.persona })
         assertEquals(List(3) { ReplyStatus.DONE }, replies.map { it.status })
+        assertEquals(listOf(gpt5.id, gemini.id, sonnet.id), fuelix.calls.map { it.model })
+        assertEquals(
+            listOf(terse.prompt, null, reviewer.prompt),
+            fuelix.calls.map { call -> call.messages.firstOrNull { it.role == FuelixRole.SYSTEM }?.content },
+        )
     }
 
     @Test
@@ -437,7 +609,7 @@ class RoomChatRepositoryTest {
         val writes = database.writes
 
         assertFalse(repository.choose(id + 1, ModelChoice(gemini)))
-        assertFalse(repository.choose(id, ModelChoice(gemini.copy(id = "gemini-1"))))
+        assertFalse(repository.choose(id, ModelChoice(gemini.copy(id = ""))))
         assertFalse(repository.choose(id, ModelChoice(terse.copy(id = "ghost"))))
 
         assertEquals(writes, database.writes)
@@ -465,13 +637,13 @@ class RoomChatRepositoryTest {
     }
 
     @Test
-    fun aPersonaThatIsNoLongerStoredReadsAsNoneOnItsConversationAndReplies() = runTest {
+    fun aPersonaThatIsNoLongerStoredReadsAsNoneAndItsPromptIsNotSent() = runTest {
         database = FakeChatDatabase(
             conversations = listOf(
                 ConversationEntity(
                     id = 1,
                     title = "t",
-                    modelId = "gpt5",
+                    modelId = gpt5.id,
                     createdAt = 0,
                     updatedAt = 0,
                     personaId = "ghost",
@@ -484,8 +656,11 @@ class RoomChatRepositoryTest {
         )
         val repository = repository()
 
-        assertEquals(ModelChoice(ModelCatalogue["gpt5"]), repository.observeConversation(1).first()?.choice)
+        assertEquals(ModelChoice(gpt5), repository.observeConversation(1).first()?.choice)
         assertNull(repository.replies(1).single().persona)
+        assertEquals(1L, repository.send(1, "again"))
+        advanceUntilIdle()
+        assertTrue(fuelix.calls.single().messages.none { it.role == FuelixRole.SYSTEM })
     }
 
     private fun message(
@@ -499,7 +674,7 @@ class RoomChatRepositoryTest {
         role = role,
         text = if (role == MessageRole.USER) "why?" else "",
         blocks = blocks,
-        modelId = if (role == MessageRole.USER) null else "gpt5",
+        modelId = if (role == MessageRole.USER) null else gpt5.id,
         status = status,
         latencyMillis = null,
         createdAt = 0,

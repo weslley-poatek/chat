@@ -15,6 +15,7 @@ import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailed
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_comparing
 import br.com.weslleycampos.chat.feature.chat.resources.chat_toast_send_failed
@@ -52,7 +53,8 @@ import kotlin.time.Duration.Companion.milliseconds
  * A tap on a message, its action row, the read-aloud bar and the fork banner are [messageActions],
  * on [ForkRepository]. The compare button and a compare card's "continue with this →" are
  * [compareActions], on [CompareRepository]. A toast carried over by [ChatToastRelay], a fork's,
- * shows as this opens.
+ * shows as this opens; a reply of the open conversation that Fuelix could not give shows the toast
+ * that says why (`ReplyFailure.toast`).
  *
  * The thread is how a conversation reads as text, over History or Voice: [onBack] returns there and
  * the mic, [onOpenVoice], goes on in voice. There is no "new chat": new sessions start on Voice.
@@ -85,6 +87,13 @@ class ChatViewModel(
      * itself changes, so a streaming tick that arrives before a pick is saved cannot take it back.
      */
     private var shownConversation: Conversation? = null
+
+    /**
+     * Reply failures of conversations this chat does not know yet: a new chat's first reply can fail
+     * before its send returns the conversation's id. The send claims its own, and drops the rest, when
+     * it does.
+     */
+    private val unclaimedFailures = mutableListOf<ReplyFailed>()
 
     /** What a new chat starts on, and a gone conversation returns to: `ModelRepository.observeDefaultModel`. */
     private var defaultModel: ChatModel = ModelCatalogue.default
@@ -150,7 +159,19 @@ class ChatViewModel(
             }
         }
         viewModelScope.launch {
+            models.observeModels().collect { listed -> uiState.update { it.copy(models = listed) } }
+        }
+        viewModelScope.launch {
             models.observeFavorites().collect { favorites -> uiState.update { it.copy(favorites = favorites) } }
+        }
+        viewModelScope.launch {
+            repository.replyFailures.collect { failed ->
+                val state = uiState.value
+                when {
+                    failed.conversationId == state.conversationId -> toast.show(ChatToastUi(failed.failure.toast))
+                    state.sending -> unclaimedFailures += failed
+                }
+            }
         }
         viewModelScope.launch {
             models.observePersonas().collect { personas -> uiState.update { it.copy(personas = personas) } }
@@ -197,7 +218,11 @@ class ChatViewModel(
             if (conversationId != null && sentFrom == generation) {
                 openConversation.value = conversationId
                 uiState.update { it.copy(conversationId = conversationId) }
+                unclaimedFailures.firstOrNull { it.conversationId == conversationId }?.let { failed ->
+                    toast.show(ChatToastUi(failed.failure.toast))
+                }
             }
+            unclaimedFailures.clear()
             uiState.update {
                 it.copy(
                     sending = false,
@@ -250,8 +275,15 @@ class ChatViewModel(
         }
     }
 
-    /** The model chip, the prototype's `openModelSheet`: the Model picker opens. */
-    fun onOpenModelPicker() = uiState.update { it.copy(modelPickerOpen = true) }
+    /**
+     * The model chip, the prototype's `openModelSheet`: the Model picker opens, and asks Fuelix again
+     * which models the key can use. It lists the ones it knows meanwhile, and keeps them when Fuelix
+     * does not answer.
+     */
+    fun onOpenModelPicker() {
+        uiState.update { it.copy(modelPickerOpen = true) }
+        viewModelScope.launch { models.refreshListed() }
+    }
 
     /** A tap on the scrim, a drag down or Back: the sheet closes, picking nothing. */
     fun onDismissModelPicker() = uiState.update { it.copy(modelPickerOpen = false) }
@@ -352,6 +384,20 @@ fun ChatViewModel.onBack() {
  */
 fun ChatViewModel.onOpenVoice() {
     navigate(VoiceEntry(uiState.value.conversationId)) { popUpTo<VoiceEntry> { inclusive = true } }
+}
+
+/**
+ * Asks Fuelix for the key's models, `ModelRepository.refreshModels`; one that cannot be stored keeps
+ * the list as it was.
+ */
+internal suspend fun ModelRepository.refreshListed() {
+    try {
+        refreshModels()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (ignored: Exception) {
+        // The list stays as last stored.
+    }
 }
 
 private data class ObservedThread(val id: Long, val conversation: Conversation?, val messages: List<Message>)

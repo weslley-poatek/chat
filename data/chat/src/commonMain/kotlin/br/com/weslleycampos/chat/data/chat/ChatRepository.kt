@@ -3,6 +3,7 @@ package br.com.weslleycampos.chat.data.chat
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailed
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import br.com.weslleycampos.chat.data.chat.models.groupHistory
 import kotlinx.coroutines.flow.Flow
@@ -12,8 +13,9 @@ import kotlinx.coroutines.flow.Flow
  * that emits the current value when collected and again on every change that alters it; nothing
  * emits twice in a row with the same value.
  *
- * Replies are canned and play in the data layer: [send] saves the user's message and a reply that
- * starts [ReplyStatus.THINKING], then streams the reply into the database. The UI only observes.
+ * Replies come from Fuelix and stream in the data layer: [send] saves the user's message and a
+ * reply that starts [ReplyStatus.THINKING], then streams the model's reply into the database. The UI
+ * only observes, and hears from [replyFailures] why a reply stopped.
  *
  * A new chat has no conversation and nothing in the database: show its empty state on
  * [ModelRepository.observeDefaultModel] (or what the model picker picked since) with
@@ -47,9 +49,8 @@ interface ChatRepository {
      * The conversation's messages, oldest first: each [Message.User] followed by its
      * [Message.Assistant], or by a [Message.ComparePair] when it was sent while compare was on,
      * except in a fork made at a user message ([ForkRepository.fork]), where that message has no
-     * reply and the next send follows it. Emits on every tick of a reply that is streaming, about
-     * every 28 ms, a pair's two sides changing in one emission. Empty for an id with no
-     * conversation.
+     * reply and the next send follows it. Emits as a reply streams, at most about every 40 ms per
+     * side. Empty for an id with no conversation.
      */
     fun observeMessages(conversationId: Long): Flow<List<Message>>
 
@@ -68,8 +69,7 @@ interface ChatRepository {
      * With a [query] that is not blank, only the conversations it matches, in the same order. The
      * query is trimmed, and a conversation matches when one of these contains it:
      * - its title;
-     * - the text of one of the user's own messages (replies are canned, the same in every
-     *   conversation, so they are not searched);
+     * - the text of one of the user's own messages (replies are not searched);
      * - its model's short name, as the row shows it: "gpt" finds every GPT-5 conversation;
      * - while it compares, the short name of the model it is compared with, the row's "⇄ gpt-5".
      *
@@ -93,28 +93,39 @@ interface ChatRepository {
      * id from then on. A conversation that exists answers with its own choice and ignores
      * [newChat]; [choose] changes it. The reply records the model and persona it is written with.
      *
-     * While the conversation compares ([ModelChoice.comparing]), the reply is a
-     * [Message.ComparePair]: its first side from the conversation's model with the canned reply a
-     * single reply would have, its second from the compared model with that reply's alternative.
-     * The pair counts as one reply in the rotation of canned replies.
+     * The reply is Fuelix's, from the conversation's model, which reads the conversation so far and,
+     * while a persona answers, the persona's prompt first. While the conversation compares
+     * ([ModelChoice.comparing]), the reply is a [Message.ComparePair]: its first side from the
+     * conversation's model, its second from the compared model, each reading its own side of the
+     * pairs before it.
      *
      * Sends nothing and returns `null` when [text] is blank, when [conversationId] names no
      * conversation, when [newChat]'s model or second model is not in the catalogue, its second model
      * is its model, or its persona is not stored, or while the conversation's last reply, either
      * side of a pair, [ReplyStatus.isInProgress], so replies never overlap in one conversation.
      *
-     * The reply thinks for 320–619 ms, then streams one tick every 28 ms until it is
-     * [ReplyStatus.DONE] with its latency. It keeps playing, and is saved, after the UI that sent
-     * it is gone; one that was still playing when the app was closed reads as
-     * [ReplyStatus.INTERRUPTED] the next time the app starts. Archiving its conversation lets it
-     * finish; deleting it stops it at its next tick. A pair's sides think once, together, then
-     * stream on the same ticks, each finishing on its own with its own latency; closing the app or
-     * deleting the conversation stops both.
+     * The reply thinks until its first words arrive, then streams them until it is
+     * [ReplyStatus.DONE] with its latency, the time from its first words to its last. It keeps
+     * streaming, and is saved, after the UI that sent it is gone; one that was still streaming when
+     * the app was closed reads as [ReplyStatus.INTERRUPTED] the next time the app starts. Archiving
+     * its conversation lets it finish; deleting it stops it at its next write. A pair's sides
+     * stream at once, each finishing on its own with its own latency.
+     *
+     * A reply that fails (no Fuelix key, a refused key, an unavailable model, no connection, an
+     * empty reply) reads [ReplyStatus.INTERRUPTED] with what it showed, and [replyFailures]
+     * says why. The message stays sent.
      *
      * A message sent in an archived conversation brings it back to History and "recent", at the
      * top, as it was pinned or not.
      */
     suspend fun send(conversationId: Long?, text: String, newChat: ModelChoice? = null): Long?
+
+    /**
+     * Every reply that stops on a failure from now on, once, as it stops: a pair whose sides both
+     * fail is one event. Nothing is replayed to a later collector, and nothing is stored: a reply
+     * read later only says [ReplyStatus.INTERRUPTED].
+     */
+    val replyFailures: Flow<ReplyFailed>
 
     /**
      * Makes [choice] answer the conversation's next message, as a pick in the model picker does: a
@@ -147,7 +158,7 @@ interface ChatRepository {
 
     /**
      * Deletes the conversation and all its messages from the device, as a row's "delete" does, with
-     * no undo. A reply still on its way stops at its next tick, and its conversation's observers
+     * no undo. A reply still on its way stops at its next write, and its conversation's observers
      * read `null` and an empty thread. Returns whether it deleted anything: `false` for an unknown
      * conversation, one already deleted included.
      */

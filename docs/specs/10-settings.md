@@ -8,7 +8,7 @@ account, and the "api keys" group, where they type their own key for each model 
 to have a option to add a key"). Since 2026-10-28 there is one provider, Fuelix ("let's have just
 Fuelix as provider"): its gateway, `https://api.fuelix.ai`, serves every model of the catalogue, so
 one key covers them all. A key is stored encrypted on the device and only ever shown masked;
-replies stay canned, so it is never sent anywhere. Deleting the account deletes it on
+since spec 11 it is sent only to Fuelix, with each reply's request. Deleting the account deletes it on
 Firebase and then wipes everything the device keeps.
 
 ## Frames
@@ -535,9 +535,8 @@ TalkBack and VoiceOver reading the rows, the delete hint and the key input as a 
 
 ## Out of scope
 
-- Reading a whole key back. Replies stay canned (rules: no real model provider), so nothing needs
-  it; a future provider integration would add an internal read in `:data:settings` that never
-  reaches the UI.
+- Reading a whole key back in the UI. Spec 11's replies read the Fuelix key whole through
+  `EncryptedFuelixKeySource`, an internal read in `:data:settings` that never reaches the UI.
 - Sending a key anywhere, validating it with its provider, or checking its format.
 - Linking and unlinking sign-in methods (the prototype's expanded "connect" / "disconnect" rows,
   364–371) and changing the email, password, name or avatar ("edit ›" is not interactive in the

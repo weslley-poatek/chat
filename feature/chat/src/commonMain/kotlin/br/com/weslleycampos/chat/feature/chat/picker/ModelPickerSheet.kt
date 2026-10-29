@@ -66,7 +66,6 @@ import br.com.weslleycampos.chat.feature.chat.Dot
 import br.com.weslleycampos.chat.feature.chat.HairlineWidth
 import br.com.weslleycampos.chat.feature.chat.palette
 import br.com.weslleycampos.chat.feature.chat.resources.FeatureChatRes
-import br.com.weslleycampos.chat.feature.chat.resources.model_picker_all_models
 import br.com.weslleycampos.chat.feature.chat.resources.model_picker_compared
 import br.com.weslleycampos.chat.feature.chat.resources.model_picker_favorite
 import br.com.weslleycampos.chat.feature.chat.resources.model_picker_favorites
@@ -99,13 +98,14 @@ private const val Plus = "+"
 
 /**
  * The Model picker frame (frames.md §2.7) in a [ChatBottomSheet]: the grabber, the title, then
- * "favorites", "personas" with "+ new persona" (the chat sheet only) and "all models", scrolling
- * within 82 % of the height the sheet is offered. It shows while [open], slides up when it opens and
+ * "favorites", "personas" with "+ new persona" (the chat sheet only) and a section per vendor,
+ * "anthropic", "openai" and on, in place of the frame's "all models", scrolling within 82 % of the
+ * height the sheet is offered. It shows while [open], slides up when it opens and
  * slides away when it closes, a pick included; a tap on the scrim, a drag down or Back asks
  * [onDismissRequest] to close it.
  *
- * A row's tap is [onPick] with the row's [ModelPickerRow.choice]; the star of an "all models" row
- * is a tap target of its own, [onToggleFavorite], which keeps the sheet open. The caller decides
+ * A row's tap is [onPick] with the row's [ModelPickerRow.choice]; the star of a vendor's row is a
+ * tap target of its own, [onToggleFavorite], which keeps the sheet open. The caller decides
  * what a pick does: the chat chooses it for the open conversation or keeps it for the new chat
  * (`ChatViewModel.onPick`), Settings' "Default model" (row 10) passes it to
  * `ModelRepository.setDefaultModel`. Either way the caller closes the sheet by setting [open] to
@@ -188,11 +188,12 @@ fun ModelPickerContent(
                 Rows(rows = state.personas, onPick = onPick, onToggleFavorite = onToggleFavorite)
                 NewPersonaRow()
             }
-            SectionLabel(
-                text = stringResource(FeatureChatRes.string.model_picker_all_models),
-                top = ChatTheme.spacing.xLarge,
-            )
-            Rows(rows = state.allModels, onPick = onPick, onToggleFavorite = onToggleFavorite)
+            for (vendor in state.vendors) {
+                key(vendor.label) {
+                    SectionLabel(text = vendor.label, top = ChatTheme.spacing.xLarge)
+                    Rows(rows = vendor.rows, onPick = onPick, onToggleFavorite = onToggleFavorite)
+                }
+            }
             Spacer(modifier = Modifier.height(ChatTheme.spacing.small))
         }
     }
@@ -222,7 +223,7 @@ private fun Header(title: String, action: @Composable () -> Unit) {
     }
 }
 
-/** "favorites", "personas", "all models": mono 11 `--fg3`. */
+/** "favorites", "personas", "anthropic": mono 11 `--fg3`. */
 @Composable
 private fun SectionLabel(text: String, top: Dp) {
     Text(
@@ -254,7 +255,7 @@ private fun Rows(rows: List<ModelPickerRow>, onPick: (ModelChoice) -> Unit, onTo
 }
 
 /**
- * A model or persona row: the dot, the name over its meta, the star on "all models" rows, and the
+ * A model or persona row: the dot, the name over its meta, the star on a vendor's rows, and the
  * mark. The row's button lies under its content rather than around it, so the star is a sibling
  * tap target, not a button nested in the row's: a tap on the star toggles the favorite, anywhere
  * else picks. `--bg2` while pressed, the prototype's hover.
@@ -404,7 +405,7 @@ data class ModelPickerPreviewCase(
  * model is picked and with one, and Settings' default sheet.
  */
 class ModelPickerPreviewParameterProvider : PreviewParameterProvider<ModelPickerPreviewCase> {
-    private val gpt5 = ModelCatalogue["gpt5"]
+    private val gpt5 = ModelCatalogue["gpt-5"]
     private val states = listOf(
         "Chat" to ModelChoice(ModelCatalogue.default),
         "Chat · persona" to ModelChoice(PreviewReviewer),
@@ -419,6 +420,7 @@ class ModelPickerPreviewParameterProvider : PreviewParameterProvider<ModelPicker
             name,
             modelPickerUiState(
                 variant = ModelPickerVariant.Chat,
+                models = ModelCatalogue.models,
                 favorites = favorites,
                 personas = PersonaPresets.personas,
                 active = active,
@@ -429,6 +431,7 @@ class ModelPickerPreviewParameterProvider : PreviewParameterProvider<ModelPicker
         "Default",
         modelPickerUiState(
             variant = ModelPickerVariant.Default,
+            models = ModelCatalogue.models,
             favorites = PreviewFavorites,
             personas = PersonaPresets.personas,
             active = ModelChoice(gpt5),

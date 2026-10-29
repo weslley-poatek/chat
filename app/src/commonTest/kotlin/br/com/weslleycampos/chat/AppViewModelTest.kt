@@ -30,16 +30,28 @@ class AppViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun theRootWearsTheDefaultModelsPaletteAndFollowsItAtOnce() = runTest {
-        val defaultModel = MutableStateFlow(ModelCatalogue["gemini"])
+    fun theRootWearsTheDefaultModelsVendorsPaletteAndFollowsItAtOnce() = runTest {
+        val defaultModel = MutableStateFlow(ModelCatalogue["gemini-2.5-pro"])
         val viewModel = AppViewModel(DefaultModelOnly(defaultModel))
         runCurrent()
         assertEquals(ChatPalette.GEMINI, viewModel.palette.value)
 
-        for (model in ModelCatalogue.models) {
-            defaultModel.value = model
+        val palettes = mapOf(
+            "claude-sonnet-4-5-20250929" to ChatPalette.SONNET,
+            "claude-opus-4-1-20250805" to ChatPalette.SONNET,
+            "gpt-5" to ChatPalette.GPT5,
+            "o3" to ChatPalette.GPT5,
+            "gemini-2.5-pro" to ChatPalette.GEMINI,
+            "llama-4-maverick-17b-128e" to ChatPalette.LLAMA,
+            "deepseek-v4.1-flash" to ChatPalette.DEEPSEEK,
+            "mistral-large" to ChatPalette.MISTRAL,
+            // A model of no known vendor, as Fuelix may list one.
+            "qwen3-coder" to ChatPalette.Default,
+        )
+        for ((id, palette) in palettes) {
+            defaultModel.value = ModelCatalogue[id]
             runCurrent()
-            assertEquals(model.id.uppercase(), viewModel.palette.value.name, model.id)
+            assertEquals(palette, viewModel.palette.value, id)
         }
     }
 
@@ -54,6 +66,10 @@ class AppViewModelTest {
 
 /** A [ModelRepository] with only a default model: the root reads nothing else. */
 private class DefaultModelOnly(private val defaultModel: Flow<ChatModel>) : ModelRepository {
+    override fun observeModels(): Flow<List<ChatModel>> = emptyFlow()
+
+    override suspend fun refreshModels(): Boolean = false
+
     override fun observeFavorites(): Flow<List<ChatModel>> = emptyFlow()
 
     override suspend fun setFavorite(model: ChatModel, favorite: Boolean) = Unit

@@ -1,15 +1,17 @@
 package br.com.weslleycampos.chat.data.chat
 
+import androidx.datastore.preferences.core.preferencesOf
 import br.com.weslleycampos.chat.data.chat.fakes.FakeChatDatabase
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient.Companion.PIECE_DELAY
 import br.com.weslleycampos.chat.data.chat.fakes.FakePreferences
-import br.com.weslleycampos.chat.data.chat.fakes.FixedRandom
 import br.com.weslleycampos.chat.data.chat.fakes.TestClock
+import br.com.weslleycampos.chat.data.chat.models.Block
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
-import br.com.weslleycampos.chat.data.chat.replies.CannedReplies
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -31,8 +33,10 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoomChatRepositoryHistoryTest {
     private val database = FakeChatDatabase()
+    private var preferences = FakePreferences()
+    private val fuelix = FakeFuelixClient()
 
-    /** Streams at the slowest pace and shortest thinking time, in the test's own scope. */
+    /** Replies stream from [fuelix] on the test's virtual time, in the test's own scope. */
     private fun TestScope.repository(): RoomChatRepository {
         val clock = TestClock(testScheduler)
         return RoomChatRepository(
@@ -43,10 +47,11 @@ class RoomChatRepositoryHistoryTest {
             transactions = database.transactions,
             models = LocalModelRepository(
                 personaDao = database.personaDao,
-                preferences = FakePreferences(),
+                preferences = preferences,
+                fuelix = fuelix,
                 scope = this,
             ),
-            streamer = ReplyStreamer(messageDao = database.messageDao, clock = clock, random = FixedRandom()),
+            streamer = ReplyStreamer(messageDao = database.messageDao, fuelix = fuelix, clock = clock),
             clock = clock,
             scope = this,
         )
@@ -60,6 +65,9 @@ class RoomChatRepositoryHistoryTest {
         observeHistory(query).first().map(Conversation::id)
 
     private suspend fun ChatRepository.recent(): List<Long> = observeRecentConversations().first().map(Conversation::id)
+
+    /** What the default model answers when nothing else is scripted. */
+    private val answer = listOf(Block.Paragraph(FakeFuelixClient.answer(ModelCatalogue.DEFAULT_MODEL_ID)))
 
     private suspend fun ChatRepository.reply(conversationId: Long): Message.Assistant =
         observeMessages(conversationId).first().filterIsInstance<Message.Assistant>().last()
@@ -106,12 +114,28 @@ class RoomChatRepositoryHistoryTest {
     }
 
     @Test
-    fun aQueryDoesNotSearchTheCannedReplies() = runTest {
+    fun aQueryDoesNotSearchTheReplies() = runTest {
         val repository = repository()
-        started(repository, "first", "second")
+        fuelix.reply(ModelCatalogue.DEFAULT_MODEL_ID, "The probability ", "is low.")
+        val (first) = started(repository, "first", "second")
 
-        assertTrue(CannedReplies.replies[0].toString().contains("probability"))
+        assertEquals(listOf(Block.Paragraph("The probability is low.")), repository.reply(first).blocks)
         assertEquals(emptyList(), repository.history("probability"))
+    }
+
+    @Test
+    fun aQueryFindsAConversationOnAModelTheKeyListsByItsShortName() = runTest {
+        val haiku = "claude-haiku-4-5-20251001"
+        preferences = FakePreferences(preferencesOf(LocalModelRepository.ModelIdsKey to "$haiku\ngpt-5"))
+        val repository = repository()
+        val (index) = started(repository, "Postgres index")
+        val onHaiku = ModelChoice(ModelCatalogue.of(haiku))
+        val rust = assertNotNull(repository.send(null, "Rust ownership", newChat = onHaiku))
+        advanceUntilIdle()
+
+        assertEquals(listOf(rust), repository.history("HAIKU"))
+        assertEquals(listOf(rust, index), repository.history("4.5"))
+        assertEquals(listOf(haiku, ModelCatalogue.DEFAULT_MODEL_ID, "sonnet"), database.searches.last().second)
     }
 
     @Test
@@ -123,7 +147,7 @@ class RoomChatRepositoryHistoryTest {
         repository.history("50%_off\\")
 
         assertEquals(
-            listOf("%Gpt%" to listOf("gpt5"), """%50\%\_off\\%""" to emptyList()),
+            listOf("%Gpt%" to listOf("gpt-5", "gpt5"), """%50\%\_off\\%""" to emptyList()),
             database.searches,
         )
     }
@@ -167,7 +191,7 @@ class RoomChatRepositoryHistoryTest {
             repository.observeHistory("debounce").collect { list -> emissions += list.map { it.id } }
         }
 
-        // A conversation the search does not match, and its reply's 186 ticks.
+        // A conversation the search does not match, and every write of its reply.
         val other = assertNotNull(repository.send(null, "Postgres index"))
         advanceUntilIdle()
         // Now it matches; its next reply streams into it without changing the matches again.
@@ -263,17 +287,18 @@ class RoomChatRepositoryHistoryTest {
     }
 
     @Test
-    fun deletingAConversationWhileItsReplyThinksStopsTheReplyOnItsFirstTick() = runTest {
+    fun deletingAConversationWhileItsReplyThinksStopsTheReplyOnItsFirstWords() = runTest {
         val repository = repository()
         val id = assertNotNull(repository.send(null, "first"))
-        advanceTimeBy(100)
+        advanceTimeBy(PIECE_DELAY / 2)
 
         assertTrue(repository.delete(id))
         advanceUntilIdle()
 
-        // Thinking ends at 320 ms; the first tick, at 348 ms, finds the reply gone and the stream stops.
+        // The first piece, at 50 ms, finds the reply gone and the stream stops.
         assertEquals(1, database.replyUpdates.size)
-        assertEquals(320L + 28, currentTime)
+        assertEquals(1, fuelix.calls.single().sent)
+        assertEquals(PIECE_DELAY.inWholeMilliseconds, currentTime)
         assertTrue(database.messageRows.value.isEmpty())
         val next = assertNotNull(repository.send(null, "a new chat"))
         advanceUntilIdle()
@@ -285,7 +310,7 @@ class RoomChatRepositoryHistoryTest {
         val repository = repository()
         val deleted = assertNotNull(repository.send(null, "first"))
         val kept = assertNotNull(repository.send(null, "second"))
-        advanceTimeBy(400)
+        advanceTimeBy(PIECE_DELAY * 1.5)
         val deletedReply = repository.reply(deleted).id
         val writesBefore = database.replyUpdates.count { it.id == deletedReply }
         assertEquals(ReplyStatus.STREAMING, repository.reply(kept).status)
@@ -295,7 +320,7 @@ class RoomChatRepositoryHistoryTest {
 
         assertEquals(writesBefore + 1, database.replyUpdates.count { it.id == deletedReply })
         assertEquals(ReplyStatus.DONE, repository.reply(kept).status)
-        assertEquals(CannedReplies.replies[0], repository.reply(kept).blocks)
+        assertEquals(answer, repository.reply(kept).blocks)
         assertEquals(listOf(kept), repository.history())
     }
 
@@ -303,14 +328,14 @@ class RoomChatRepositoryHistoryTest {
     fun archivingAConversationWhileItsReplyStreamsLetsTheReplyFinish() = runTest {
         val repository = repository()
         val id = assertNotNull(repository.send(null, "first"))
-        advanceTimeBy(400)
+        advanceTimeBy(PIECE_DELAY * 1.5)
         assertEquals(ReplyStatus.STREAMING, repository.reply(id).status)
 
         assertTrue(repository.archive(id))
         advanceUntilIdle()
 
         assertEquals(ReplyStatus.DONE, repository.reply(id).status)
-        assertEquals(CannedReplies.replies[0], repository.reply(id).blocks)
+        assertEquals(answer, repository.reply(id).blocks)
         assertEquals(emptyList(), repository.history())
     }
 }

@@ -8,11 +8,13 @@ import br.com.weslleycampos.chat.core.database.entities.PAIR_FIRST_SIDE
 import br.com.weslleycampos.chat.core.database.entities.PAIR_SECOND_SIDE
 import br.com.weslleycampos.chat.core.database.entities.StoredBlock
 import br.com.weslleycampos.chat.data.chat.fakes.FakeChatDatabase
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient
+import br.com.weslleycampos.chat.data.chat.fakes.FakeFuelixClient.Companion.PIECE_DELAY
 import br.com.weslleycampos.chat.data.chat.fakes.FakePreferences
-import br.com.weslleycampos.chat.data.chat.fakes.FixedRandom
 import br.com.weslleycampos.chat.data.chat.fakes.TEST_START
 import br.com.weslleycampos.chat.data.chat.fakes.TestClock
 import br.com.weslleycampos.chat.data.chat.models.Block
+import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.CompareSide
 import br.com.weslleycampos.chat.data.chat.models.Conversation
 import br.com.weslleycampos.chat.data.chat.models.Message
@@ -20,9 +22,13 @@ import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.Persona
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailed
+import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
-import br.com.weslleycampos.chat.data.chat.replies.CannedReplies
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
+import br.com.weslleycampos.chat.data.fuelix.FuelixException
+import br.com.weslleycampos.chat.data.fuelix.FuelixMessage
+import br.com.weslleycampos.chat.data.fuelix.FuelixRole
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -44,22 +50,22 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.milliseconds
 
 /** Compare mode in [RoomChatRepository]: the stored compare choice, and the pairs a send answers with. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoomChatRepositoryCompareTest {
     private var database = FakeChatDatabase()
+    private val fuelix = FakeFuelixClient()
 
-    private val sonnet = ModelCatalogue["sonnet"]
-    private val gpt5 = ModelCatalogue["gpt5"]
-    private val gemini = ModelCatalogue["gemini"]
+    private val sonnet = ModelCatalogue.default
+    private val gpt5 = ModelCatalogue["gpt-5"]
+    private val gemini = ModelCatalogue["gemini-2.5-pro"]
     private val terse: Persona = PersonaPresets.personas.single { it.id == "terse" }
 
     /** Sonnet compared with GPT-5, the prototype's "sonnet-4.5 ⇄ gpt-5". */
     private val comparing = ModelChoice(model = sonnet, compareOn = true, compareWith = gpt5)
 
-    /** Streams at the slowest pace and shortest thinking time, in the test's own scope by default. */
+    /** Replies stream from [fuelix] on the test's virtual time, in the test's own scope by default. */
     private fun TestScope.repository(scope: CoroutineScope = this): RoomChatRepository {
         val clock = TestClock(testScheduler)
         return RoomChatRepository(
@@ -71,9 +77,10 @@ class RoomChatRepositoryCompareTest {
             models = LocalModelRepository(
                 personaDao = database.personaDao,
                 preferences = FakePreferences(),
+                fuelix = fuelix,
                 scope = this,
             ),
-            streamer = ReplyStreamer(messageDao = database.messageDao, clock = clock, random = FixedRandom()),
+            streamer = ReplyStreamer(messageDao = database.messageDao, fuelix = fuelix, clock = clock),
             clock = clock,
             scope = scope,
         )
@@ -91,6 +98,13 @@ class RoomChatRepositoryCompareTest {
     private fun Message.ComparePair.statuses(): List<ReplyStatus> = sides.map { it.status }
 
     private fun row(id: Long): ConversationEntity = database.conversationRows.value.single { it.id == id }
+
+    /** What [model] answers when nothing else is scripted for it. */
+    private fun answer(model: ChatModel): List<Block> = listOf(Block.Paragraph(FakeFuelixClient.answer(model.id)))
+
+    private fun asUser(text: String) = FuelixMessage(FuelixRole.USER, text)
+
+    private fun asModel(model: ChatModel) = FuelixMessage(FuelixRole.ASSISTANT, FakeFuelixClient.answer(model.id))
 
     @Test
     fun aFirstSendWhileComparingCreatesAComparingConversationAnsweredByAThinkingPair() = runTest {
@@ -117,12 +131,13 @@ class RoomChatRepositoryCompareTest {
         val sides = database.messageRows.value.filter { it.role == MessageRole.ASSISTANT }
         assertEquals(listOf(PAIR_FIRST_SIDE, PAIR_SECOND_SIDE), sides.map { it.pairSide })
         assertEquals(listOf(null, null), sides.map { it.personaId })
-        assertEquals(true to "gpt5", row(id).let { it.compareOn to it.compareModelId })
+        assertEquals(true to gpt5.id, row(id).let { it.compareOn to it.compareModelId })
     }
 
     @Test
-    fun aPairsSidesStreamOnTheSameTicksWithTheReplyAndItsAlternativeEachDoneWithItsOwnLatency() = runTest {
+    fun aPairsSidesStreamAtOnceEachFromItsOwnModelEachDoneWithItsOwnLatency() = runTest {
         val repository = repository()
+        fuelix.reply(gpt5.id, "Most ", "likely ", "SSE.")
         val id = assertNotNull(repository.send(null, "why is my debounce stale?", newChat = comparing))
         val pairs = mutableListOf<Message.ComparePair>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -131,40 +146,38 @@ class RoomChatRepositoryCompareTest {
 
         advanceUntilIdle()
 
-        // REPLY_ALT[0] is done after 79 ticks and REPLIES[0] after 186, one emission a tick, both
-        // sides at once, except REPLIES[0]'s tick after its list's last item, which shows nothing new.
         val pair = pairs.last()
-        assertEquals(listOf(CannedReplies.replies[0], CannedReplies.alternatives[0]), pair.sides.map { it.blocks })
-        assertEquals(listOf((186 * 28).milliseconds, (79 * 28).milliseconds), pair.sides.map { it.latency })
-        assertEquals(320L + 186 * 28, currentTime)
-        assertEquals(186, pairs.size)
+        assertEquals(listOf(answer(sonnet), listOf(Block.Paragraph("Most likely SSE."))), pair.sides.map { it.blocks })
+        // Sonnet's four pieces and GPT-5's three, 50 ms apart, side by side.
+        assertEquals(listOf(PIECE_DELAY * 3, PIECE_DELAY * 2), pair.sides.map { it.latency })
+        assertEquals((PIECE_DELAY * FakeFuelixClient.DEFAULT_PIECES).inWholeMilliseconds, currentTime)
         assertEquals(listOf(ReplyStatus.THINKING, ReplyStatus.THINKING), pairs.first().statuses())
-        assertEquals(listOf(ReplyStatus.STREAMING, ReplyStatus.STREAMING), pairs[78].statuses())
-        assertEquals(listOf(ReplyStatus.STREAMING, ReplyStatus.DONE), pairs[79].statuses())
+        assertTrue(pairs.any { it.statuses() == listOf(ReplyStatus.STREAMING, ReplyStatus.DONE) })
         assertEquals(listOf(ReplyStatus.DONE, ReplyStatus.DONE), pair.statuses())
-        pairs.take(80).zipWithNext().forEach { (before, after) ->
-            assertTrue(before.sides.indices.all { side -> before.sides[side].blocks != after.sides[side].blocks })
-        }
         assertFalse(pair.isInProgress)
+        assertEquals(listOf(sonnet.id, gpt5.id), fuelix.calls.map { it.model })
+        assertEquals(List(2) { listOf(asUser("why is my debounce stale?")) }, fuelix.calls.map { it.messages })
     }
 
     @Test
     fun aSendWaitsForBothSidesOfThePair() = runTest {
         val repository = repository()
+        fuelix.hold(afterPieces = 1, model = sonnet.id)
         val id = assertNotNull(repository.send(null, "first", newChat = comparing))
 
-        advanceTimeBy(320 + 80 * 28)
+        advanceUntilIdle()
         assertEquals(listOf(ReplyStatus.STREAMING, ReplyStatus.DONE), repository.pair(id).statuses())
         assertNull(repository.send(id, "while the first side streams"))
         assertEquals(2, repository.thread(id).size)
 
+        fuelix.release()
         advanceUntilIdle()
         assertEquals(id, repository.send(id, "after both are done"))
         assertEquals(4, repository.thread(id).size)
     }
 
     @Test
-    fun aPairCountsAsOneReplyInTheRotationOfCannedReplies() = runTest {
+    fun eachSideOfTheNextTurnReadsItsOwnSideOfEarlierPairsAndASingleReplyTheFirstSide() = runTest {
         val repository = repository()
         val id = assertNotNull(repository.send(null, "one"))
         advanceUntilIdle()
@@ -177,14 +190,23 @@ class RoomChatRepositoryCompareTest {
         repository.send(id, "four")
         advanceUntilIdle()
 
-        val r = CannedReplies.replies
-        val alt = CannedReplies.alternatives
+        assertEquals(listOf(sonnet, sonnet, gpt5, sonnet, gpt5, sonnet).map { it.id }, fuelix.calls.map { it.model })
+        val (sonnetThree, gptThree) = fuelix.calls.subList(3, 5).map { it.messages }
+        assertEquals(
+            listOf(asUser("one"), asModel(sonnet), asUser("two"), asModel(gpt5), asUser("three")),
+            gptThree,
+        )
+        assertEquals(
+            listOf(asUser("one"), asModel(sonnet), asUser("two"), asModel(sonnet), asUser("three")),
+            sonnetThree,
+        )
         val replies = repository.thread(id).filterNot { it is Message.User }
-        assertEquals(r[0], assertIs<Message.Assistant>(replies[0]).blocks)
-        assertEquals(listOf(r[1], alt[1]), assertIs<Message.ComparePair>(replies[1]).sides.map { it.blocks })
-        assertEquals(listOf(r[2], alt[2]), assertIs<Message.ComparePair>(replies[2]).sides.map { it.blocks })
-        assertEquals(r[0], assertIs<Message.Assistant>(replies[3]).blocks)
-        assertEquals(sonnet, (replies[3] as Message.Assistant).model)
+        assertEquals(answer(sonnet), assertIs<Message.Assistant>(replies[0]).blocks)
+        replies.subList(1, 3).forEach { pair ->
+            val sides = assertIs<Message.ComparePair>(pair).sides
+            assertEquals(listOf(answer(sonnet), answer(gpt5)), sides.map { it.blocks })
+        }
+        assertEquals(sonnet, assertIs<Message.Assistant>(replies[3]).model)
     }
 
     @Test
@@ -199,7 +221,7 @@ class RoomChatRepositoryCompareTest {
         advanceUntilIdle()
         val pair = restarted.pair(id)
         assertEquals(listOf(sonnet, gpt5), pair.sides.map { it.model })
-        assertEquals(listOf(CannedReplies.replies[1], CannedReplies.alternatives[1]), pair.sides.map { it.blocks })
+        assertEquals(listOf(answer(sonnet), answer(gpt5)), pair.sides.map { it.blocks })
     }
 
     @Test
@@ -223,43 +245,58 @@ class RoomChatRepositoryCompareTest {
         assertEquals(listOf(ReplyStatus.DONE, ReplyStatus.INTERRUPTED), repository.pair(2).statuses())
         assertEquals(1L, repository.send(1, "try again"))
         advanceUntilIdle()
-        val next = listOf(CannedReplies.replies[1], CannedReplies.alternatives[1])
-        assertEquals(next, repository.pair(1).sides.map { it.blocks })
+        assertEquals(listOf(answer(sonnet), answer(gpt5)), repository.pair(1).sides.map { it.blocks })
     }
 
     @Test
-    fun aPairWhoseStreamIsCancelledHasBothSidesInterruptedWithWhatTheyRevealed() = runTest {
+    fun aPairWhoseStreamIsCancelledHasBothSidesInterruptedWithWhatTheyShowed() = runTest {
         val streams = CoroutineScope(coroutineContext + Job(coroutineContext.job))
         val repository = repository(scope = streams)
         val id = assertNotNull(repository.send(null, "first", newChat = comparing))
-        advanceTimeBy(320 + 2 * 28)
-        runCurrent()
+        advanceTimeBy(PIECE_DELAY * 1.5)
 
         streams.cancel()
         runCurrent()
 
         val pair = repository.pair(id)
         assertEquals(listOf(ReplyStatus.INTERRUPTED, ReplyStatus.INTERRUPTED), pair.statuses())
-        assertEquals(
-            listOf(listOf(Block.Paragraph("Two ")), listOf(Block.Paragraph("Most"))),
-            pair.sides.map { it.blocks },
-        )
+        assertEquals(List(2) { listOf(Block.Paragraph("Answer")) }, pair.sides.map { it.blocks })
         assertEquals(listOf(null, null), pair.sides.map { it.latency })
         assertFalse(pair.isInProgress)
+    }
+
+    @Test
+    fun aSideThatFailsIsLeftInterruptedWhileTheOtherFinishesAndTheFailureIsToldOnce() = runTest {
+        val repository = repository()
+        val failures = mutableListOf<ReplyFailed>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            repository.replyFailures.collect { failures += it }
+        }
+        fuelix.reply(gpt5.id, "Most ", failure = FuelixException.ModelUnavailable(status = 404))
+
+        val id = assertNotNull(repository.send(null, "first", newChat = comparing))
+        advanceUntilIdle()
+
+        assertEquals(listOf(ReplyFailed(conversationId = id, failure = ReplyFailure.MODEL_UNAVAILABLE)), failures)
+        val pair = repository.pair(id)
+        assertEquals(listOf(ReplyStatus.DONE, ReplyStatus.INTERRUPTED), pair.statuses())
+        assertEquals(listOf(answer(sonnet), listOf(Block.Paragraph("Most"))), pair.sides.map { it.blocks })
+        assertEquals(id, repository.send(id, "again"))
     }
 
     @Test
     fun deletingAComparingConversationWhileItsPairStreamsStopsBothSides() = runTest {
         val repository = repository()
         val id = assertNotNull(repository.send(null, "first", newChat = comparing))
-        advanceTimeBy(320 + 2 * 28)
-        runCurrent()
+        advanceTimeBy(PIECE_DELAY * 1.5)
 
         assertTrue(repository.delete(id))
         advanceUntilIdle()
 
-        assertEquals(3, database.replyBatches.size)
-        assertEquals(320L + 3 * 28, currentTime)
+        // Each side's second piece finds its row gone, and both streams stop there.
+        assertEquals(listOf(2, 2), fuelix.calls.map { it.sent })
+        assertEquals(4, database.replyUpdates.size)
+        assertEquals((PIECE_DELAY * 2).inWholeMilliseconds, currentTime)
         assertTrue(repository.thread(id).isEmpty())
     }
 
@@ -309,8 +346,9 @@ class RoomChatRepositoryCompareTest {
         assertEquals(ModelChoice(model = sonnet, compareOn = true), repository.conversation(id).choice)
         assertNull(repository.conversation(id).comparing)
         val reply = assertIs<Message.Assistant>(repository.thread(id).last())
-        assertEquals(sonnet to CannedReplies.replies[0], reply.model to reply.blocks)
+        assertEquals(sonnet to answer(sonnet), reply.model to reply.blocks)
         assertNull(database.messageRows.value.last().pairSide)
+        assertEquals(listOf(sonnet.id), fuelix.calls.map { it.model })
     }
 
     @Test
@@ -324,7 +362,7 @@ class RoomChatRepositoryCompareTest {
         assertTrue(repository.choose(second, ModelChoice(model = gemini, persona = null, compareWith = gpt5)))
 
         assertEquals(ModelChoice(terse), repository.conversation(first).choice)
-        assertEquals("gpt5" to "terse", row(first).let { it.modelId to it.personaId })
+        assertEquals(gpt5.id to "terse", row(first).let { it.modelId to it.personaId })
         assertEquals(false to null, row(first).let { it.compareOn to it.compareModelId })
         assertEquals(ModelChoice(gemini), repository.conversation(second).choice)
         assertEquals(false to null, row(second).let { it.compareOn to it.compareModelId })
@@ -345,18 +383,18 @@ class RoomChatRepositoryCompareTest {
     }
 
     @Test
-    fun aSecondModelThatIsTheModelItselfOrNotInTheCatalogueIsRefusedAndChangesNothing() = runTest {
+    fun aSecondModelThatIsTheModelItselfOrBlankIsRefusedAndChangesNothing() = runTest {
         val repository = repository()
         val id = assertNotNull(repository.send(null, "first")).also { advanceUntilIdle() }
         val writes = database.writes
         val itself = comparing.copy(compareWith = sonnet)
-        val retired = comparing.copy(compareWith = gpt5.copy(id = "gpt4"))
+        val blank = comparing.copy(compareWith = gpt5.copy(id = " "))
 
         assertFalse(repository.choose(id, itself))
-        assertFalse(repository.choose(id, retired))
+        assertFalse(repository.choose(id, blank))
         assertFalse(repository.choose(id + 1, comparing))
         assertNull(repository.send(null, "a new chat", newChat = itself))
-        assertNull(repository.send(null, "a new chat", newChat = retired))
+        assertNull(repository.send(null, "a new chat", newChat = blank))
 
         assertEquals(writes, database.writes)
         assertEquals(ModelChoice(sonnet), repository.conversation(id).choice)
@@ -368,19 +406,21 @@ class RoomChatRepositoryCompareTest {
         database = FakeChatDatabase(
             conversations = listOf(
                 comparingRow(id = 1).copy(personaId = "terse"),
-                comparingRow(id = 2).copy(compareModelId = "retired"),
-                comparingRow(id = 3).copy(compareModelId = "sonnet"),
+                comparingRow(id = 2).copy(compareModelId = " "),
+                comparingRow(id = 3).copy(compareModelId = sonnet.id),
+                comparingRow(id = 4).copy(compareModelId = "sonnet"),
             ),
         )
         val repository = repository()
 
-        listOf(1L, 2, 3).forEach { id ->
+        listOf(1L, 2, 3, 4).forEach { id ->
             assertEquals(id, repository.send(id, "hello"))
             advanceUntilIdle()
             assertIs<Message.Assistant>(repository.thread(id).last())
             assertNull(repository.conversation(id).comparing)
         }
         assertTrue(database.messageRows.value.all { it.pairSide == null })
+        assertEquals(4, fuelix.calls.size)
     }
 
     @Test
@@ -403,11 +443,11 @@ class RoomChatRepositoryCompareTest {
     private fun comparingRow(id: Long = 1) = ConversationEntity(
         id = id,
         title = "SSE vs WebSocket",
-        modelId = "sonnet",
+        modelId = sonnet.id,
         createdAt = 0,
         updatedAt = 0,
         compareOn = true,
-        compareModelId = "gpt5",
+        compareModelId = gpt5.id,
     )
 
     private fun stored(
@@ -423,7 +463,7 @@ class RoomChatRepositoryCompareTest {
         role = role,
         text = if (role == MessageRole.USER) "SSE or WebSocket?" else "",
         blocks = listOfNotNull(text?.let(StoredBlock::Paragraph)),
-        modelId = if (role == MessageRole.USER) null else if (pairSide == PAIR_SECOND_SIDE) "gpt5" else "sonnet",
+        modelId = if (role == MessageRole.USER) null else if (pairSide == PAIR_SECOND_SIDE) gpt5.id else sonnet.id,
         status = status,
         latencyMillis = null,
         createdAt = 0,

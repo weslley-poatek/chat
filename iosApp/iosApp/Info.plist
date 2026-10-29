@@ -13,5 +13,9 @@
 	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Voice mode listens to what you say to the model.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Voice mode turns what you say into text for the model.</string>
 </dict>
 </plist>

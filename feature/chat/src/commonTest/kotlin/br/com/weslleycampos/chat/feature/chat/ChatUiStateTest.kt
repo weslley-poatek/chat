@@ -122,9 +122,18 @@ class ChatUiStateTest {
         assertEquals(Reviewer, onPersona.persona)
         assertEquals(ModelPickerVariant.Chat, onPersona.modelPicker.variant)
         assertEquals(
-            modelPickerUiState(ModelPickerVariant.Chat, listOf(Gemini), listOf(Reviewer), ModelChoice(Reviewer)),
+            modelPickerUiState(
+                variant = ModelPickerVariant.Chat,
+                models = ModelCatalogue.models,
+                favorites = listOf(Gemini),
+                personas = listOf(Reviewer),
+                active = ModelChoice(Reviewer),
+            ),
             onPersona.modelPicker,
         )
+        // The sheet lists the models the state holds: the key's, once Fuelix has listed them.
+        val listed = onPersona.copy(models = listOf(Gpt5)).modelPicker
+        assertEquals(listOf(Gpt5), listed.allModels.map { it.choice.model })
         assertFalse(ChatUiState().modelPickerOpen)
     }
 

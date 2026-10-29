@@ -127,8 +127,8 @@ private const val PreviewConversationId = 1L
 private const val PreviewUserTime = "14:01"
 private const val PreviewReplyTime = "14:02"
 private val PreviewLatency = 800.milliseconds
-private val PreviewGemini = ModelCatalogue["gemini"]
-private val PreviewGpt5 = ModelCatalogue["gpt5"]
+private val PreviewGemini = ModelCatalogue["gemini-2.5-pro"]
+private val PreviewGpt5 = ModelCatalogue["gpt-5"]
 private val PreviewCompare = ModelChoice(ModelCatalogue.default, compareOn = true, compareWith = PreviewGpt5)
 private val PreviewSecondLatency = 1900.milliseconds
 private val PreviewReviewer = PersonaPresets.personas.first()

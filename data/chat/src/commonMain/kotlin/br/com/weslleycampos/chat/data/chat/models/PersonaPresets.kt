@@ -10,19 +10,19 @@ object PersonaPresets {
         Persona(
             id = "reviewer",
             name = "Code reviewer",
-            model = ModelCatalogue["sonnet"],
+            model = ModelCatalogue.default,
             prompt = "Correctness first, style last. Cite line numbers. No praise.",
         ),
         Persona(
             id = "terse",
             name = "Terse",
-            model = ModelCatalogue["gpt5"],
+            model = ModelCatalogue["gpt-5"],
             prompt = "One paragraph max. Code over prose.",
         ),
         Persona(
             id = "digest",
             name = "Paper digest",
-            model = ModelCatalogue["gemini"],
+            model = ModelCatalogue["gemini-2.5-pro"],
             prompt = "Claim, method, evidence, caveats. Bullets.",
         ),
     )

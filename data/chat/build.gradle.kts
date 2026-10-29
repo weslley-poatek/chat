@@ -14,6 +14,8 @@ kotlin {
             implementation(projects.core.database)
             // Favorites and the default model are plain preferences in its unencrypted DataStore.
             implementation(projects.core.preferences)
+            // Replies and the model list come from Fuelix's gateway.
+            implementation(projects.data.fuelix)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
