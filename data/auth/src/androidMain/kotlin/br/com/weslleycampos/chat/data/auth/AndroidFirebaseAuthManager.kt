@@ -26,10 +26,11 @@ internal class AndroidFirebaseAuthManager : AuthManager {
             FirebaseAuth.getInstance()
                 .signInWithCredential(GoogleAuthProvider.getCredential(idToken, accessToken))
                 .await()
-        } catch (e: CancellationException) {
-            throw e
         } catch (e: Exception) {
-            throw e.toAuthException()
+            when (e) {
+                is CancellationException -> throw e
+                else -> throw e.toAuthException()
+            }
         }
     }
 
