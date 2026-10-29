@@ -4,6 +4,8 @@
 **/build/
 xcuserdata
 !src/**/build/
+# The IDE's Java and Gradle extension compiles copies of the sources into bin/
+bin/
 local.properties
 .idea
 .DS_Store
