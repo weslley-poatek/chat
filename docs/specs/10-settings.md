@@ -5,8 +5,10 @@
 Voice's Settings button opens Settings, reduced to what the user kept (2026-10-28): the "account"
 group, where the signed-in user sees who they are and how they sign in, signs out, or deletes their
 account, and the "api keys" group, where they type their own key for each model provider ("we need
-to have a option to add a key"). A key is stored encrypted on the device and only ever shown
-masked; replies stay canned, so it is never sent anywhere. Deleting the account deletes it on
+to have a option to add a key"). Since 2026-10-28 there is one provider, Fuelix ("let's have just
+Fuelix as provider"): its gateway, `https://api.fuelix.ai`, serves every model of the catalogue, so
+one key covers them all. A key is stored encrypted on the device and only ever shown masked;
+replies stay canned, so it is never sent anywhere. Deleting the account deletes it on
 Firebase and then wipes everything the device keeps.
 
 ## Frames
@@ -18,7 +20,7 @@ Every line number refers to `.claude/screens/design/ctx Prototype.dc.html`; `fra
 | --- | --- | --- |
 | `Settings` bar | back chevron (→ the screen underneath: Voice or History; the prototype's `goHistory`), title "Settings" | markup 349–352 |
 | `Settings` "account", signed in | profile row (40 x 40 initials avatar, name, email in mono, ellipsized; no "edit ›"); "Sign-in methods" with its summary ("Google", "email", "Google, email" or "none"), not expandable; "Sign out"; "Delete account" in `--danger`: idle, armed for 3000 ms by a first tap with "tap again to confirm" (`deleteArmed`), deleting ("deleting…", nothing else answers), refused (toast) | markup 355–378 without "Biometric unlock" (372–375) and the expanded methods (364–371); bindings 912–915 |
-| `Settings` "api keys" | label row "api keys" · "encrypted on device · never sent in plain text"; one row per provider, Anthropic, OpenAI, Google, Meta, DeepSeek, Mistral: 7 px dot (green filled when a key is stored, else a hollow 1.5 px `--fg3` ring), name (88 wide), masked key or "not set", "edit" / "add" (none while editing) | markup 385–394; `keyRows` 860–861 |
+| `Settings` "api keys" | label row "api keys" · "encrypted on device · never sent in plain text"; one row per provider, Fuelix only, in place of the prototype's Anthropic, OpenAI, Google, Meta, DeepSeek, Mistral: 7 px dot (green filled when a key is stored, else a hollow 1.5 px `--fg3` ring), name (88 wide), masked key or "not set", "edit" / "add" (none while editing) | markup 385–394; `keyRows` 860–861 |
 | `Settings` key row in edit | `keyEdit === provider`, one row at most: input (focused as it opens, the provider's placeholder, typed masked), "save" (primary small), "remove" in `--danger` when a key exists; save toasts "key encrypted and stored" when a key was stored | markup 395–401; `keyRows` 861 |
 | `Settings` footer | "Chat 1.0 (1) · ios" / "Chat 1.0 (1) · android" (the prototype's "ctx 0.9.2 (418)"), from the installed app's version | markup 439 |
 | Toast | "key encrypted and stored"; the delete refusals and the key failures (copy written here) | frames §2.9; markup 531–534 |
@@ -97,12 +99,8 @@ and simulator tests do not have; `:androidApp:assembleDebug` and
 
 ### Provider keys (`:data:settings`)
 
-- [x] The providers are the prototype's, in its order, Anthropic, OpenAI, Google, Meta, DeepSeek,
-  Mistral, with stable ids — `ModelProviderTest.theProvidersAreThePrototypesInItsOrder`
-- [x] Anthropic's placeholder is "sk-ant-…", OpenAI's "sk-…", the others' "paste key" —
-  `ModelProviderTest.anthropicAndOpenAiHintTheirKeyPrefixAndTheOthersSayPasteKey`
-- [x] Every model in the catalogue has its provider's row, and every row a model —
-  `ModelProviderTest.everyModelInTheCatalogueHasItsProvidersKeyRow`
+- [x] Fuelix is the only provider, with the stable id "fuelix" and the placeholder "paste key" —
+  `ModelProviderTest.fuelixIsTheOnlyProviderWithAStableIdAndThePasteKeyPlaceholder`
 - [x] A key of 22 characters or more is masked as its first 7, "…" and its last 4, as the
   prototype's save does — `KeyMaskTest.aKeyOf22CharactersOrMoreShowsItsFirst7AndLast4AroundAnEllipsisAsThePrototypeDoes`
 - [x] A key of 8 to 21 characters shows only "…" and its last 4, and a shorter one only "…" —
@@ -110,8 +108,8 @@ and simulator tests do not have; `:androidApp:assembleDebug` and
   `KeyMaskTest.aKeyOfFewerThan8CharactersShowsOnlyAnEllipsis`
 - [x] The mask never shows more than half of a key, whatever its length —
   `KeyMaskTest.theMaskNeverShowsMoreThanHalfOfAKey`
-- [x] On a fresh install every provider is listed, in order, with no key —
-  `EncryptedProviderKeyRepositoryTest.everyProviderIsListedInThePrototypesOrderAndNoneHasAKeyOnAFreshInstall`
+- [x] On a fresh install Fuelix is the one row, with no key —
+  `EncryptedProviderKeyRepositoryTest.fuelixIsTheOnlyProviderAndHasNoKeyOnAFreshInstall`
 - [x] A saved key is stored trimmed under its provider, `save` returns `true`, and it reads back
   only masked; no row's text holds the key —
   `EncryptedProviderKeyRepositoryTest.aSavedKeyIsStoredTrimmedAndReadBackOnlyMasked`,
@@ -120,12 +118,15 @@ and simulator tests do not have; `:androidApp:assembleDebug` and
   prototype's empty save does — `EncryptedProviderKeyRepositoryTest.savingABlankKeyStoresNothingAndKeepsTheKeyTheProviderHad`
 - [x] Saving again replaces the provider's key —
   `EncryptedProviderKeyRepositoryTest.savingAgainReplacesTheProvidersKey`
-- [x] Removing a key removes only that provider's and says whether it had one —
-  `EncryptedProviderKeyRepositoryTest.removingAKeyRemovesOnlyThatProvidersAndSaysWhetherItHadOne`
-- [x] Removing every key leaves none and leaves other preferences alone; doing it again writes
-  nothing — `EncryptedProviderKeyRepositoryTest.removingEveryKeyLeavesNoneAndLeavesOtherPreferencesAlone`
+- [x] Removing the key says whether there was one and leaves other preferences alone —
+  `EncryptedProviderKeyRepositoryTest.removingTheKeySaysWhetherItHadOneAndLeavesOtherPreferencesAlone`
+- [x] A key saved for a provider no longer listed, such as the Anthropic key of a build before
+  Fuelix, is never read — `EncryptedProviderKeyRepositoryTest.aKeySavedForAProviderNoLongerListedIsNeverRead`
+- [x] Removing every key removes those of providers no longer listed too, and leaves other
+  preferences alone; doing it again writes nothing —
+  `EncryptedProviderKeyRepositoryTest.removingEveryKeyRemovesThoseOfProvidersNoLongerListedTooAndLeavesOtherPreferencesAlone`
 - [x] The rows emit on collect and again only when a row changes: saving the same key again, a
-  blank save and removing a missing key emit nothing —
+  blank save, a change to another preference and removing a missing key emit nothing —
   `EncryptedProviderKeyRepositoryTest.theKeysEmitOnCollectAndOnlyWhenARowChanges`
 
 ### Account (`:data:settings`)
@@ -225,17 +226,16 @@ Delete account
 
 The api keys
 
-- [x] One row per provider in `ModelProvider` order, each with its dot (filled when a key is
-  stored), its name, the masked key or "not set", the placeholder, and "edit" / "add", following
-  the repository — `SettingsViewModelKeysTest.theRowsAreEveryProviderInOrderWithTheMaskedKeyTheRepositoryReads`,
+- [x] One row, Fuelix's, with its dot (filled when a key is stored), its name, the masked key or
+  "not set", the placeholder, and "edit" / "add", following the repository —
+  `SettingsViewModelKeysTest.theOneRowIsFuelixWithTheMaskedKeyTheRepositoryReads`,
   `SettingsUiStateTest.aKeyRowShowsItsDotItsNameItsMaskedKeyOrNotSetAndEditOrAdd`
 - [x] The row being edited has no action and offers "remove" only for a stored key —
   `SettingsUiStateTest.theRowBeingEditedHasNoActionAndOffersRemoveOnlyForAStoredKey`,
   `SettingsViewModelKeysTest.removeIsOfferedAndDoesSomethingOnlyForAStoredKey`
 - [x] A tap opens that row's edit row with an empty draft, and a tap again closes it and clears
   the draft — `SettingsViewModelKeysTest.aTapOpensThatRowsEditRowWithAnEmptyDraftAndATapAgainClosesItAndClearsTheDraft`
-- [x] Only one row is edited at a time; another row starts with an empty draft —
-  `SettingsViewModelKeysTest.onlyOneRowIsEditedAtATimeAndAnotherRowStartsWithAnEmptyDraft`,
+- [x] Typing with no row open is ignored —
   `SettingsViewModelKeysTest.typingWithNoRowOpenIsIgnored`
 - [x] "save" passes the draft to `save` once, closes the row, clears the draft, and toasts "key
   encrypted and stored" for 1400 ms when it returns `true` —
@@ -318,10 +318,9 @@ TalkBack and VoiceOver reading the rows, the delete hint and the key input as a 
 
 - **Wipe (`:data:chat`):** `interface ChatDataEraser { suspend fun eraseAll() }`.
 - **Models (`:data:settings`):**
-  - `enum class ModelProvider(id: String, displayName: String, placeholder: String)`: `ANTHROPIC`
-    ("anthropic", "Anthropic", "sk-ant-…"), `OPENAI` ("openai", "OpenAI", "sk-…"), `GOOGLE`,
-    `META`, `DEEPSEEK`, `MISTRAL` ("google" / "meta" / "deepseek" / "mistral", their names, "paste
-    key"). `entries` is the catalogue, in the rows' order.
+  - `enum class ModelProvider(id: String, displayName: String, placeholder: String)`: `FUELIX`
+    ("fuelix", "Fuelix", "paste key"), in place of the prototype's `ANTHROPIC`, `OPENAI`, `GOOGLE`,
+    `META`, `DEEPSEEK` and `MISTRAL` (2026-10-28). `entries` is the catalogue, in the rows' order.
   - `data class ProviderKey(provider: ModelProvider, masked: String?)` with `hasKey: Boolean`
     (`masked != null`).
   - `data class Account(user: AuthUser, signInMethods: List<SignInMethod>)`.
@@ -330,6 +329,8 @@ TalkBack and VoiceOver reading the rows, the delete hint and the key input as a 
 - **Storage:**
   - Keys: the `@EncryptedPreferences` DataStore (`chat.encrypted.preferences_pb`), one string
     preference `provider_key_<id>` per provider holding the trimmed key. Nothing else is written.
+    Keys saved under the retired providers' ids (`provider_key_anthropic` … `provider_key_mistral`)
+    are never read, and `removeAll()` removes them with the rest.
   - No schema change: Room stays on version 6. `ConversationDao.deleteAll(): Int` is
     `DELETE FROM conversations`, its messages going through the foreign key's cascade.
   - The wipe removes `favorite_model_ids` and `default_model_id` from the plain DataStore and
@@ -346,7 +347,7 @@ TalkBack and VoiceOver reading the rows, the delete hint and the key input as a 
   - `:data:chat` (`ChatBindings.kt`): `@Single internal fun chatDataEraser(conversationDao,
     @UnencryptedPreferences preferences): ChatDataEraser` → `LocalChatDataEraser`.
 - **Behaviour:**
-  - `observeKeys()` emits the six rows in `ModelProvider` order on collect and again when a row's
+  - `observeKeys()` emits a row per provider, in `ModelProvider` order, on collect and again when a row's
     `masked` changes (`distinctUntilChanged`). Only the masked form leaves the repository; no API
     returns a whole key.
   - `save(provider, key)`: trims; blank → `false`, nothing written, the old key kept; otherwise

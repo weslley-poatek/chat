@@ -76,23 +76,17 @@ class SettingsViewModelKeysTest {
     // The rows
 
     @Test
-    fun theRowsAreEveryProviderInOrderWithTheMaskedKeyTheRepositoryReads() = keysTest {
-        val keys = FakeProviderKeyRepository(mapOf(ModelProvider.OPENAI to FakeKey))
+    fun theOneRowIsFuelixWithTheMaskedKeyTheRepositoryReads() = keysTest {
+        val keys = FakeProviderKeyRepository(mapOf(ModelProvider.FUELIX to FakeKey))
         val viewModel = settingsViewModel(keys = keys)
 
-        assertEquals(
-            ModelProvider.entries.map { ProviderKey(it, if (it == ModelProvider.OPENAI) fakeMask(FakeKey) else null) },
-            viewModel.state.keys,
-        )
-        assertEquals(
-            listOf("Anthropic", "OpenAI", "Google", "Meta", "DeepSeek", "Mistral"),
-            viewModel.state.keyRows.map { it.name },
-        )
+        assertEquals(listOf(ProviderKey(ModelProvider.FUELIX, fakeMask(FakeKey))), viewModel.state.keys)
+        assertEquals(listOf("Fuelix"), viewModel.state.keyRows.map { it.name })
 
-        keys.stored.value = mapOf(ModelProvider.MISTRAL to OtherFakeKey)
+        keys.stored.value = emptyMap()
         runCurrent()
 
-        assertEquals(listOf(false, false, false, false, false, true), viewModel.state.keyRows.map { it.hasKey })
+        assertEquals(listOf(false), viewModel.state.keyRows.map { it.hasKey })
     }
 
     // The edit row
@@ -101,29 +95,16 @@ class SettingsViewModelKeysTest {
     fun aTapOpensThatRowsEditRowWithAnEmptyDraftAndATapAgainClosesItAndClearsTheDraft() = keysTest {
         val viewModel = settingsViewModel()
 
-        viewModel.onKeyRowClick(ModelProvider.ANTHROPIC)
-        assertEquals(ModelProvider.ANTHROPIC, viewModel.state.editing)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
+        assertEquals(ModelProvider.FUELIX, viewModel.state.editing)
         assertEquals("", viewModel.draft.value)
-        assertEquals(listOf(true, false, false, false, false, false), viewModel.state.keyRows.map { it.editing })
+        assertEquals(listOf(true), viewModel.state.keyRows.map { it.editing })
 
         viewModel.onDraftChange(FakeKey)
         assertEquals(FakeKey, viewModel.draft.value)
 
-        viewModel.onKeyRowClick(ModelProvider.ANTHROPIC)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         assertNull(viewModel.state.editing)
-        assertEquals("", viewModel.draft.value)
-    }
-
-    @Test
-    fun onlyOneRowIsEditedAtATimeAndAnotherRowStartsWithAnEmptyDraft() = keysTest {
-        val viewModel = settingsViewModel()
-        viewModel.onKeyRowClick(ModelProvider.ANTHROPIC)
-        viewModel.onDraftChange(FakeKey)
-
-        viewModel.onKeyRowClick(ModelProvider.DEEPSEEK)
-
-        assertEquals(ModelProvider.DEEPSEEK, viewModel.state.editing)
-        assertEquals(listOf(ModelProvider.DEEPSEEK), viewModel.state.keyRows.filter { it.editing }.map { it.provider })
         assertEquals("", viewModel.draft.value)
     }
 
@@ -144,7 +125,7 @@ class SettingsViewModelKeysTest {
     fun saveStoresTheDraftOnceClosesTheRowAndToastsKeyEncryptedAndStoredFor1400Ms() = keysTest {
         val keys = FakeProviderKeyRepository()
         val viewModel = settingsViewModel(keys = keys)
-        viewModel.onKeyRowClick(ModelProvider.ANTHROPIC)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         viewModel.onDraftChange(" $FakeKey ")
 
         viewModel.onSaveKey()
@@ -154,7 +135,7 @@ class SettingsViewModelKeysTest {
         assertEquals("", viewModel.draft.value)
         runCurrent()
 
-        assertEquals(listOf(ModelProvider.ANTHROPIC to " $FakeKey "), keys.saves)
+        assertEquals(listOf(ModelProvider.FUELIX to " $FakeKey "), keys.saves)
         assertEquals(FeatureSettingsRes.string.settings_toast_key_stored, viewModel.state.toast)
         assertEquals(fakeMask(FakeKey), viewModel.state.keyRows.first().masked)
         assertEquals(FeatureSettingsRes.string.settings_key_edit, viewModel.state.keyRows.first().action)
@@ -167,91 +148,89 @@ class SettingsViewModelKeysTest {
 
     @Test
     fun aBlankSaveKeepsTheOldKeyClosesTheRowAndShowsNoToast() = keysTest {
-        val keys = FakeProviderKeyRepository(mapOf(ModelProvider.GOOGLE to FakeKey))
+        val keys = FakeProviderKeyRepository(mapOf(ModelProvider.FUELIX to FakeKey))
         val viewModel = settingsViewModel(keys = keys)
 
         for (blank in listOf("", "   ")) {
-            viewModel.onKeyRowClick(ModelProvider.GOOGLE)
+            viewModel.onKeyRowClick(ModelProvider.FUELIX)
             viewModel.onDraftChange(blank)
             viewModel.onSaveKey()
             runCurrent()
 
             assertNull(viewModel.state.editing)
             assertNull(viewModel.state.toast)
-            assertEquals(mapOf(ModelProvider.GOOGLE to FakeKey), keys.stored.value)
-            assertEquals(fakeMask(FakeKey), viewModel.state.keyRows[2].masked)
+            assertEquals(mapOf(ModelProvider.FUELIX to FakeKey), keys.stored.value)
+            assertEquals(fakeMask(FakeKey), viewModel.state.keyRows.single().masked)
         }
     }
 
     @Test
     fun savingAgainReplacesTheKeyAndToastsAgain() = keysTest {
-        val keys = FakeProviderKeyRepository(mapOf(ModelProvider.META to FakeKey))
+        val keys = FakeProviderKeyRepository(mapOf(ModelProvider.FUELIX to FakeKey))
         val viewModel = settingsViewModel(keys = keys)
 
-        viewModel.onKeyRowClick(ModelProvider.META)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         viewModel.onDraftChange(OtherFakeKey)
         viewModel.onSaveKey()
         runCurrent()
 
-        assertEquals(mapOf(ModelProvider.META to OtherFakeKey), keys.stored.value)
+        assertEquals(mapOf(ModelProvider.FUELIX to OtherFakeKey), keys.stored.value)
         assertEquals(FeatureSettingsRes.string.settings_toast_key_stored, viewModel.state.toast)
     }
 
     @Test
     fun aSaveOrRemoveTheStoreRefusesSaysSoAndStoresNothing() = keysTest {
-        val keys = FakeProviderKeyRepository(mapOf(ModelProvider.OPENAI to FakeKey))
+        val keys = FakeProviderKeyRepository(mapOf(ModelProvider.FUELIX to FakeKey))
         val viewModel = settingsViewModel(keys = keys)
         keys.failure = IllegalStateException("keystore")
 
-        viewModel.onKeyRowClick(ModelProvider.ANTHROPIC)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         viewModel.onDraftChange(OtherFakeKey)
         viewModel.onSaveKey()
         runCurrent()
         assertEquals(FeatureSettingsRes.string.settings_toast_key_store_failed, viewModel.state.toast)
         assertNull(viewModel.state.editing)
 
-        viewModel.onKeyRowClick(ModelProvider.OPENAI)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         viewModel.onRemoveKey()
         runCurrent()
         assertEquals(FeatureSettingsRes.string.settings_toast_key_remove_failed, viewModel.state.toast)
-        assertEquals(mapOf(ModelProvider.OPENAI to FakeKey), keys.stored.value)
+        assertEquals(mapOf(ModelProvider.FUELIX to FakeKey), keys.stored.value)
     }
 
     // Remove
 
     @Test
     fun removeRemovesTheKeyClosesTheRowAndShowsNoToast() = keysTest {
-        val keys = FakeProviderKeyRepository(
-            mapOf(ModelProvider.OPENAI to FakeKey, ModelProvider.MISTRAL to OtherFakeKey),
-        )
+        val keys = FakeProviderKeyRepository(mapOf(ModelProvider.FUELIX to FakeKey))
         val viewModel = settingsViewModel(keys = keys)
-        viewModel.onKeyRowClick(ModelProvider.OPENAI)
-        assertTrue(viewModel.state.keyRows[1].removable)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
+        assertTrue(viewModel.state.keyRows.single().removable)
         viewModel.onDraftChange(OtherFakeKey)
 
         viewModel.onRemoveKey()
         runCurrent()
 
-        assertEquals(listOf(ModelProvider.OPENAI), keys.removes)
-        assertEquals(mapOf(ModelProvider.MISTRAL to OtherFakeKey), keys.stored.value)
+        assertEquals(listOf(ModelProvider.FUELIX), keys.removes)
+        assertEquals(emptyMap(), keys.stored.value)
         assertNull(viewModel.state.editing)
         assertEquals("", viewModel.draft.value)
         assertNull(viewModel.state.toast)
-        assertEquals(FeatureSettingsRes.string.settings_key_add, viewModel.state.keyRows[1].action)
+        assertEquals(FeatureSettingsRes.string.settings_key_add, viewModel.state.keyRows.single().action)
     }
 
     @Test
     fun removeIsOfferedAndDoesSomethingOnlyForAStoredKey() = keysTest {
         val keys = FakeProviderKeyRepository()
         val viewModel = settingsViewModel(keys = keys)
-        viewModel.onKeyRowClick(ModelProvider.ANTHROPIC)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
 
         assertFalse(viewModel.state.keyRows.first().removable)
         viewModel.onRemoveKey()
         runCurrent()
 
         assertEquals(emptyList(), keys.removes)
-        assertEquals(ModelProvider.ANTHROPIC, viewModel.state.editing)
+        assertEquals(ModelProvider.FUELIX, viewModel.state.editing)
     }
 
     // The draft
@@ -261,13 +240,13 @@ class SettingsViewModelKeysTest {
         val navigator = navigator(VoiceEntry(), SettingsEntry)
         val viewModel = settingsViewModel(navigator = navigator)
         val json = Json { serializersModule = SettingsEntryProvider().serializerModule() }
-        viewModel.onKeyRowClick(ModelProvider.ANTHROPIC)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         viewModel.onDraftChange(FakeKey)
 
         // The state the screen renders, prints and compares holds no draft.
         assertFalse(FakeKey in viewModel.state.toString())
         assertEquals(
-            SettingsUiState(account = Ana.toUi(), editing = ModelProvider.ANTHROPIC),
+            SettingsUiState(account = Ana.toUi(), editing = ModelProvider.FUELIX),
             viewModel.state.copy(keys = emptyList()),
         )
         // The back stack, which is all Settings saves, holds only the key-less `SettingsEntry`.
@@ -288,7 +267,7 @@ class SettingsViewModelKeysTest {
     fun leavingSettingsClearsTheDraftAndANewSettingsStartsWithNone() = keysTest {
         val navigator = navigator(VoiceEntry(), SettingsEntry)
         val viewModel = settingsViewModel(navigator = navigator)
-        viewModel.onKeyRowClick(ModelProvider.OPENAI)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         viewModel.onDraftChange(FakeKey)
 
         viewModel.onBack()
@@ -307,7 +286,7 @@ class SettingsViewModelKeysTest {
     @Test
     fun signingOutClearsTheDraft() = keysTest {
         val viewModel = settingsViewModel()
-        viewModel.onKeyRowClick(ModelProvider.OPENAI)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         viewModel.onDraftChange(FakeKey)
 
         viewModel.onSignOut()

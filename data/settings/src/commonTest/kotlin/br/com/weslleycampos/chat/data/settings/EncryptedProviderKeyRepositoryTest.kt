@@ -1,5 +1,6 @@
 package br.com.weslleycampos.chat.data.settings
 
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import br.com.weslleycampos.chat.data.settings.EncryptedProviderKeyRepository.Companion.keyOf
@@ -20,87 +21,95 @@ import kotlin.test.assertTrue
 /** Every key here is an obvious fake. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EncryptedProviderKeyRepositoryTest {
-    private val anthropicKey = "sk-ant-test-0000000000000000000000000000"
-    private val openAiKey = "sk-test-0000000000000000000000001111"
+    private val fuelixKey = "sk-test-0000000000000000000000000000"
+    private val otherFuelixKey = "sk-test-0000000000000000000000001111"
+
+    /** A preference that is not a provider key. */
+    private val other = stringPreferencesKey("not_a_provider_key")
+
+    /** Keys the builds before Fuelix stored, under their providers' ids. */
+    private val retiredKeys = listOf("anthropic", "openai", "google", "meta", "deepseek", "mistral")
+        .map { stringPreferencesKey("provider_key_$it") to "sk-test-$it-000000000000000000" }
 
     private val preferences = FakePreferences()
     private val repository = EncryptedProviderKeyRepository(preferences)
 
-    private suspend fun masked(): List<String?> = repository.observeKeys().first().map(ProviderKey::masked)
+    private suspend fun masked(): String? = repository.observeKeys().first().single().masked
 
     @Test
-    fun everyProviderIsListedInThePrototypesOrderAndNoneHasAKeyOnAFreshInstall() = runTest {
-        val keys = repository.observeKeys().first()
-
-        assertEquals(ModelProvider.entries, keys.map(ProviderKey::provider))
-        assertTrue(keys.none(ProviderKey::hasKey))
-        assertTrue(keys.all { it.masked == null })
+    fun fuelixIsTheOnlyProviderAndHasNoKeyOnAFreshInstall() = runTest {
+        assertEquals(listOf(ProviderKey(ModelProvider.FUELIX, null)), repository.observeKeys().first())
     }
 
     @Test
     fun aSavedKeyIsStoredTrimmedAndReadBackOnlyMasked() = runTest {
-        assertTrue(repository.save(ModelProvider.ANTHROPIC, "  $anthropicKey\n"))
+        assertTrue(repository.save(ModelProvider.FUELIX, "  $fuelixKey\n"))
 
         val keys = repository.observeKeys().first()
-        assertEquals(ProviderKey(ModelProvider.ANTHROPIC, "sk-ant-…0000"), keys.first())
-        assertTrue(keys.first().hasKey)
-        assertTrue(keys.drop(1).none(ProviderKey::hasKey))
-        assertEquals(anthropicKey, preferences.stored.value[keyOf(ModelProvider.ANTHROPIC)])
-        assertTrue(keys.none { it.toString().contains(anthropicKey) })
+        assertEquals(listOf(ProviderKey(ModelProvider.FUELIX, "sk-test…0000")), keys)
+        assertTrue(keys.single().hasKey)
+        assertEquals(fuelixKey, preferences.stored.value[keyOf(ModelProvider.FUELIX)])
+        assertTrue(keys.none { it.toString().contains(fuelixKey) })
     }
 
     @Test
     fun aShortKeyIsMaskedToLessThanHalfOfIt() = runTest {
-        assertTrue(repository.save(ModelProvider.MISTRAL, "sk-test-0000000000"))
-        assertTrue(repository.save(ModelProvider.META, "fake567"))
+        assertTrue(repository.save(ModelProvider.FUELIX, "sk-test-0000000000"))
+        assertEquals("…0000", masked())
 
-        assertEquals(listOf(null, null, null, "…", null, "…0000"), masked())
+        assertTrue(repository.save(ModelProvider.FUELIX, "fake567"))
+        assertEquals("…", masked())
     }
 
     @Test
     fun savingABlankKeyStoresNothingAndKeepsTheKeyTheProviderHad() = runTest {
-        assertFalse(repository.save(ModelProvider.OPENAI, ""))
-        assertFalse(repository.save(ModelProvider.OPENAI, "   \n\t"))
+        assertFalse(repository.save(ModelProvider.FUELIX, ""))
+        assertFalse(repository.save(ModelProvider.FUELIX, "   \n\t"))
         assertEquals(0, preferences.writes)
-        assertNull(masked()[1])
+        assertNull(masked())
 
-        assertTrue(repository.save(ModelProvider.OPENAI, openAiKey))
-        assertFalse(repository.save(ModelProvider.OPENAI, " "))
+        assertTrue(repository.save(ModelProvider.FUELIX, otherFuelixKey))
+        assertFalse(repository.save(ModelProvider.FUELIX, " "))
 
-        assertEquals("sk-test…1111", masked()[1])
-        assertEquals(openAiKey, preferences.stored.value[keyOf(ModelProvider.OPENAI)])
+        assertEquals("sk-test…1111", masked())
+        assertEquals(otherFuelixKey, preferences.stored.value[keyOf(ModelProvider.FUELIX)])
     }
 
     @Test
     fun savingAgainReplacesTheProvidersKey() = runTest {
-        repository.save(ModelProvider.GOOGLE, "AIza-test-00000000000000000000000")
-        assertTrue(repository.save(ModelProvider.GOOGLE, "AIza-test-11111111111111111119999"))
+        repository.save(ModelProvider.FUELIX, fuelixKey)
+        assertTrue(repository.save(ModelProvider.FUELIX, otherFuelixKey))
 
-        assertEquals("AIza-te…9999", masked()[2])
+        assertEquals("sk-test…1111", masked())
     }
 
     @Test
-    fun removingAKeyRemovesOnlyThatProvidersAndSaysWhetherItHadOne() = runTest {
-        repository.save(ModelProvider.ANTHROPIC, anthropicKey)
-        repository.save(ModelProvider.OPENAI, openAiKey)
-
-        assertTrue(repository.remove(ModelProvider.ANTHROPIC))
-        assertFalse(repository.remove(ModelProvider.ANTHROPIC))
-        assertFalse(repository.remove(ModelProvider.DEEPSEEK))
-
-        assertEquals(listOf(null, "sk-test…1111", null, null, null, null), masked())
-        assertNull(preferences.stored.value[keyOf(ModelProvider.ANTHROPIC)])
-    }
-
-    @Test
-    fun removingEveryKeyLeavesNoneAndLeavesOtherPreferencesAlone() = runTest {
-        val other = stringPreferencesKey("not_a_provider_key")
+    fun removingTheKeySaysWhetherItHadOneAndLeavesOtherPreferencesAlone() = runTest {
         preferences.stored.value = preferencesOf(other to "kept")
-        ModelProvider.entries.forEach { repository.save(it, "sk-test-${it.id}-000000000000000000") }
+        repository.save(ModelProvider.FUELIX, fuelixKey)
+
+        assertTrue(repository.remove(ModelProvider.FUELIX))
+        assertFalse(repository.remove(ModelProvider.FUELIX))
+
+        assertNull(masked())
+        assertEquals(preferencesOf(other to "kept"), preferences.stored.value)
+    }
+
+    @Test
+    fun aKeySavedForAProviderNoLongerListedIsNeverRead() = runTest {
+        preferences.stored.value = preferencesOf(*retiredKeys.toTypedArray())
+
+        assertEquals(listOf(ProviderKey(ModelProvider.FUELIX, null)), repository.observeKeys().first())
+    }
+
+    @Test
+    fun removingEveryKeyRemovesThoseOfProvidersNoLongerListedTooAndLeavesOtherPreferencesAlone() = runTest {
+        preferences.stored.value = preferencesOf(other to "kept", *retiredKeys.toTypedArray())
+        repository.save(ModelProvider.FUELIX, fuelixKey)
 
         repository.removeAll()
 
-        assertTrue(repository.observeKeys().first().none(ProviderKey::hasKey))
+        assertNull(masked())
         assertEquals(preferencesOf(other to "kept"), preferences.stored.value)
         val writes = preferences.writes
         repository.removeAll()
@@ -109,24 +118,18 @@ class EncryptedProviderKeyRepositoryTest {
 
     @Test
     fun theKeysEmitOnCollectAndOnlyWhenARowChanges() = runTest {
-        val emissions = mutableListOf<List<String?>>()
+        val emissions = mutableListOf<String?>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            repository.observeKeys().collect { keys -> emissions += keys.map(ProviderKey::masked) }
+            repository.observeKeys().collect { keys -> emissions += keys.single().masked }
         }
 
-        repository.save(ModelProvider.ANTHROPIC, anthropicKey)
-        repository.save(ModelProvider.ANTHROPIC, anthropicKey)
-        repository.save(ModelProvider.ANTHROPIC, " ")
-        repository.remove(ModelProvider.OPENAI)
-        repository.remove(ModelProvider.ANTHROPIC)
+        repository.save(ModelProvider.FUELIX, fuelixKey)
+        repository.save(ModelProvider.FUELIX, fuelixKey)
+        repository.save(ModelProvider.FUELIX, " ")
+        preferences.edit { it[other] = "changed" }
+        repository.remove(ModelProvider.FUELIX)
+        repository.remove(ModelProvider.FUELIX)
 
-        assertEquals(
-            listOf(
-                List(6) { null },
-                listOf("sk-ant-…0000", null, null, null, null, null),
-                List(6) { null },
-            ),
-            emissions,
-        )
+        assertEquals(listOf(null, "sk-test…0000", null), emissions)
     }
 }

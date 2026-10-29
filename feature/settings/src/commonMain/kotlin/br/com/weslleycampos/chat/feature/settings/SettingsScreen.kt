@@ -216,15 +216,11 @@ private val PreviewEmailAccount = Account(
     signInMethods = listOf(SignInMethod.EMAIL_PASSWORD),
 ).toUi()
 
-/** Two stored keys, shown masked as the repository reads them, and four providers with none. */
-private val PreviewKeys: List<ProviderKey> = ModelProvider.entries.map { provider ->
-    val masked = when (provider) {
-        ModelProvider.ANTHROPIC -> "sk-ant-…4f2a"
-        ModelProvider.OPENAI -> "sk-proj…9c1e"
-        else -> null
-    }
-    ProviderKey(provider = provider, masked = masked)
-}
+/** Fuelix's key stored, shown masked as the repository reads it. */
+private val PreviewKeys = listOf(ProviderKey(provider = ModelProvider.FUELIX, masked = "sk-test…4f2a"))
+
+/** Fuelix with no key yet. */
+private val PreviewNoKeys = listOf(ProviderKey(provider = ModelProvider.FUELIX, masked = null))
 
 /** A fake key, never a real one: the previews show it masked as the screen does. */
 private const val PreviewDraft = "sk-test-0000000000"
@@ -254,8 +250,9 @@ class SettingsScreenPreviewParameterProvider : PreviewParameterProvider<Settings
             PreviewState.copy(toast = FeatureSettingsRes.string.settings_toast_delete_recent_login),
             "",
         ),
-        Triple("Editing a key", PreviewState.copy(editing = ModelProvider.ANTHROPIC), ""),
-        Triple("Adding a key", PreviewState.copy(editing = ModelProvider.GOOGLE), PreviewDraft),
+        Triple("No key", PreviewState.copy(keys = PreviewNoKeys), ""),
+        Triple("Editing a key", PreviewState.copy(editing = ModelProvider.FUELIX), ""),
+        Triple("Adding a key", PreviewState.copy(keys = PreviewNoKeys, editing = ModelProvider.FUELIX), PreviewDraft),
         Triple("Key stored", PreviewState.copy(toast = FeatureSettingsRes.string.settings_toast_key_stored), ""),
     )
 

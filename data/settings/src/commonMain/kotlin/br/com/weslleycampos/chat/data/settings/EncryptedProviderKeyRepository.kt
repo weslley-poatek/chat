@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.map
  *
  * When the encrypted store recovers from a lost key or a corrupt file it empties itself, and every
  * provider then reads as not set; the user types their keys again.
+ *
+ * Keys saved for a provider Settings no longer lists, such as the Anthropic, OpenAI, Google, Meta,
+ * DeepSeek and Mistral keys of the builds before Fuelix, are never read, and [removeAll] removes
+ * them with the rest.
  */
 internal class EncryptedProviderKeyRepository(
     private val preferences: DataStore<Preferences>,
@@ -43,12 +47,17 @@ internal class EncryptedProviderKeyRepository(
     }
 
     override suspend fun removeAll() {
-        preferences.edit { stored -> ModelProvider.entries.forEach { stored.remove(keyOf(it)) } }
+        preferences.edit { stored ->
+            stored.asMap().keys.filter { it.name.startsWith(KEY_PREFIX) }.forEach { stored.remove(it) }
+        }
     }
 
     companion object {
+        /** What every provider key's preference is named with, the ones no longer listed too. */
+        private const val KEY_PREFIX = "provider_key_"
+
         /** The preference [provider]'s key is stored under: `provider_key_<id>`. */
         fun keyOf(provider: ModelProvider): Preferences.Key<String> =
-            stringPreferencesKey("provider_key_${provider.id}")
+            stringPreferencesKey("$KEY_PREFIX${provider.id}")
     }
 }

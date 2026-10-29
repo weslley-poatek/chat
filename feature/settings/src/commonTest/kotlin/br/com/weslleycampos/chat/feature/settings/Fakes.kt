@@ -54,7 +54,7 @@ internal class FakeAccountRepository(account: Account? = Ana) : AccountRepositor
 }
 
 /**
- * An in-memory [ProviderKeyRepository] with the real one's contract: six rows in [ModelProvider]
+ * An in-memory [ProviderKeyRepository] with the real one's contract: a row per [ModelProvider], in its
  * order, a blank save that stores nothing and returns `false`, and keys that leave it only masked
  * (as "…" and the last 4, enough to tell two fakes apart).
  */

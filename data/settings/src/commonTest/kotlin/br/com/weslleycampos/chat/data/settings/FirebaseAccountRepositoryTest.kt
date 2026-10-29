@@ -75,20 +75,19 @@ class FirebaseAccountRepositoryTest {
 
     @Test
     fun signingOutKeepsEveryKeyAndTheChatsData() = runTest {
-        keys.save(ModelProvider.ANTHROPIC, "sk-ant-test-0000000000000000000000000000")
+        keys.save(ModelProvider.FUELIX, "sk-test-0000000000000000000000000000")
 
         repository.signOut()
 
         assertEquals(1, auth.signOuts)
         assertNull(repository.observeAccount().first())
-        assertEquals(listOf(ModelProvider.ANTHROPIC), storedKeys())
+        assertEquals(listOf(ModelProvider.FUELIX), storedKeys())
         assertTrue(events.isEmpty())
     }
 
     @Test
     fun deletingTheAccountDeletesItOnFirebaseFirstThenWipesTheKeysAndTheChatsData() = runTest {
-        keys.save(ModelProvider.ANTHROPIC, "sk-ant-test-0000000000000000000000000000")
-        keys.save(ModelProvider.MISTRAL, "sk-test-0000000000000000000000000000")
+        keys.save(ModelProvider.FUELIX, "sk-test-0000000000000000000000000000")
 
         repository.deleteAccount()
 
@@ -99,7 +98,7 @@ class FirebaseAccountRepositoryTest {
 
     @Test
     fun aDeleteFirebaseRefusesThrowsItsAuthExceptionAndWipesNothing() = runTest {
-        keys.save(ModelProvider.OPENAI, "sk-test-0000000000000000000000000000")
+        keys.save(ModelProvider.FUELIX, "sk-test-0000000000000000000000000000")
         val refusals = listOf(
             AuthException.RequiresRecentLogin("sign in again", null),
             AuthException.NotSignedIn("nobody", null),
@@ -117,13 +116,13 @@ class FirebaseAccountRepositoryTest {
         }
 
         assertEquals(List(refusals.size) { "delete" }, events)
-        assertEquals(listOf(ModelProvider.OPENAI), storedKeys())
+        assertEquals(listOf(ModelProvider.FUELIX), storedKeys())
         assertEquals(Account(ANA, listOf(SignInMethod.GOOGLE)), repository.observeAccount().first())
     }
 
     @Test
     fun aCancellationFromFirebaseIsRethrownUntouchedAndWipesNothing() = runTest {
-        keys.save(ModelProvider.OPENAI, "sk-test-0000000000000000000000000000")
+        keys.save(ModelProvider.FUELIX, "sk-test-0000000000000000000000000000")
         val cancellation = CancellationException("task cancelled")
         accounts.failure = cancellation
 
@@ -132,12 +131,12 @@ class FirebaseAccountRepositoryTest {
         assertEquals("task cancelled", thrown.message)
 
         assertEquals(listOf("delete"), events)
-        assertEquals(listOf(ModelProvider.OPENAI), storedKeys())
+        assertEquals(listOf(ModelProvider.FUELIX), storedKeys())
     }
 
     @Test
     fun cancellingTheCallerWhileFirebaseDeletesStillWipesTheDeviceOnceTheDeleteSucceeds() = runTest {
-        keys.save(ModelProvider.DEEPSEEK, "sk-test-0000000000000000000000000000")
+        keys.save(ModelProvider.FUELIX, "sk-test-0000000000000000000000000000")
         val answer = CompletableDeferred<Unit>()
         accounts.answer = answer
         val call = launch(start = CoroutineStart.UNDISPATCHED) { repository.deleteAccount() }

@@ -74,7 +74,7 @@ data class KeyRowUi(
 
     val hasKey: Boolean get() = masked != null
 
-    /** The edit row's input placeholder: "sk-ant-…", "sk-…" or "paste key". */
+    /** The edit row's input placeholder, the provider's: "paste key" for Fuelix. */
     val placeholder: String get() = provider.placeholder
 
     /** "edit" for a stored key, "add" for none, and nothing while the row is being edited. */

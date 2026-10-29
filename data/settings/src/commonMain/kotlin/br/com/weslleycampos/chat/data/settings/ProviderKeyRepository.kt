@@ -27,6 +27,9 @@ interface ProviderKeyRepository {
     /** Removes [provider]'s key, as the edit row's "remove" does. Returns whether it had one. */
     suspend fun remove(provider: ModelProvider): Boolean
 
-    /** Removes every provider's key, as deleting the account does. */
+    /**
+     * Removes every key stored, those of providers Settings no longer lists too, as deleting the
+     * account does.
+     */
     suspend fun removeAll()
 }

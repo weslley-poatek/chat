@@ -123,7 +123,7 @@ class SettingsViewModelTest {
         )
         for (stack in stacks) {
             val accounts = FakeAccountRepository()
-            val keys = FakeProviderKeyRepository(mapOf(ModelProvider.ANTHROPIC to FakeKey))
+            val keys = FakeProviderKeyRepository(mapOf(ModelProvider.FUELIX to FakeKey))
             val navigator = navigator(*stack.toTypedArray())
             val viewModel = settingsViewModel(accounts = accounts, keys = keys, navigator = navigator)
 
@@ -135,7 +135,7 @@ class SettingsViewModelTest {
             assertEquals(1, accounts.signOuts)
             assertEquals(listOf<NavKey>(SignInEntry()), navigator.stack)
             // Signing out keeps the keys on this device.
-            assertEquals(mapOf(ModelProvider.ANTHROPIC to FakeKey), keys.stored.value)
+            assertEquals(mapOf(ModelProvider.FUELIX to FakeKey), keys.stored.value)
         }
     }
 
@@ -222,7 +222,7 @@ class SettingsViewModelTest {
         val keys = FakeProviderKeyRepository()
         val navigator = navigator(VoiceEntry(), HistoryEntry, SettingsEntry)
         val viewModel = settingsViewModel(accounts = accounts, keys = keys, navigator = navigator)
-        viewModel.onKeyRowClick(ModelProvider.OPENAI)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         viewModel.onDraftChange(FakeKey)
 
         viewModel.onDeleteAccount()
@@ -240,7 +240,7 @@ class SettingsViewModelTest {
         viewModel.onDeleteAccount()
         viewModel.onSignOut()
         viewModel.onBack()
-        viewModel.onKeyRowClick(ModelProvider.OPENAI)
+        viewModel.onKeyRowClick(ModelProvider.FUELIX)
         viewModel.onDraftChange(FakeKey)
         viewModel.onSaveKey()
         advance(10_000.milliseconds)
@@ -274,7 +274,7 @@ class SettingsViewModelTest {
         )
         for ((refusal, message) in refusals) {
             val accounts = FakeAccountRepository().apply { delete = { throw refusal } }
-            val keys = FakeProviderKeyRepository(mapOf(ModelProvider.ANTHROPIC to FakeKey))
+            val keys = FakeProviderKeyRepository(mapOf(ModelProvider.FUELIX to FakeKey))
             val navigator = navigator(VoiceEntry(), SettingsEntry)
             val viewModel = settingsViewModel(accounts = accounts, keys = keys, navigator = navigator)
 
@@ -287,7 +287,7 @@ class SettingsViewModelTest {
             assertFalse(viewModel.state.deleteArmed)
             assertEquals(Ana.toUi(), viewModel.state.account)
             assertEquals(listOf(VoiceEntry(), SettingsEntry), navigator.stack)
-            assertEquals(mapOf(ModelProvider.ANTHROPIC to FakeKey), keys.stored.value)
+            assertEquals(mapOf(ModelProvider.FUELIX to FakeKey), keys.stored.value)
 
             advance(1399.milliseconds)
             assertEquals(message, viewModel.state.toast)

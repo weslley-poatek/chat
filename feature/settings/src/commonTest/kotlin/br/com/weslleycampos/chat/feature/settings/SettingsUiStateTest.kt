@@ -126,48 +126,34 @@ class SettingsUiStateTest {
 
     @Test
     fun aKeyRowShowsItsDotItsNameItsMaskedKeyOrNotSetAndEditOrAdd() {
-        val state = SettingsUiState(
-            keys = ModelProvider.entries.map { provider ->
-                val masked = "sk-ant-…4f2a".takeIf { provider == ModelProvider.ANTHROPIC }
-                ProviderKey(provider = provider, masked = masked)
-            },
-        )
+        val rows = listOf("sk-test…4f2a", null).map { masked ->
+            SettingsUiState(
+                keys = listOf(ProviderKey(provider = ModelProvider.FUELIX, masked = masked))
+            ).keyRows.single()
+        }
 
-        val rows = state.keyRows
-
-        assertEquals(ModelProvider.entries, rows.map { it.provider })
+        assertEquals(listOf(ModelProvider.FUELIX, ModelProvider.FUELIX), rows.map { it.provider })
+        assertEquals(listOf("Fuelix", "Fuelix"), rows.map { it.name })
+        assertEquals(listOf(true, false), rows.map { it.hasKey })
+        assertEquals(listOf("sk-test…4f2a", null), rows.map { it.masked })
         assertEquals(
-            listOf("Anthropic", "OpenAI", "Google", "Meta", "DeepSeek", "Mistral"),
-            rows.map { it.name },
-        )
-        assertEquals(listOf(true, false, false, false, false, false), rows.map { it.hasKey })
-        assertEquals(listOf("sk-ant-…4f2a", null, null, null, null, null), rows.map { it.masked })
-        assertEquals(
-            listOf(FeatureSettingsRes.string.settings_key_edit) +
-                List(size = 5) { FeatureSettingsRes.string.settings_key_add },
+            listOf(FeatureSettingsRes.string.settings_key_edit, FeatureSettingsRes.string.settings_key_add),
             rows.map { it.action },
         )
-        assertEquals(
-            listOf("sk-ant-…", "sk-…", "paste key", "paste key", "paste key", "paste key"),
-            rows.map { it.placeholder },
-        )
+        assertEquals(listOf("paste key", "paste key"), rows.map { it.placeholder })
         assertTrue(rows.none { it.editing || it.removable })
     }
 
     @Test
     fun theRowBeingEditedHasNoActionAndOffersRemoveOnlyForAStoredKey() {
-        val keys = listOf(
-            ProviderKey(provider = ModelProvider.ANTHROPIC, masked = "sk-ant-…4f2a"),
-            ProviderKey(provider = ModelProvider.OPENAI, masked = null),
-        )
+        val rows = listOf("sk-test…4f2a", null).map { masked ->
+            val keys = listOf(ProviderKey(provider = ModelProvider.FUELIX, masked = masked))
+            SettingsUiState(keys = keys, editing = ModelProvider.FUELIX).keyRows.single()
+        }
 
-        val stored = SettingsUiState(keys = keys, editing = ModelProvider.ANTHROPIC).keyRows
-        val none = SettingsUiState(keys = keys, editing = ModelProvider.OPENAI).keyRows
-
-        assertEquals(listOf(null, FeatureSettingsRes.string.settings_key_add), stored.map { it.action })
-        assertEquals(listOf(true, false), stored.map { it.removable })
-        assertEquals(listOf(FeatureSettingsRes.string.settings_key_edit, null), none.map { it.action })
-        assertEquals(listOf(false, false), none.map { it.removable })
+        assertEquals(listOf(true, true), rows.map { it.editing })
+        assertEquals(listOf(null, null), rows.map { it.action })
+        assertEquals(listOf(true, false), rows.map { it.removable })
     }
 
     // The footer
@@ -211,6 +197,7 @@ class SettingsUiStateTest {
             "Delete armed",
             "Deleting",
             "Delete refused",
+            "No key",
             "Editing a key",
             "Adding a key",
             "Key stored",
