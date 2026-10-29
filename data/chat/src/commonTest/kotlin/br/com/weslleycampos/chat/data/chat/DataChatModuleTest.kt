@@ -99,6 +99,20 @@ class DataChatModuleTest {
     }
 
     @Test
+    fun koinProvidesOneLocalVoiceLanguageRepositoryOnThePlainPreferences() {
+        val koin = koinApplication {
+            module<FakeDatabaseModule>()
+            module<DataChatModule>()
+        }.koin
+        try {
+            assertIs<LocalVoiceLanguageRepository>(koin.get<VoiceLanguageRepository>())
+            assertSame(koin.get<VoiceLanguageRepository>(), koin.get<VoiceLanguageRepository>())
+        } finally {
+            koin.close()
+        }
+    }
+
+    @Test
     fun koinProvidesOneLocalModelRepositoryOnThePersonaDaoAndThePlainPreferences() {
         val koin = koinApplication {
             module<FakeDatabaseModule>()

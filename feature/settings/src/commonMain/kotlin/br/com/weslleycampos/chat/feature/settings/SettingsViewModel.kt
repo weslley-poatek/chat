@@ -7,6 +7,7 @@ import br.com.weslleycampos.chat.core.navigation.entries.auth.SignInEntry
 import br.com.weslleycampos.chat.core.navigation.entries.settings.SettingsEntry
 import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
+import br.com.weslleycampos.chat.data.chat.VoiceLanguageRepository
 import br.com.weslleycampos.chat.data.settings.AccountRepository
 import br.com.weslleycampos.chat.data.settings.ProviderKeyRepository
 import br.com.weslleycampos.chat.data.settings.models.ModelProvider
@@ -28,9 +29,10 @@ import org.koin.core.annotation.KoinViewModel
 import kotlin.time.Duration
 
 /**
- * The Settings frame's logic, reduced to the "account" and "api keys" groups: the prototype's
- * `signOut`, `deleteAccount` with its `deleteArmed` timer, and `keyRows`' edit, save and remove
- * (860–861, 911–920), on [AccountRepository] and [ProviderKeyRepository].
+ * The Settings frame's logic, reduced to the "account", "api keys" and "voice" groups: the
+ * prototype's `signOut`, `deleteAccount` with its `deleteArmed` timer, `keyRows`' edit, save and
+ * remove (860–861, 911–920), and the language voice mode listens and speaks in ([voice]), on
+ * [AccountRepository], [ProviderKeyRepository] and [VoiceLanguageRepository].
  *
  * Navigation: Settings opens over Voice or History, and back returns there. Signing out opens
  * sign-in, and deleting the account opens account creation, each with the whole stack cleared,
@@ -46,6 +48,7 @@ class SettingsViewModel(
     val navigator: Navigator,
     private val accounts: AccountRepository,
     private val keys: ProviderKeyRepository,
+    languages: VoiceLanguageRepository,
 ) : ViewModel(), Navigator by navigator {
     val uiState: StateFlow<SettingsUiState>
         field = MutableStateFlow(SettingsUiState())
@@ -58,6 +61,9 @@ class SettingsViewModel(
     private val toast = TimedValue<StringResource>(viewModelScope, ChatToastDefaults.Duration) { message ->
         uiState.update { it.copy(toast = message) }
     }
+
+    /** The "voice" group. */
+    val voice = SettingsVoiceGroup(scope = viewModelScope, state = uiState, languages = languages, toast = toast)
 
     /** Ends the armed "Delete account" after [DeleteArmDuration], the prototype's `timers.arm`. */
     private var disarm: Job? = null
@@ -214,8 +220,8 @@ class SettingsViewModel(
     }
 }
 
-/** Runs a key action; a failure shows [failure] and counts as nothing done. */
-private suspend fun TimedValue<StringResource>.showOnFailure(
+/** Runs a key or language action; a failure shows [failure] and counts as nothing done. */
+internal suspend fun TimedValue<StringResource>.showOnFailure(
     failure: StringResource,
     action: suspend () -> Boolean,
 ): Boolean = try {

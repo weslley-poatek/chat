@@ -8,7 +8,8 @@ import br.com.weslleycampos.chat.core.database.daos.ConversationDao
 /**
  * [ChatDataEraser] on Room and the plain DataStore: one statement deletes the conversations, their
  * messages going with them through the foreign key's cascade, then one edit removes
- * [LocalModelRepository]'s keys. The `personas` table is left as it is.
+ * [LocalModelRepository]'s keys and the voice languages, which go back to the device's. The
+ * `personas` table is left as it is.
  */
 internal class LocalChatDataEraser(
     private val conversationDao: ConversationDao,
@@ -20,6 +21,8 @@ internal class LocalChatDataEraser(
             stored.remove(LocalModelRepository.FavoritesKey)
             stored.remove(LocalModelRepository.DefaultModelKey)
             stored.remove(LocalModelRepository.ModelIdsKey)
+            stored.remove(LocalVoiceLanguageRepository.LanguageKey)
+            stored.remove(LocalVoiceLanguageRepository.BilingualKey)
         }
     }
 }

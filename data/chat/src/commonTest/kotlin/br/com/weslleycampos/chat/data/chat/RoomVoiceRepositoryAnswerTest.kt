@@ -11,7 +11,12 @@ import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.ModelChoice
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import br.com.weslleycampos.chat.data.chat.models.VoiceAnswer
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
+import br.com.weslleycampos.chat.data.chat.replies.ReplyPrompts
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
+import br.com.weslleycampos.chat.data.fuelix.FuelixMessage
+import br.com.weslleycampos.chat.data.fuelix.FuelixRole
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -34,6 +39,9 @@ class RoomVoiceRepositoryAnswerTest {
     private val database = FakeChatDatabase()
     private val preferences = FakePreferences()
     private val fuelix = FakeFuelixClient()
+
+    /** The voice language on [preferences], on an English device until a test picks another. */
+    private val languages = LocalVoiceLanguageRepository(preferences = preferences, deviceLanguage = { "en-US" })
 
     private val sonnet: ChatModel = ModelCatalogue.default
     private val gpt5: ChatModel = ModelCatalogue["gpt-5"]
@@ -74,12 +82,34 @@ class RoomVoiceRepositoryAnswerTest {
             messageDao = database.messageDao,
             transactions = database.transactions,
             fuelix = fuelix,
+            languages = languages,
             clock = clock,
         )
         return Repositories(voice = voice, chat = chat)
     }
 
     private fun answer(model: ChatModel): String = FakeFuelixClient.answer(model.id)
+
+    @Test
+    fun eachAnswerIsAskedForInTheVoiceLanguagesAsTheyAreWhenAsked() = runTest {
+        val voice = repositories().voice
+        val english = VoiceLanguages(VoiceLanguage.ENGLISH_US)
+        val portuguese = VoiceLanguages(VoiceLanguage.PORTUGUESE_BRAZIL)
+        val bilingual = portuguese.copy(bilingual = true)
+        val picks = listOf(english, portuguese, bilingual)
+        var conversationId: Long? = null
+        for (picked in picks) {
+            languages.setLanguages(picked)
+            val turn = assertNotNull(voice.saveTranscript(conversationId, heard))
+            conversationId = turn.conversationId
+            voice.answer(turn)
+        }
+
+        assertEquals(
+            picks.map { FuelixMessage(FuelixRole.SYSTEM, ReplyPrompts.voicePrompt(it)) },
+            fuelix.calls.map { it.messages.first() },
+        )
+    }
 
     @Test
     fun aTurnAnsweredTwiceAtOnceIsSavedOnceAndTheOtherAnswerIsDropped() = runTest {

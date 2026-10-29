@@ -44,6 +44,7 @@ class SettingsEntryProvider : EntryProvider {
                 onDraftChange = viewModel::onDraftChange,
                 onSaveKey = viewModel::onSaveKey,
                 onRemoveKey = viewModel::onRemoveKey,
+                onLanguagesClick = viewModel.voice::onLanguagesClick,
             )
         }
     }

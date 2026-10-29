@@ -18,9 +18,14 @@
     <string name="settings_key_remove">remove</string>
     <string name="settings_key_input_description">%1$s API key</string>
 
+    <string name="settings_voice">voice</string>
+    <string name="settings_voice_language">Language</string>
+    <string name="settings_voice_both">both</string>
+
     <string name="settings_toast_key_stored">key encrypted and stored</string>
     <string name="settings_toast_key_store_failed">couldn’t store the key, try again</string>
     <string name="settings_toast_key_remove_failed">couldn’t remove the key, try again</string>
+    <string name="settings_toast_language_failed">couldn’t change the language, try again</string>
     <string name="settings_toast_delete_recent_login">sign in again, then delete</string>
     <string name="settings_toast_delete_network">no connection, nothing deleted</string>
     <string name="settings_toast_delete_too_many_requests">too many attempts, try again later</string>

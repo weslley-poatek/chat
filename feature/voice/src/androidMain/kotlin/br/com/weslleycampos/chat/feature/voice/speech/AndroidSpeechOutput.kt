@@ -3,6 +3,7 @@ package br.com.weslleycampos.chat.feature.voice.speech
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -16,8 +17,9 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.incrementAndFetch
 
 /**
- * [SpeechOutput] on Android's `TextToSpeech`, in the device's language. One engine for the process,
- * started on first use; each word is reported as the engine starts it (`onRangeStart`).
+ * [SpeechOutput] on Android's `TextToSpeech`, in the engine's voice for the language it is given. One
+ * engine for the process, started on first use; each word is reported as the engine starts it
+ * (`onRangeStart`). A language whose voice is not installed cannot be spoken.
  */
 @OptIn(ExperimentalAtomicApi::class)
 @Single
@@ -28,9 +30,9 @@ internal class AndroidSpeechOutput(context: Context) : SpeechOutput {
     }
     private val utterances = AtomicInt(0)
 
-    override fun speak(text: String): Flow<Int> = callbackFlow {
+    override fun speak(text: String, language: VoiceLanguage): Flow<Int> = callbackFlow {
         if (!ready.await()) throw SpeechException(SpeechProblem.UNAVAILABLE)
-        val available = engine.setLanguage(Locale.getDefault())
+        val available = engine.setLanguage(Locale.forLanguageTag(language.tag))
         if (available == TextToSpeech.LANG_MISSING_DATA || available == TextToSpeech.LANG_NOT_SUPPORTED) {
             throw SpeechException(SpeechProblem.UNAVAILABLE)
         }

@@ -4,12 +4,14 @@ import br.com.weslleycampos.chat.core.ui.components.ChatVoicePhase
 import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
 import br.com.weslleycampos.chat.data.chat.models.VoiceAnswer
 import br.com.weslleycampos.chat.data.chat.models.VoiceExchange
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.chat.models.VoiceTurn
 import br.com.weslleycampos.chat.feature.voice.speech.Heard
 import br.com.weslleycampos.chat.feature.voice.speech.SpeechException
 import br.com.weslleycampos.chat.feature.voice.speech.SpeechInput
 import br.com.weslleycampos.chat.feature.voice.speech.SpeechOutput
 import br.com.weslleycampos.chat.feature.voice.speech.SpeechProblem
+import br.com.weslleycampos.chat.feature.voice.speech.voiceFor
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,6 +33,9 @@ internal interface VoiceTurns {
     /** Listening ended with [transcript]: saves it; `null` when nothing was saved. */
     suspend fun saveTranscript(transcript: String): VoiceTurn?
 
+    /** The languages to listen and speak in, as Settings last picked them. */
+    suspend fun languages(): VoiceLanguages
+
     /** Thinking: gets [turn]'s reply from Fuelix and saves it. */
     suspend fun answer(turn: VoiceTurn): VoiceAnswer
 
@@ -43,7 +48,9 @@ internal interface VoiceTurns {
 
 /**
  * The prototype's phase machine, `startVoice` … `stopVoice` (lines 737–753), on [scope], on the
- * device's speech and Fuelix's replies, for as long as it is started:
+ * device's speech and Fuelix's replies, for as long as it is started. Each listen is for the
+ * [VoiceTurns.languages] of the moment it starts, and each reply is spoken in the one it is written
+ * in:
  *
  * - listening: the microphone is on ([SpeechInput]) and the caption shows the words as they are
  *   heard. It ends when the user stops speaking: when the device says so, or after
@@ -168,7 +175,7 @@ internal class VoicePlayer(
         var latest = ""
         val heard = CompletableDeferred<String?>()
         val listening = launch {
-            input.listen().collectLatest { words ->
+            input.listen(turns.languages().all).collectLatest { words ->
                 latest = words.text
                 state.update { it.copy(exchange = VoiceExchange(transcript = latest), words = wordCount(latest)) }
                 if (words is Heard.Final) {
@@ -200,7 +207,8 @@ internal class VoicePlayer(
         val done = CompletableDeferred<Unit>()
         val speaking = launch {
             try {
-                output.speak(reply).collect { spoken -> state.update { it.copy(words = spoken) } }
+                val voice = turns.languages().voiceFor(reply)
+                output.speak(reply, voice).collect { spoken -> state.update { it.copy(words = spoken) } }
             } catch (ignored: SpeechException) {
                 // No voice: the words show at the design's pace instead.
                 withTimeoutOrNull(speakingDuration(reply)) {

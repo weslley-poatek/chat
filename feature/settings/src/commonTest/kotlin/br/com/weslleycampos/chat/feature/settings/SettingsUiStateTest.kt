@@ -3,6 +3,8 @@ package br.com.weslleycampos.chat.feature.settings
 import br.com.weslleycampos.chat.data.auth.AuthException
 import br.com.weslleycampos.chat.data.auth.AuthUser
 import br.com.weslleycampos.chat.data.auth.SignInMethod
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.settings.models.Account
 import br.com.weslleycampos.chat.data.settings.models.ModelProvider
 import br.com.weslleycampos.chat.data.settings.models.ProviderKey
@@ -175,17 +177,31 @@ class SettingsUiStateTest {
     // The frame
 
     @Test
-    fun settingsHasOnlyTheAccountAndApiKeysGroups() {
+    fun settingsHasOnlyTheAccountApiKeysAndVoiceGroups() {
         val labels = FeatureSettingsRes.allStringResources.keys
 
         assertTrue("settings_account" in labels)
         assertTrue("settings_api_keys" in labels)
-        // Biometric unlock, defaults, appearance, data and linking methods are not built: the module
-        // has no label any of their controls could be shown or announced by.
-        val dropped = listOf("biometric", "default", "voice", "speech", "read", "theme", "export", "connect", "local")
+        assertTrue("settings_voice" in labels)
+        // Biometric unlock, defaults, speech rate, appearance, data and linking methods are not built:
+        // the module has no label any of their controls could be shown or announced by.
+        val dropped = listOf("biometric", "default", "speech", "rate", "read", "theme", "export", "connect", "local")
         for (word in dropped) {
             assertEquals(emptyList(), labels.filter { word in it }, word)
         }
+    }
+
+    @Test
+    fun theVoiceGroupOffersEachLanguageAloneThenBothListeningFirstForTheOneItWasIn() {
+        val portuguese = VoiceLanguages(VoiceLanguage.PORTUGUESE_BRAZIL)
+        val english = VoiceLanguages(VoiceLanguage.ENGLISH_US)
+
+        assertEquals(listOf(portuguese, english, english.copy(bilingual = true)), english.options())
+        assertEquals(listOf(portuguese, english, portuguese.copy(bilingual = true)), portuguese.options())
+        // While both, picking both again changes nothing.
+        assertEquals(portuguese.copy(bilingual = true), portuguese.copy(bilingual = true).options().last())
+        assertEquals("Português (Brasil)", portuguese.description)
+        assertEquals("Português (Brasil) + English (US)", portuguese.copy(bilingual = true).description)
     }
 
     @Test
@@ -201,6 +217,8 @@ class SettingsUiStateTest {
             "Editing a key",
             "Adding a key",
             "Key stored",
+            "English voice",
+            "Both languages",
         )
 
         assertEquals(names + names, cases.map { it.name })

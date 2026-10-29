@@ -60,6 +60,7 @@ class VoiceViewModelTest {
         input: FakeSpeechInput = FakeSpeechInput(),
         output: FakeSpeechOutput = FakeSpeechOutput(),
         entry: VoiceEntry = VoiceEntry(),
+        languages: FakeVoiceLanguageRepository = FakeVoiceLanguageRepository(),
         start: Boolean = true,
     ): VoiceViewModel {
         val viewModel = VoiceViewModel(
@@ -67,6 +68,7 @@ class VoiceViewModelTest {
             navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(entry) }),
             voices = voices,
             models = FakeModelRepository(),
+            languages = languages,
             input = input,
             output = output,
         )

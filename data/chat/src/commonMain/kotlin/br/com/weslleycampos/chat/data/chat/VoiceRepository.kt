@@ -67,7 +67,8 @@ interface VoiceRepository {
     /**
      * Gets the reply to [turn]'s transcript from Fuelix and saves it, as thinking ends and speaking
      * starts. The conversation's model reads the conversation so far after a prompt that asks for a
-     * short spoken answer, and its persona's prompt while one answers. The reply is saved as one
+     * short spoken answer in the voice languages ([VoiceLanguageRepository]), and its persona's prompt
+     * while one answers. The reply is saved as one
      * [Message.Assistant] that is [ReplyStatus.DONE] at once, whole, with the model and persona that
      * wrote it, the conversation's as it was asked, the time its transcript was sent, and as its
      * latency the time since that transcript was saved. It does not move the

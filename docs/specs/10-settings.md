@@ -260,9 +260,9 @@ The footer and the frame
 - [x] On iOS the version is the bundle's `CFBundleShortVersionString` and `CFBundleVersion` —
   `AppVersionIosTest.theVersionIsTheBundlesShortVersionStringAndBuildNumberOnIos`,
   `AppVersionIosTest.aBundleWithoutTheKeysReadsAsNoVersion`
-- [x] Settings has only the "account" and "api keys" groups: no label for biometric unlock,
-  defaults, voice, speech rate, read aloud, theme, export, connecting methods or local only —
-  `SettingsUiStateTest.settingsHasOnlyTheAccountAndApiKeysGroups`
+- [x] Settings has only the "account" and "api keys" groups, and since spec 12 the "voice" group's
+  language: no label for biometric unlock, defaults, speech rate, read aloud, theme, export,
+  connecting methods or local only — `SettingsUiStateTest.settingsHasOnlyTheAccountApiKeysAndVoiceGroups`
 - [x] The previews cover every state in light and dark, with only a fake draft —
   `SettingsUiStateTest.previewsCoverEveryStateInLightAndDark`
 

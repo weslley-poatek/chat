@@ -6,6 +6,9 @@ import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
 import br.com.weslleycampos.chat.core.ui.components.ChatVoicePhase
+import br.com.weslleycampos.chat.data.chat.models.VoiceAnswer
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.feature.voice.speech.Heard
 import br.com.weslleycampos.chat.feature.voice.speech.SpeechProblem
 import br.com.weslleycampos.chat.feature.voice.speech.toast
@@ -35,6 +38,9 @@ private const val Question = "so the hook works"
 /** What the user says next. */
 private const val FollowUp = "what about unmount"
 
+private val Portuguese = VoiceLanguage.PORTUGUESE_BRAZIL
+private val English = VoiceLanguage.ENGLISH_US
+
 /**
  * Listening on `VoiceViewModel`, on the fakes' speech: the words as the device hears them, what ends
  * listening (the device, silence, a tap), hearing nothing, mute, a device that cannot listen, and the
@@ -56,6 +62,7 @@ class VoiceViewModelListeningTest {
         input: FakeSpeechInput = FakeSpeechInput(),
         output: FakeSpeechOutput = FakeSpeechOutput(),
         entry: VoiceEntry = VoiceEntry(),
+        languages: FakeVoiceLanguageRepository = FakeVoiceLanguageRepository(),
         start: Boolean = true,
     ): VoiceViewModel {
         val viewModel = VoiceViewModel(
@@ -63,6 +70,7 @@ class VoiceViewModelListeningTest {
             navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(entry) }),
             voices = voices,
             models = FakeModelRepository(),
+            languages = languages,
             input = input,
             output = output,
         )
@@ -239,6 +247,49 @@ class VoiceViewModelListeningTest {
         assertEquals(3, input.listens)
         assertTrue(input.listening)
         assertEquals(emptyList(), voices.transcripts)
+    }
+
+    // The language
+
+    @Test
+    fun eachListenAndEachReplySpokenIsInTheLanguageSettingsPickedAsItStarts() = started.runTest {
+        val languages = FakeVoiceLanguageRepository(VoiceLanguages(Portuguese))
+        val input = FakeSpeechInput().apply { says(Question) }
+        val output = FakeSpeechOutput()
+        voiceViewModel(input = input, output = output, languages = languages)
+        advance(toSpeaking)
+        // An English reply is still said in the one language picked.
+        assertEquals(listOf(Replies[0]), output.texts)
+
+        // Picked while the reply is spoken: the next listen is in the new language.
+        languages.languages.value = VoiceLanguages(English)
+        advance(spokenTime(Replies[0]))
+        assertTrue(input.listening)
+        assertEquals(listOf(listOf(Portuguese), listOf(English)), input.languages)
+        assertEquals(listOf(Portuguese), output.languages)
+    }
+
+    @Test
+    fun bilingualEachListenIsForBothAndEachReplyIsSaidInTheLanguageItIsWrittenIn() = started.runTest {
+        val portugueseReply = "use uma flag de leading edge no hook"
+        val englishReply = "add a leading flag to the hook"
+        val replies = ArrayDeque(listOf(portugueseReply, englishReply))
+        val voices = FakeVoiceRepository().apply { answerScript = { VoiceAnswer.Spoken(replies.removeFirst()) } }
+        val input = FakeSpeechInput().apply {
+            says(Question)
+            says(FollowUp)
+        }
+        val output = FakeSpeechOutput()
+        val languages = FakeVoiceLanguageRepository(VoiceLanguages(Portuguese, bilingual = true))
+        voiceViewModel(voices = voices, input = input, output = output, languages = languages)
+
+        advance(spokenTime(Question))
+        advance(spokenTime(portugueseReply))
+        advance(spokenTime(FollowUp))
+
+        assertEquals(listOf(portugueseReply, englishReply), output.texts)
+        assertEquals(listOf(Portuguese, English), output.languages)
+        assertEquals(listOf(listOf(Portuguese, English), listOf(Portuguese, English)), input.languages)
     }
 
     // Mute

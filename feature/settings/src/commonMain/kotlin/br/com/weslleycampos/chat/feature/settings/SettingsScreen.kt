@@ -35,6 +35,8 @@ import br.com.weslleycampos.chat.core.ui.components.ChatToast
 import br.com.weslleycampos.chat.core.ui.icons.ChatIcons
 import br.com.weslleycampos.chat.data.auth.AuthUser
 import br.com.weslleycampos.chat.data.auth.SignInMethod
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.settings.models.Account
 import br.com.weslleycampos.chat.data.settings.models.ModelProvider
 import br.com.weslleycampos.chat.data.settings.models.ProviderKey
@@ -46,6 +48,7 @@ import br.com.weslleycampos.chat.feature.settings.resources.settings_back
 import br.com.weslleycampos.chat.feature.settings.resources.settings_title
 import br.com.weslleycampos.chat.feature.settings.resources.settings_toast_delete_recent_login
 import br.com.weslleycampos.chat.feature.settings.resources.settings_toast_key_stored
+import br.com.weslleycampos.chat.feature.settings.resources.settings_voice
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -57,8 +60,8 @@ private val ToastBottomOffset = 84.dp
 
 /**
  * The Settings frame (frames.md §2.5), reduced to what the user kept: the bar, the "account" group,
- * the "api keys" group and the version footer, inside the safe area. The groups scroll under the
- * bottom inset and above the keyboard; the toast floats over their bottom.
+ * the "api keys" group, the "voice" group and the version footer, inside the safe area. The groups
+ * scroll under the bottom inset and above the keyboard; the toast floats over their bottom.
  *
  * Settings shows no conversation, so it wears the root's accent.
  *
@@ -77,6 +80,7 @@ fun SettingsScreen(
     onDraftChange: (String) -> Unit,
     onSaveKey: () -> Unit,
     onRemoveKey: () -> Unit,
+    onLanguagesClick: (VoiceLanguages) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Below the keyboard while it shows, else the navigation bar or home indicator.
@@ -125,6 +129,13 @@ fun SettingsScreen(
                         onSave = onSaveKey,
                         onRemove = onRemoveKey,
                     )
+                }
+                uiState.languages?.let { languages ->
+                    GroupLabel(
+                        text = stringResource(FeatureSettingsRes.string.settings_voice),
+                        modifier = Modifier.padding(top = GroupGap, bottom = ChatTheme.spacing.xSmall),
+                    )
+                    VoiceGroup(languages = languages, enabled = enabled, onLanguagesClick = onLanguagesClick)
                 }
                 Text(
                     text = settingsFooter(appVersion),
@@ -227,7 +238,11 @@ private const val PreviewDraft = "sk-test-0000000000"
 
 private val PreviewVersion = AppVersion(name = "1.0", code = "1", platform = "ios")
 
-private val PreviewState = SettingsUiState(account = PreviewAccount, keys = PreviewKeys)
+private val PreviewState = SettingsUiState(
+    account = PreviewAccount,
+    keys = PreviewKeys,
+    languages = VoiceLanguages(VoiceLanguage.PORTUGUESE_BRAZIL),
+)
 
 data class SettingsPreviewCase(
     val name: String,
@@ -254,6 +269,12 @@ class SettingsScreenPreviewParameterProvider : PreviewParameterProvider<Settings
         Triple("Editing a key", PreviewState.copy(editing = ModelProvider.FUELIX), ""),
         Triple("Adding a key", PreviewState.copy(keys = PreviewNoKeys, editing = ModelProvider.FUELIX), PreviewDraft),
         Triple("Key stored", PreviewState.copy(toast = FeatureSettingsRes.string.settings_toast_key_stored), ""),
+        Triple("English voice", PreviewState.copy(languages = VoiceLanguages(VoiceLanguage.ENGLISH_US)), ""),
+        Triple(
+            "Both languages",
+            PreviewState.copy(languages = VoiceLanguages(VoiceLanguage.PORTUGUESE_BRAZIL, bilingual = true)),
+            "",
+        ),
     )
 
     override val values: Sequence<SettingsPreviewCase> = sequence {
@@ -284,6 +305,7 @@ private fun SettingsScreenPreview(
             onDraftChange = {},
             onSaveKey = {},
             onRemoveKey = {},
+            onLanguagesClick = {},
         )
     }
 }

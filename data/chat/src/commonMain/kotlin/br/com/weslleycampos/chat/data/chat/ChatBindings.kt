@@ -72,8 +72,8 @@ internal fun compareRepository(
 
 /**
  * The app's one [VoiceRepository]: voice sessions read through the [ChatRepository] and pick through
- * it and the [ModelRepository], get their replies from [fuelix], and save their turns on the system
- * clock.
+ * it and the [ModelRepository], get their replies from [fuelix] in the languages of [languages], and
+ * save their turns on the system clock.
  */
 @Single
 internal fun voiceRepository(
@@ -83,6 +83,7 @@ internal fun voiceRepository(
     messageDao: MessageDao,
     transactions: TransactionRunner,
     fuelix: FuelixClient,
+    languages: VoiceLanguageRepository,
 ): VoiceRepository = RoomVoiceRepository(
     chats = chats,
     models = models,
@@ -90,7 +91,20 @@ internal fun voiceRepository(
     messageDao = messageDao,
     transactions = transactions,
     fuelix = fuelix,
+    languages = languages,
     clock = Clock.System,
+)
+
+/**
+ * The app's one [VoiceLanguageRepository], in the plain DataStore, on the device's language until
+ * others are picked.
+ */
+@Single
+internal fun voiceLanguageRepository(
+    @UnencryptedPreferences preferences: DataStore<Preferences>,
+): VoiceLanguageRepository = LocalVoiceLanguageRepository(
+    preferences = preferences,
+    deviceLanguage = ::deviceLanguageTag,
 )
 
 /**

@@ -19,16 +19,23 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.weslleycampos.chat.core.ui.ChatTheme
+import br.com.weslleycampos.chat.core.ui.components.ChatSegment
+import br.com.weslleycampos.chat.core.ui.components.ChatSegmentedControl
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.feature.settings.resources.FeatureSettingsRes
 import br.com.weslleycampos.chat.feature.settings.resources.settings_delete_account
 import br.com.weslleycampos.chat.feature.settings.resources.settings_sign_in_methods
 import br.com.weslleycampos.chat.feature.settings.resources.settings_sign_out
+import br.com.weslleycampos.chat.feature.settings.resources.settings_voice_both
+import br.com.weslleycampos.chat.feature.settings.resources.settings_voice_language
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -106,6 +113,51 @@ internal fun AccountGroup(
             onClick = onDeleteAccount,
             hint = deleteHint?.let { stringResource(it) },
         )
+    }
+}
+
+/**
+ * The "voice" group, on the prototype's segmented "defaults" rows (frame lines 410–414): "Language"
+ * and a segmented control of each [VoiceLanguage] by its tag, "pt-BR" and "en-US", and "both", the
+ * picked [languages] filled. Screen readers announce each by its languages' own names.
+ */
+@Composable
+internal fun VoiceGroup(
+    languages: VoiceLanguages,
+    enabled: Boolean,
+    onLanguagesClick: (VoiceLanguages) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SettingsGroup(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(ChatTheme.spacing.large),
+            horizontalArrangement = Arrangement.spacedBy(ChatTheme.spacing.large),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(FeatureSettingsRes.string.settings_voice_language),
+                modifier = Modifier.weight(1f),
+                style = ChatTheme.typography.bodyMedium,
+                color = ChatTheme.colors.text.primary,
+            )
+            ChatSegmentedControl {
+                languages.options().forEach { option ->
+                    ChatSegment(
+                        selected = option == languages,
+                        onClick = { onLanguagesClick(option) },
+                        label = if (option.bilingual) {
+                            stringResource(FeatureSettingsRes.string.settings_voice_both)
+                        } else {
+                            option.primary.tag
+                        },
+                        modifier = Modifier.semantics { contentDescription = option.description },
+                        enabled = enabled,
+                    )
+                }
+            }
+        }
     }
 }
 

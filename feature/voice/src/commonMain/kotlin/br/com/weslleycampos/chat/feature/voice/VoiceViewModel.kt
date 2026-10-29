@@ -10,9 +10,11 @@ import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.ui.components.ChatToastDefaults
 import br.com.weslleycampos.chat.core.ui.components.ChatVoicePhase
 import br.com.weslleycampos.chat.data.chat.ModelRepository
+import br.com.weslleycampos.chat.data.chat.VoiceLanguageRepository
 import br.com.weslleycampos.chat.data.chat.VoiceRepository
 import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
 import br.com.weslleycampos.chat.data.chat.models.VoiceAnswer
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.chat.models.VoiceSession
 import br.com.weslleycampos.chat.data.chat.models.VoiceTurn
 import br.com.weslleycampos.chat.feature.chat.toast
@@ -28,6 +30,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -42,7 +45,8 @@ import org.koin.core.annotation.KoinViewModel
  * `stopVoice`, lines 737–753), mute and the model chip, on [VoiceRepository]. The phases run on
  * [VoicePlayer] while the screen is resumed ([onStart] / [onStop]) and the microphone is allowed
  * ([onMicrophone]): it listens with the device's speech recognition ([SpeechInput]), Fuelix answers,
- * and the device says the reply ([SpeechOutput]). Every exchange is saved as it is heard: the
+ * and the device says the reply ([SpeechOutput]), in the languages Settings picked
+ * ([VoiceLanguageRepository]). Every exchange is saved as it is heard: the
  * transcript when listening ends, the reply when Fuelix gives it. A voice session is therefore an
  * ordinary conversation, listed in History and readable as text. When Fuelix gives no reply, or the
  * device cannot listen, a toast says why and the phases stop until a tap on the sphere.
@@ -59,6 +63,7 @@ class VoiceViewModel(
     val navigator: Navigator,
     private val voices: VoiceRepository,
     models: ModelRepository,
+    languages: VoiceLanguageRepository,
     input: SpeechInput,
     output: SpeechOutput,
 ) : ViewModel(), Navigator by navigator {
@@ -85,6 +90,8 @@ class VoiceViewModel(
         state = uiState,
         turns = object : VoiceTurns {
             override suspend fun saveTranscript(transcript: String): VoiceTurn? = saveTranscriptOnce(transcript)
+
+            override suspend fun languages(): VoiceLanguages = languages.observeLanguages().first()
 
             override suspend fun answer(turn: VoiceTurn): VoiceAnswer =
                 attempt(fallback = VoiceAnswer.Failed(ReplyFailure.FAILED)) { voices.answer(turn) }

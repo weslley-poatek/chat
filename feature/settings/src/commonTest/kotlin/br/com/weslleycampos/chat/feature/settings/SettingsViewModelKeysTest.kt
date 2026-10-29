@@ -60,7 +60,12 @@ class SettingsViewModelKeysTest {
         keys: FakeProviderKeyRepository = FakeProviderKeyRepository(),
         navigator: NavigatorImpl = navigator(VoiceEntry(), SettingsEntry),
     ): SettingsViewModel {
-        val viewModel = SettingsViewModel(navigator = navigator, accounts = FakeAccountRepository(), keys = keys)
+        val viewModel = SettingsViewModel(
+            navigator = navigator,
+            accounts = FakeAccountRepository(),
+            keys = keys,
+            languages = FakeVoiceLanguageRepository(),
+        )
         viewModels += viewModel
         runCurrent()
         return viewModel
@@ -247,7 +252,7 @@ class SettingsViewModelKeysTest {
         assertFalse(FakeKey in viewModel.state.toString())
         assertEquals(
             SettingsUiState(account = Ana.toUi(), editing = ModelProvider.FUELIX),
-            viewModel.state.copy(keys = emptyList()),
+            viewModel.state.copy(keys = emptyList(), languages = null),
         )
         // The back stack, which is all Settings saves, holds only the key-less `SettingsEntry`.
         assertEquals(SettingsEntry, navigator.stack.last())

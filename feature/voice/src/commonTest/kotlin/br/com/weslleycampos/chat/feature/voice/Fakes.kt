@@ -1,6 +1,7 @@
 package br.com.weslleycampos.chat.feature.voice
 
 import br.com.weslleycampos.chat.data.chat.ModelRepository
+import br.com.weslleycampos.chat.data.chat.VoiceLanguageRepository
 import br.com.weslleycampos.chat.data.chat.VoiceRepository
 import br.com.weslleycampos.chat.data.chat.models.ChatModel
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
@@ -10,6 +11,8 @@ import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
 import br.com.weslleycampos.chat.data.chat.models.VoiceAnswer
 import br.com.weslleycampos.chat.data.chat.models.VoiceExchange
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.chat.models.VoiceSession
 import br.com.weslleycampos.chat.data.chat.models.VoiceTurn
 import br.com.weslleycampos.chat.feature.voice.speech.Heard
@@ -179,7 +182,7 @@ internal class FakeVoiceRepository(
  * A [SpeechInput] that plays the listens a test queues, one per `listen()`, in turn: [says],
  * [trailsOff], [hearsNothing], [fails] or any [queue]d script. With none queued, a listen hears
  * nothing and waits, as a device does while the user is quiet. It records how often the microphone
- * went on, whether it is on, and how often a listen was cut short.
+ * went on and in what language, whether it is on, and how often a listen was cut short.
  */
 internal class FakeSpeechInput : SpeechInput {
     private val queued = ArrayDeque<suspend FlowCollector<Heard>.() -> Unit>()
@@ -187,6 +190,9 @@ internal class FakeSpeechInput : SpeechInput {
     /** How many times the microphone went on. */
     var listens = 0
         private set
+
+    /** The languages of each listen, in order. */
+    val languages = mutableListOf<List<VoiceLanguage>>()
 
     /** How many listens were cancelled while on: by a tap, silence, mute, or the player stopping. */
     var cancellations = 0
@@ -196,9 +202,10 @@ internal class FakeSpeechInput : SpeechInput {
     var listening = false
         private set
 
-    override fun listen(): Flow<Heard> = flow {
+    override fun listen(languages: List<VoiceLanguage>): Flow<Heard> = flow {
         val script = queued.removeFirstOrNull()
         listens++
+        this@FakeSpeechInput.languages += languages
         listening = true
         try {
             if (script == null) awaitCancellation() else script()
@@ -249,12 +256,15 @@ internal suspend fun FlowCollector<Heard>.speak(text: String) {
 /**
  * A [SpeechOutput] that says a text a word every [SpokenWord]: as each word starts, how many have,
  * then all of them once the last one has been said, and completes ([spokenTime]). With [failure] it
- * cannot speak. It records what it was asked to say, whether it is speaking, and how often it was
- * stopped on the way.
+ * cannot speak. It records what it was asked to say and in what language, whether it is speaking,
+ * and how often it was stopped on the way.
  */
 internal class FakeSpeechOutput : SpeechOutput {
     /** Every text it was asked to say, in order. */
     val texts = mutableListOf<String>()
+
+    /** The language of each text it was asked to say, in order. */
+    val languages = mutableListOf<VoiceLanguage>()
 
     /** How many times speaking was stopped before its end. */
     var cancellations = 0
@@ -267,8 +277,9 @@ internal class FakeSpeechOutput : SpeechOutput {
     /** When set, `speak` throws a [SpeechException] for it. */
     var failure: SpeechProblem? = null
 
-    override fun speak(text: String): Flow<Int> = flow {
+    override fun speak(text: String, language: VoiceLanguage): Flow<Int> = flow {
         texts += text
+        languages += language
         failure?.let { throw SpeechException(it) }
         val words = text.split(' ').size
         speaking = true
@@ -360,5 +371,18 @@ internal class StartedViewModels {
             all.forEach { it.onStop() }
             all.clear()
         }
+    }
+}
+
+/** The voice languages as Settings keeps them, in memory: [languages] until a test picks others. */
+internal class FakeVoiceLanguageRepository(
+    languages: VoiceLanguages = VoiceLanguages(VoiceLanguage.ENGLISH_US),
+) : VoiceLanguageRepository {
+    val languages = MutableStateFlow(languages)
+
+    override fun observeLanguages(): Flow<VoiceLanguages> = languages
+
+    override suspend fun setLanguages(languages: VoiceLanguages) {
+        this.languages.value = languages
     }
 }

@@ -5,6 +5,7 @@ import br.com.weslleycampos.chat.core.navigation.Navigator
 import br.com.weslleycampos.chat.core.navigation.entries.settings.SettingsEntry
 import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntryProvider
+import br.com.weslleycampos.chat.data.chat.VoiceLanguageRepository
 import br.com.weslleycampos.chat.data.settings.AccountRepository
 import br.com.weslleycampos.chat.data.settings.ProviderKeyRepository
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +65,9 @@ internal class FakeSettingsAppModule {
 
     @Single
     fun keys(): ProviderKeyRepository = FakeProviderKeyRepository()
+
+    @Single
+    fun languages(): VoiceLanguageRepository = FakeVoiceLanguageRepository()
 
     @Single
     fun navigator(): Navigator = navigator(VoiceEntry(), SettingsEntry)

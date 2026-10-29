@@ -12,6 +12,8 @@ import br.com.weslleycampos.chat.data.chat.models.Message
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.PersonaPresets
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.chat.replies.ReplyStreamer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -90,6 +92,17 @@ class LocalChatDataEraserTest {
         assertEquals(ModelCatalogue.default, models.observeDefaultModel().first())
         assertEquals(ModelCatalogue.models, models.observeModels().first())
         assertEquals(PersonaPresets.personas, models.observePersonas().first())
+        assertEquals(preferencesOf(otherKey to "kept"), preferences.stored.value)
+    }
+
+    @Test
+    fun erasingPutsTheVoiceLanguagesBackToTheDevicesAlone() = runTest {
+        val languages = LocalVoiceLanguageRepository(preferences = preferences, deviceLanguage = { "pt-BR" })
+        languages.setLanguages(VoiceLanguages(VoiceLanguage.ENGLISH_US, bilingual = true))
+
+        eraser.eraseAll()
+
+        assertEquals(VoiceLanguages(VoiceLanguage.PORTUGUESE_BRAZIL), languages.observeLanguages().first())
         assertEquals(preferencesOf(otherKey to "kept"), preferences.stored.value)
     }
 

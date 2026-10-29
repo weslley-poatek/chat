@@ -32,7 +32,7 @@ import kotlin.time.Clock
  * thread through [chats], a pick goes through [ChatRepository.choose] and
  * [ModelRepository.setDefaultModel], and a transcript is written by the [TurnWriter] a send uses,
  * so a voice conversation is created, titled, moved up and brought back from the archive as a
- * typed one is. Replies come from [fuelix].
+ * typed one is. Replies come from [fuelix], in the languages of [languages].
  *
  * Each save is one write transaction, which checks and writes together, so it needs no lock with
  * [RoomChatRepository]'s sends: a send's transaction runs wholly before it or wholly after it.
@@ -44,6 +44,7 @@ internal class RoomVoiceRepository(
     private val messageDao: MessageDao,
     private val transactions: TransactionRunner,
     private val fuelix: FuelixClient,
+    private val languages: VoiceLanguageRepository,
     private val clock: Clock,
 ) : VoiceRepository {
     private val turns = TurnWriter(conversationDao = conversationDao, messageDao = messageDao, clock = clock)
@@ -95,7 +96,8 @@ internal class RoomVoiceRepository(
         val thread = messageDao.observeByConversation(turn.conversationId).first()
         if (thread.lastOrNull()?.isTranscriptOf(turn) != true) return VoiceAnswer.Dropped
         val persona = conversation.personaId?.let { id -> models.observePersonas().first().firstOrNull { it.id == id } }
-        val prompt = listOfNotNull(ReplyPrompts.VOICE_PROMPT, persona?.prompt).joinToString("\n\n")
+        val spoken = languages.observeLanguages().first()
+        val prompt = listOfNotNull(ReplyPrompts.voicePrompt(spoken), persona?.prompt).joinToString("\n\n")
         val model = ModelCatalogue.resolve(conversation.modelId)
         val reply = try {
             fuelix.streamChat(model, ReplyPrompts.messages(thread, model, prompt))

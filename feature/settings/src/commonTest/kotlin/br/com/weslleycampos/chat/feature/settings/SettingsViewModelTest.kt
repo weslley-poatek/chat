@@ -68,7 +68,12 @@ class SettingsViewModelTest {
         keys: FakeProviderKeyRepository = FakeProviderKeyRepository(),
         navigator: NavigatorImpl = navigator(VoiceEntry(), SettingsEntry),
     ): SettingsViewModel {
-        val viewModel = SettingsViewModel(navigator = navigator, accounts = accounts, keys = keys)
+        val viewModel = SettingsViewModel(
+            navigator = navigator,
+            accounts = accounts,
+            keys = keys,
+            languages = FakeVoiceLanguageRepository(),
+        )
         viewModels += viewModel
         runCurrent()
         return viewModel

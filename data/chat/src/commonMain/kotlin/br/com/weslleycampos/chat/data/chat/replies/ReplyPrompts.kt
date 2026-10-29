@@ -6,6 +6,7 @@ import br.com.weslleycampos.chat.core.database.entities.PAIR_FIRST_SIDE
 import br.com.weslleycampos.chat.core.database.entities.PAIR_SECOND_SIDE
 import br.com.weslleycampos.chat.data.chat.models.ModelCatalogue
 import br.com.weslleycampos.chat.data.chat.models.Persona
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.chat.toBlock
 import br.com.weslleycampos.chat.data.fuelix.FuelixMessage
 import br.com.weslleycampos.chat.data.fuelix.FuelixRole
@@ -20,9 +21,22 @@ import br.com.weslleycampos.chat.data.fuelix.FuelixRole
  * goes on its own line of thought.
  */
 internal object ReplyPrompts {
-    /** Voice mode's system prompt: the device says the reply aloud, so it is short plain speech. */
-    const val VOICE_PROMPT = "You are speaking aloud in a voice conversation. Answer in one to three short " +
-        "sentences of plain spoken words: no Markdown, lists or code."
+    /**
+     * Voice mode's system prompt: the device says the reply aloud, so it is short plain speech in a
+     * language of [languages] its voice can say. With one language, in that one, whatever language
+     * the conversation so far is in; bilingual, in the language of the user's last message, code and
+     * technical terms staying in English as developers say them.
+     */
+    fun voicePrompt(languages: VoiceLanguages): String {
+        val language = if (languages.bilingual) {
+            "The user speaks ${languages.all.joinToString(" and ") { it.promptName }}: answer in the " +
+                "language of their last message, keeping code and technical terms in English"
+        } else {
+            "Answer in ${languages.primary.promptName}"
+        }
+        return "You are speaking aloud in a voice conversation. $language, in one to three short " +
+            "sentences of plain spoken words: no Markdown, lists or code."
+    }
 
     /**
      * The requests of reply rows [replyIds] of [thread], one or a pair's two: each from the model

@@ -22,6 +22,8 @@ import br.com.weslleycampos.chat.data.chat.models.ReplyFailure
 import br.com.weslleycampos.chat.data.chat.models.ReplyStatus
 import br.com.weslleycampos.chat.data.chat.models.VoiceAnswer
 import br.com.weslleycampos.chat.data.chat.models.VoiceExchange
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.chat.models.VoiceSession
 import br.com.weslleycampos.chat.data.chat.models.VoiceTurn
 import br.com.weslleycampos.chat.data.chat.replies.ReplyPrompts
@@ -59,6 +61,12 @@ class RoomVoiceRepositoryTest {
     private var database = FakeChatDatabase()
     private val preferences = FakePreferences()
     private val fuelix = FakeFuelixClient()
+
+    /** The voice language on [preferences], on an English device until a test picks another. */
+    private val languages = LocalVoiceLanguageRepository(preferences = preferences, deviceLanguage = { "en-US" })
+
+    /** Voice mode's system prompt in [languages]' English. */
+    private val voicePrompt = ReplyPrompts.voicePrompt(VoiceLanguages(VoiceLanguage.ENGLISH_US))
 
     private val reviewer: Persona = PersonaPresets.personas.single { it.id == "reviewer" }
     private val terse: Persona = PersonaPresets.personas.single { it.id == "terse" }
@@ -113,6 +121,7 @@ class RoomVoiceRepositoryTest {
             messageDao = database.messageDao,
             transactions = database.transactions,
             fuelix = fuelix,
+            languages = languages,
             clock = clock,
         )
         return Repositories(voice = voice, chat = chat, models = models)
@@ -276,8 +285,8 @@ class RoomVoiceRepositoryTest {
 
         val (alone, persona, followUp) = fuelix.calls
         assertEquals(sonnet.id, alone.model)
-        assertEquals(listOf(FuelixMessage(FuelixRole.SYSTEM, ReplyPrompts.VOICE_PROMPT), asUser(heard)), alone.messages)
-        val prompt = FuelixMessage(FuelixRole.SYSTEM, ReplyPrompts.VOICE_PROMPT + "\n\n" + reviewer.prompt)
+        assertEquals(listOf(FuelixMessage(FuelixRole.SYSTEM, voicePrompt), asUser(heard)), alone.messages)
+        val prompt = FuelixMessage(FuelixRole.SYSTEM, voicePrompt + "\n\n" + reviewer.prompt)
         assertEquals(reviewer.model.id, persona.model)
         assertEquals(listOf(prompt, asUser(heard)), persona.messages)
         assertEquals(
@@ -422,7 +431,7 @@ class RoomVoiceRepositoryTest {
         assertEquals(listOf("why is my debounce stale?", "and the shell one?", heard), userTexts(typed))
         assertEquals(
             listOf(
-                FuelixMessage(FuelixRole.SYSTEM, ReplyPrompts.VOICE_PROMPT),
+                FuelixMessage(FuelixRole.SYSTEM, voicePrompt),
                 asUser("why is my debounce stale?"),
                 FuelixMessage(FuelixRole.ASSISTANT, answer(sonnet)),
                 asUser("and the shell one?"),

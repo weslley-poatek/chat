@@ -285,7 +285,7 @@ test is an obvious fake.
   prompt, and speaking lasts as long as the device takes to say it, not the design's 7 s.
 - Decided: on-device speech rather than Fuelix's audio models (the user's pick): free, no round trip
   before the words show, and it works with every chat model. It speaks and listens in the device's
-  language.
+  language, or since spec 12 in the one Settings picks.
 - Decided: listening ends when the device says the user stopped, or after 2 s with no new word once
   some were heard (iOS never says so on its own), or at a tap, which takes what was heard. Nothing
   heard, and it listens again after half a second.
@@ -299,7 +299,7 @@ test is an obvious fake.
 
 ## Out of scope
 
-- Choosing a voice or a language for speech: the device's default is used.
+- Choosing a voice for speech: the device's default is used. The language came in spec 12.
 - Listening while the model speaks (barge-in): a tap stops speaking instead.
 - Retrying a failed reply in place: "retry" still puts the message back in the composer.
 - Context windows and costs for models outside the catalogue's eight: Fuelix's model list does not

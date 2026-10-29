@@ -5,6 +5,9 @@ import androidx.navigation3.runtime.NavKey
 import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.data.auth.AuthUser
 import br.com.weslleycampos.chat.data.auth.SignInMethod
+import br.com.weslleycampos.chat.data.chat.VoiceLanguageRepository
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.settings.AccountRepository
 import br.com.weslleycampos.chat.data.settings.ProviderKeyRepository
 import br.com.weslleycampos.chat.data.settings.models.Account
@@ -97,6 +100,27 @@ internal class FakeProviderKeyRepository(keys: Map<ModelProvider, String> = empt
 }
 
 internal fun fakeMask(key: String): String = "…" + key.takeLast(4)
+
+/** The voice languages in memory: [languages] until a pick changes them, or [failure] refuses it. */
+internal open class FakeVoiceLanguageRepository(
+    languages: VoiceLanguages = VoiceLanguages(VoiceLanguage.PORTUGUESE_BRAZIL),
+) : VoiceLanguageRepository {
+    val languages = MutableStateFlow(languages)
+
+    /** Every `setLanguages`, in order. */
+    val picks = mutableListOf<VoiceLanguages>()
+
+    /** Set to make every pick fail, as a store that cannot be written would. */
+    var failure: Exception? = null
+
+    override fun observeLanguages(): Flow<VoiceLanguages> = languages
+
+    override suspend fun setLanguages(languages: VoiceLanguages) {
+        picks += languages
+        failure?.let { throw it }
+        this.languages.value = languages
+    }
+}
 
 internal fun navigator(vararg keys: NavKey) = NavigatorImpl(NavBackStack<NavKey>().apply { addAll(keys) })
 

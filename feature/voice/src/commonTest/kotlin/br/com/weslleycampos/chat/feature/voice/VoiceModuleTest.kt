@@ -7,6 +7,7 @@ import br.com.weslleycampos.chat.core.navigation.NavigatorImpl
 import br.com.weslleycampos.chat.core.navigation.entries.voice.VoiceEntry
 import br.com.weslleycampos.chat.core.navigation.utils.EntryProvider
 import br.com.weslleycampos.chat.data.chat.ModelRepository
+import br.com.weslleycampos.chat.data.chat.VoiceLanguageRepository
 import br.com.weslleycampos.chat.data.chat.VoiceRepository
 import br.com.weslleycampos.chat.feature.voice.speech.SpeechInput
 import br.com.weslleycampos.chat.feature.voice.speech.SpeechOutput
@@ -83,6 +84,9 @@ internal class FakeAppModule {
 
     @Single
     fun navigator(): Navigator = NavigatorImpl(NavBackStack<NavKey>().apply { add(VoiceEntry()) })
+
+    @Single
+    fun languages(): VoiceLanguageRepository = FakeVoiceLanguageRepository()
 
     @Single
     fun input(): SpeechInput = FakeSpeechInput()

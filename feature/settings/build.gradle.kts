@@ -13,6 +13,8 @@ kotlin {
             // AccountRepository and ProviderKeyRepository, with `:data:auth`'s AuthUser, SignInMethod and
             // AuthException through its `api`.
             implementation(projects.data.settings)
+            // The "voice" group's VoiceLanguageRepository, which voice mode reads.
+            implementation(projects.data.chat)
         }
         commonTest.dependencies {
             implementation(libs.kotlinx.coroutines.test)

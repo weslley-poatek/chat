@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import br.com.weslleycampos.chat.data.auth.AuthException
 import br.com.weslleycampos.chat.data.auth.AuthUser
 import br.com.weslleycampos.chat.data.auth.SignInMethod
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguage
+import br.com.weslleycampos.chat.data.chat.models.VoiceLanguages
 import br.com.weslleycampos.chat.data.settings.models.Account
 import br.com.weslleycampos.chat.data.settings.models.ModelProvider
 import br.com.weslleycampos.chat.data.settings.models.ProviderKey
@@ -35,6 +37,8 @@ val DeleteArmDuration: Duration = 3000.milliseconds
  *   Settings, back included, answers until it is done.
  * @property keys The "api keys" group's rows, in [ModelProvider] order, or empty until they are read.
  * @property editing The provider whose edit row is open, the prototype's `keyEdit`; one at most.
+ * @property languages The "voice" group's languages, those voice mode listens and speaks in, or
+ *   `null` until they are read.
  * @property toast The toast's text while it shows.
  */
 @Immutable
@@ -44,6 +48,7 @@ data class SettingsUiState(
     val deleting: Boolean = false,
     val keys: List<ProviderKey> = emptyList(),
     val editing: ModelProvider? = null,
+    val languages: VoiceLanguages? = null,
     val toast: StringResource? = null,
 )
 
@@ -100,6 +105,17 @@ val SettingsUiState.deleteHint: StringResource?
         deleteArmed -> FeatureSettingsRes.string.settings_delete_confirm
         else -> null
     }
+
+/**
+ * The "voice" group's segments: each language alone, "pt-BR" and "en-US", then "both", which keeps
+ * the language listened for first as it is.
+ */
+fun VoiceLanguages.options(): List<VoiceLanguages> =
+    VoiceLanguage.entries.map { VoiceLanguages(it) } + copy(bilingual = true)
+
+/** How screen readers announce a segment: "Português (Brasil)", or both names for "both". */
+val VoiceLanguages.description: String
+    get() = all.joinToString(" + ") { it.displayName }
 
 /** Whether a provider has a key stored, as the rows last read. */
 internal fun SettingsUiState.hasKey(provider: ModelProvider): Boolean =

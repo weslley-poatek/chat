@@ -66,6 +66,7 @@ class VoiceViewModelSessionTest {
             navigator = navigator,
             voices = voices,
             models = models,
+            languages = FakeVoiceLanguageRepository(),
             input = input,
             output = FakeSpeechOutput(),
         )
